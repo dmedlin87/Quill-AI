@@ -1,11 +1,15 @@
 import { useState, useRef, useCallback } from 'react';
 import { analyzeDraft, rewriteText, getContextualHelp } from '../services/geminiService';
 import { AnalysisResult } from '../types';
+import { Lore } from '../types/schema';
 
 // Define proper types
 interface ProjectContext {
-  setting?: string;
-  // add other fields as needed
+  id: string; // added id
+  setting?: {
+    timePeriod: string;
+    location: string;
+  };
 }
 
 interface SelectionRange {
@@ -25,6 +29,7 @@ interface UseDraftSmithEngineProps {
   currentProject: ProjectContext | null;
   activeChapterId: string | null;
   updateChapterAnalysis: (id: string, result: AnalysisResult) => Promise<void>;
+  updateProjectLore: (projectId: string, lore: Lore) => Promise<void>;
   commit: (text: string, desc: string, author: 'User' | 'Agent') => void;
   selectionRange: SelectionRange | null;
   clearSelection: () => void;
@@ -50,6 +55,7 @@ export function useDraftSmithEngine({
   currentProject,
   activeChapterId,
   updateChapterAnalysis,
+  updateProjectLore,
   commit,
   selectionRange,
   clearSelection
@@ -73,6 +79,7 @@ export function useDraftSmithEngine({
 
   // Stable ref for project setting
   const projectSetting = currentProject?.setting;
+  const projectId = currentProject?.id;
 
   // --- 1. Analysis Logic ---
   const runAnalysis = useCallback(async () => {
@@ -101,6 +108,18 @@ export function useDraftSmithEngine({
       }
       
       await updateChapterAnalysis(chapterId, result);
+
+      // --- LORE BIBLE UPDATE ---
+      // Automatically update the project lore with the latest findings
+      if (projectId) {
+          const worldRules = result.settingAnalysis?.issues.map(i => `Avoid ${i.issue}: ${i.suggestion}`) || [];
+          const lore: Lore = {
+              characters: result.characters,
+              worldRules: worldRules
+          };
+          await updateProjectLore(projectId, lore);
+      }
+
     } catch (e) {
       if (signal.aborted) return;
       const message = e instanceof Error ? e.message : 'Analysis failed';
@@ -111,7 +130,7 @@ export function useDraftSmithEngine({
         setIsAnalyzing(false);
       }
     }
-  }, [getCurrentText, activeChapterId, projectSetting, updateChapterAnalysis]);
+  }, [getCurrentText, activeChapterId, projectSetting, projectId, updateChapterAnalysis, updateProjectLore]);
 
   const cancelAnalysis = useCallback(() => {
     analysisAbortRef.current?.abort();
@@ -252,7 +271,7 @@ export function useDraftSmithEngine({
     const currentText = getCurrentText();
     
     if (action === 'update_manuscript') {
-      const { search_text, replacement_text, description } = params as AgentAction & { action: 'update_manuscript' }['params'];
+      const { search_text, replacement_text, description } = params as Extract<AgentAction, { action: 'update_manuscript' }>['params'];
       try {
         const newText = calculateTextReplacement(currentText, search_text, replacement_text);
         commit(newText, description || "Agent Edit", 'Agent');
@@ -264,7 +283,7 @@ export function useDraftSmithEngine({
     }
 
     if (action === 'append_to_manuscript') {
-      const { text_to_add, description } = params as AgentAction & { action: 'append_to_manuscript' }['params'];
+      const { text_to_add, description } = params as Extract<AgentAction, { action: 'append_to_manuscript' }>['params'];
       
       // Smart newline handling
       const separator = currentText.length === 0 

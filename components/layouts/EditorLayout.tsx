@@ -263,6 +263,7 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
                 editorContext={editorContext} 
                 fullText={currentText} 
                 onAgentAction={engineActions.handleAgentAction} 
+                lore={currentProject?.lore}
               />
             )}
             {activeTab === SidebarTab.HISTORY && (

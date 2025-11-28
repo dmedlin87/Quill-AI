@@ -1,4 +1,9 @@
-import { AnalysisResult } from '../types';
+import { AnalysisResult, CharacterProfile } from '../types';
+
+export interface Lore {
+  characters: CharacterProfile[];
+  worldRules: string[];
+}
 
 export interface Project {
   id: string;
@@ -8,6 +13,7 @@ export interface Project {
     timePeriod: string;
     location: string;
   };
+  lore?: Lore;
   createdAt: number;
   updatedAt: number;
 }

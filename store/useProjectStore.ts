@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db } from '../services/db';
-import { Project, Chapter } from '../types/schema';
+import { Project, Chapter, Lore } from '../types/schema';
 import { AnalysisResult } from '../types';
 import { ParsedChapter } from '../services/manuscriptParser';
 
@@ -24,6 +24,7 @@ interface ProjectState {
   updateChapterContent: (chapterId: string, content: string) => Promise<void>;
   updateChapterTitle: (chapterId: string, title: string) => Promise<void>;
   updateChapterAnalysis: (chapterId: string, analysis: AnalysisResult) => Promise<void>;
+  updateProjectLore: (projectId: string, lore: Lore) => Promise<void>;
   deleteChapter: (chapterId: string) => Promise<void>;
   
   getActiveChapter: () => Chapter | undefined;
@@ -215,6 +216,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         )
     }));
     await db.chapters.update(chapterId, { lastAnalysis: analysis });
+  },
+
+  updateProjectLore: async (projectId, lore) => {
+    set(state => ({
+        currentProject: state.currentProject?.id === projectId ? { ...state.currentProject, lore } : state.currentProject,
+        projects: state.projects.map(p => p.id === projectId ? { ...p, lore } : p)
+    }));
+    await db.projects.update(projectId, { lore, updatedAt: Date.now() });
   },
 
   deleteChapter: async (chapterId) => {

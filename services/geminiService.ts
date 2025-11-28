@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, Modality, LiveServerMessage, FunctionDeclaration } from "@google/genai";
 import { AnalysisResult, PlotSuggestion } from "../types";
+import { Lore } from "../types/schema";
 import { base64ToUint8Array, createBlob, decodeAudioData } from "./audioUtils";
 
 const apiKey = process.env.API_KEY || '';
@@ -44,7 +45,7 @@ export const agentTools: FunctionDeclaration[] = [
 ];
 
 // 1. Content Analysis (Deep Thinking)
-export const analyzeDraft = async (text: string, setting?: { timePeriod: string, location: string }): Promise<AnalysisResult> => {
+export const analyzeDraft = async (text: string, setting?: { timePeriod: string, location: string }, _signal?: AbortSignal): Promise<AnalysisResult> => {
   const model = 'gemini-3-pro-preview'; 
   
   const settingContext = setting 
@@ -235,7 +236,7 @@ export const generatePlotIdeas = async (text: string, userInstruction?: string, 
 };
 
 // 1.8 Rewrite Text (Magic Editor)
-export const rewriteText = async (text: string, mode: string, tone?: string, setting?: { timePeriod: string, location: string }): Promise<string[]> => {
+export const rewriteText = async (text: string, mode: string, tone?: string, setting?: { timePeriod: string, location: string }, _signal?: AbortSignal): Promise<string[]> => {
   const model = 'gemini-3-pro-preview';
 
   const settingInstruction = setting 
@@ -292,7 +293,7 @@ ${mode === 'Tone Tuner' ? `Target Tone: ${tone}` : ''}`;
 };
 
 // 1.9 Contextual Help (Explain/Thesaurus)
-export const getContextualHelp = async (text: string, type: 'Explain' | 'Thesaurus'): Promise<string> => {
+export const getContextualHelp = async (text: string, type: 'Explain' | 'Thesaurus', _signal?: AbortSignal): Promise<string> => {
   const model = 'gemini-2.5-flash'; // Faster model for tools
   const systemInstruction = `You are a helpful writing assistant.
   If type is 'Explain': Provide a concise definition or historical context for the selected term/phrase.
@@ -310,7 +311,24 @@ export const getContextualHelp = async (text: string, type: 'Explain' | 'Thesaur
 };
 
 // 2. Chat Bot Agent
-export const createAgentSession = () => {
+export const createAgentSession = (lore?: Lore) => {
+  let loreContext = "";
+  if (lore) {
+    const chars = lore.characters.map(c => `- ${c.name}: ${c.bio} (Arc: ${c.arc})`).join('\n');
+    const rules = lore.worldRules.map(r => `- ${r}`).join('\n');
+    
+    loreContext = `
+    [LORE BIBLE & CONTEXTUAL MEMORY]
+    Do not contradict these established facts about the story.
+    
+    CHARACTERS:
+    ${chars}
+    
+    WORLD RULES / SETTING DETAILS:
+    ${rules}
+    `;
+  }
+
   return ai.chats.create({
     model: 'gemini-2.5-flash', // Fast for tool calling loops
     config: {
@@ -319,6 +337,8 @@ export const createAgentSession = () => {
       CAPABILITIES:
       1. You can READ the user's cursor position and selection.
       2. You can EDIT the manuscript directly using tools.
+      
+      ${loreContext}
       
       BEHAVIOR:
       - If the user asks to change, rewrite, or fix something, USE THE 'update_manuscript' TOOL. Do not just output the text.

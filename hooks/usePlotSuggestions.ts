@@ -1,110 +1,42 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { HistoryItem } from '../types';
+import { useState, useCallback, useRef } from 'react';
+import { generatePlotIdeas } from '../services/geminiService';
+import { PlotSuggestion } from '../types';
 
-export function useDocumentHistory(
-    initialText: string, 
-    chapterId: string | null,
-    onSave: (text: string) => void
-) {
-  const [text, setText] = useState(initialText);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [lastSavedText, setLastSavedText] = useState(initialText);
+export function usePlotSuggestions(currentText: string) {
+  const [suggestions, setSuggestions] = useState<PlotSuggestion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
-  // Stable ref for onSave to avoid dependency churn
-  const onSaveRef = useRef(onSave);
-  onSaveRef.current = onSave;
+  // Track the latest request ID to handle race conditions
+  const requestIdRef = useRef(0);
 
-  // Reset only when chapter changes, not when initialText reference changes
-  useEffect(() => {
-      setText(initialText);
-      setHistory([]);
-      setLastSavedText(initialText);
-  }, [chapterId]); // intentionally omit initialText - we only reset on chapter change
-
-  const updateText = useCallback((newText: string) => {
-      setText(newText);
-      onSaveRef.current(newText);
-      setLastSavedText(newText);
-  }, []);
-
-  const commit = useCallback((newText: string, description: string, author: 'User' | 'Agent') => {
-    setText(currentText => {
-      // Capture previous content before updating
-      const newItem: HistoryItem = {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        description,
-        author,
-        previousContent: currentText,
-        newContent: newText
-      };
-      // Schedule history update outside the setText updater
-      setHistory(prevHist => [...prevHist, newItem]);
-      return newText;
-    });
-    onSaveRef.current(newText);
-    setLastSavedText(newText);
-  }, []);
-
-  const undo = useCallback(() => {
-    let restoredText: string | null = null;
+  const generate = useCallback(async (query: string, type: string) => {
+    if (!currentText?.trim()) return;
     
-    setHistory(prev => {
-      if (prev.length === 0) return prev;
-      restoredText = prev[prev.length - 1].previousContent;
-      return prev.slice(0, -1);
-    });
+    // Increment request ID for this new call
+    const requestId = ++requestIdRef.current;
     
-    // Handle the side effects outside the updater
-    if (restoredText !== null) {
-      setText(restoredText);
-      onSaveRef.current(restoredText);
-      setLastSavedText(restoredText);
-      return true;
-    }
-    return false;
-  }, []);
+    setIsLoading(true);
+    setError(null);
 
-  const restore = useCallback((id: string) => {
-    setHistory(currentHistory => {
-      const item = currentHistory.find(h => h.id === id);
-      if (item) {
-        // Use functional update to get fresh state
-        setText(item.newContent);
-        onSaveRef.current(item.newContent);
-        setLastSavedText(item.newContent);
-        
-        const newItem: HistoryItem = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          description: `Reverted to version from ${new Date(item.timestamp).toLocaleTimeString()}`,
-          author: 'User',
-          previousContent: text, // Note: this is still stale - see below
-          newContent: item.newContent
-        };
-        return [...currentHistory, newItem];
+    try {
+      const ideas = await generatePlotIdeas(currentText, query, type);
+      
+      // Only update state if this is still the most recent request
+      if (requestId === requestIdRef.current) {
+        setSuggestions(ideas);
       }
-      return currentHistory;
-    });
-  }, [text]); // text dependency needed for previousContent
+    } catch (e) {
+      if (requestId === requestIdRef.current) {
+        console.error("Failed to generate plot ideas", e);
+        setError("Failed to generate ideas. Please try again.");
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [currentText]);
 
-  const reset = useCallback((newText: string) => {
-      setText(newText);
-      setHistory([]);
-      onSaveRef.current(newText);
-      setLastSavedText(newText);
-  }, []);
-
-  const hasUnsavedChanges = text !== lastSavedText;
-
-  return { 
-    text, 
-    updateText,
-    commit,
-    history, 
-    undo, 
-    restore, 
-    reset,
-    hasUnsavedChanges
-  };
+  return { suggestions, isLoading, error, generate };
 }

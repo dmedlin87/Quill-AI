@@ -1,3 +1,24 @@
+export interface CharacterProfile {
+  name: string;
+  bio: string;
+  arc: string;
+  arcStages: Array<{
+    stage: string;
+    description: string;
+  }>;
+  relationships: Array<{
+    name: string;
+    type: string;
+    dynamic: string;
+  }>;
+  plotThreads: string[];
+  inconsistencies: Array<{
+    issue: string;
+    quote?: string;
+  }>;
+  developmentSuggestion: string;
+}
+
 export interface AnalysisResult {
   summary: string;
   strengths: string[];
@@ -28,27 +49,7 @@ export interface AnalysisResult {
     quote?: string; // New: Text snippet for locating
   }>;
 
-  characters: Array<{
-    name: string;
-    bio: string;
-    arc: string;
-    arcStages: Array<{
-      stage: string;
-      description: string;
-    }>;
-    relationships: Array<{
-      name: string;
-      type: string;
-      dynamic: string;
-    }>;
-    plotThreads: string[];
-    // Changed from string[] to object array for context
-    inconsistencies: Array<{
-      issue: string;
-      quote?: string;
-    }>;
-    developmentSuggestion: string;
-  }>;
+  characters: CharacterProfile[];
   
   generalSuggestions: string[];
 }
