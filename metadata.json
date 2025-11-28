@@ -1,0 +1,7 @@
+{
+  "name": "DraftSmith AI",
+  "description": "An intelligent book editor companion that helps authors review rough drafts, providing deep analysis, plot suggestions, and real-time voice brainstorming using Gemini 2.5 and 3.0 models.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
