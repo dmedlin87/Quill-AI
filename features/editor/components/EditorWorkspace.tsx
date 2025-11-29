@@ -33,7 +33,9 @@ export const EditorWorkspace: React.FC = () => {
         clearSelection,
         editor,
         isZenMode,
-        toggleZenMode
+        toggleZenMode,
+        visibleComments,
+        dismissComment,
     } = useEditor();
 
     const { getActiveChapter, currentProject } = useProjectStore();
@@ -162,6 +164,8 @@ export const EditorWorkspace: React.FC = () => {
                     setEditorRef={setEditor}
                     activeHighlight={activeHighlight}
                     analysisHighlights={analysisHighlights}
+                    inlineComments={visibleComments}
+                    onDismissComment={dismissComment}
                     isZenMode={isZenMode}
                   />
     
