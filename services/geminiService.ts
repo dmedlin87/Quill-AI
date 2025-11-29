@@ -2,6 +2,7 @@ import { GoogleGenAI, Type, Modality, LiveServerMessage, FunctionDeclaration } f
 import { AnalysisResult, PlotSuggestion } from "../types";
 import { Lore, ManuscriptIndex } from "../types/schema";
 import { base64ToUint8Array, createBlob, decodeAudioData } from "./audioUtils";
+import { REWRITE_MODES, PROMPT_TEMPLATES, RewriteMode } from "./promptTemplates";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
@@ -260,25 +261,15 @@ export const rewriteText = async (text: string, mode: string, tone?: string, set
     ? `The manuscript is set in ${setting.timePeriod} in ${setting.location}. Ensure all language, objects, and dialogue are historically and geographically accurate to this setting.`
     : `Ensure the language matches the established tone of the text.`;
 
-  const systemInstruction = `Role:
-You are DraftSmith, an expert literary editor and ghostwriter specializing in fiction. Your goal is to rewrite selected text to improve its quality based on a specific "Edit Mode." You must always provide 3 distinct, high-quality variations of the text.
+  const template = PROMPT_TEMPLATES[mode as RewriteMode];
+  
+  if (!template) {
+      console.warn(`Unknown rewrite mode: ${mode}`);
+      return [];
+  }
 
-Context:
-${settingInstruction}
-
-Instructions per Mode:
-If Mode is "Show, Don't Tell": Transform abstract summaries into visceral, sensory descriptions.
-If Mode is "Dialogue Doctor": Remove "on-the-nose" exposition. Make the dialogue sound natural for the time period/setting. Add subtext.
-If Mode is "Tone Tuner": Rewrite the text to strictly match the requested tone (e.g., Darker, Humorous, Formal) while keeping the original plot point intact.
-
-Output Format:
-Return ONLY valid JSON.
-Structure:
-{ "variations": ["Variation 1 text...", "Variation 2 text...", "Variation 3 text..."] }`;
-
-  const userMessage = `Original Text: "${text}"
-Edit Mode: ${mode}
-${mode === 'Tone Tuner' ? `Target Tone: ${tone}` : ''}`;
+  const systemInstruction = template.systemInstruction(settingInstruction);
+  const userMessage = template.userMessage(text, tone);
 
   try {
     const response = await ai.models.generateContent({

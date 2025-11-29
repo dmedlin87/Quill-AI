@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { REWRITE_MODES } from '../services/promptTemplates';
 
 interface MagicBarProps {
   isLoading: boolean;
@@ -158,10 +159,10 @@ export const MagicBar: React.FC<MagicBarProps> = ({
 
               {/* Rewrite Tools */}
               <div className="flex gap-1">
-                  <button onClick={() => onRewrite("Show, Don't Tell")} className={primaryButtonClass} title="Make descriptive">
+                  <button onClick={() => onRewrite(REWRITE_MODES.SHOW_DONT_TELL)} className={primaryButtonClass} title="Make descriptive">
                     <Icons.Eye /> Show
                   </button>
-                  <button onClick={() => onRewrite('Dialogue Doctor')} className={primaryButtonClass} title="Improve dialogue">
+                  <button onClick={() => onRewrite(REWRITE_MODES.DIALOGUE_DOCTOR)} className={primaryButtonClass} title="Improve dialogue">
                     <Icons.Message /> Dialogue
                   </button>
                   <button onClick={() => setActiveView('tone')} className={primaryButtonClass} title="Change Tone">
@@ -188,7 +189,7 @@ export const MagicBar: React.FC<MagicBarProps> = ({
               {['Darker', 'Lighter', 'Formal', 'Emotional', 'Period'].map((tone, i) => (
                  <button
                    key={tone}
-                   onClick={() => onRewrite('Tone Tuner', tone)}
+                   onClick={() => onRewrite(REWRITE_MODES.TONE_TUNER, tone)}
                    className={menuButtonClass}
                    style={{ animationDelay: `${i * 50}ms` }}
                  >
@@ -258,6 +259,11 @@ export const MagicBar: React.FC<MagicBarProps> = ({
                         {copiedIndex === i ? <Icons.Check /> : <Icons.Copy />}
                       </button>
                     </div>
+                    {activeMode && (
+                        <div className="absolute bottom-2 right-2 opacity-50 text-[10px] font-bold text-[var(--ink-400)] uppercase tracking-wider">
+                            {activeMode}
+                        </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -278,7 +284,7 @@ export const MagicBar: React.FC<MagicBarProps> = ({
                    </div>
                 ) : (
                    <div className="bg-white p-4 rounded-lg border border-[var(--ink-100)] shadow-sm">
-                      <p className="text-[var(--ink-800)] font-serif text-lg leading-relaxed">{helpResult}</p>
+                       <p className="text-[var(--ink-800)] font-serif text-lg leading-relaxed">{helpResult}</p>
                    </div>
                 )}
               </div>
