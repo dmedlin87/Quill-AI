@@ -1,25 +1,34 @@
-import { act, renderHook } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useAgenticEditor } from '@/features/agent/hooks/useAgenticEditor';
+import { renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAgenticEditor, type UseAgenticEditorOptions } from '@/features/agent/hooks/useAgenticEditor';
+import type { ToolActionHandler } from '@/features/agent/hooks/useAgentService';
 import type { EditorContext } from '@/types';
 
-const { mockSendMessage, mockCreateAgentSession } = vi.hoisted(() => {
-  const mockSendMessage = vi.fn();
-  const mockCreateAgentSession = vi.fn(() => ({
-    sendMessage: mockSendMessage,
-  }));
+const mockSendMessage = vi.fn();
+const mockResetSession = vi.fn();
+const mockClearMessages = vi.fn();
+let capturedToolHandler: ToolActionHandler | null = null;
 
-  return { mockSendMessage, mockCreateAgentSession };
-});
-
-vi.mock('@/services/gemini/agent', () => ({
-  createAgentSession: mockCreateAgentSession,
+vi.mock('@/features/agent/hooks/useAgentService', () => ({
+  useAgentService: (_fullText: string, { onToolAction }: { onToolAction: ToolActionHandler }) => {
+    capturedToolHandler = onToolAction;
+    return {
+      messages: [],
+      agentState: { status: 'idle' as const },
+      isProcessing: false,
+      sendMessage: mockSendMessage,
+      resetSession: mockResetSession,
+      clearMessages: mockClearMessages,
+    };
+  },
 }));
 
-describe('useAgenticEditor', () => {
-  let currentText = 'Hello world';
+describe('useAgenticEditor tool actions', () => {
+  let currentText = 'The quick brown fox jumps over the lazy dog';
   const editorActions = {
-    updateText: vi.fn((text: string) => { currentText = text; }),
+    updateText: vi.fn((text: string) => {
+      currentText = text;
+    }),
     undo: vi.fn(() => true),
     redo: vi.fn(() => true),
     getEditorContext: vi.fn((): EditorContext => ({
@@ -30,65 +39,80 @@ describe('useAgenticEditor', () => {
     getCurrentText: vi.fn(() => currentText),
   };
 
+  const renderEditorHook = (options: Partial<UseAgenticEditorOptions> = {}) => {
+    renderHook(() =>
+      useAgenticEditor({
+        editorActions,
+        chapters: [],
+        analysis: null,
+        ...options,
+      }),
+    );
+
+    if (!capturedToolHandler) throw new Error('Tool handler was not captured');
+    return capturedToolHandler;
+  };
+
   beforeEach(() => {
-    currentText = 'Hello world';
+    currentText = 'The quick brown fox jumps over the lazy dog';
+    capturedToolHandler = null;
     vi.clearAllMocks();
-    mockSendMessage.mockReset();
-    mockCreateAgentSession.mockClear();
   });
 
-  it('applies manuscript updates via tool invocation', async () => {
-    mockSendMessage.mockImplementation(async payload => {
-      if (Array.isArray((payload as any).message)) {
-        return { text: 'Updated' };
-      }
+  it('returns errors when update_manuscript arguments are missing or text is not found', async () => {
+    const handleToolAction = renderEditorHook();
 
-      if (typeof (payload as any).message === 'string' && (payload as any).message.includes('[USER CONTEXT]')) {
-        return { functionCalls: [{ id: '1', name: 'update_manuscript', args: { oldText: 'Hello', newText: 'Hi' } }] };
-      }
+    await expect(handleToolAction('update_manuscript', { oldText: '', newText: 'Hi' })).resolves.toBe(
+      'Error: Missing oldText or newText parameters',
+    );
 
-      return { text: '' };
-    });
-
-    const { result } = renderHook(() => useAgenticEditor({
-      editorActions,
-      chapters: [{ id: 'ch1', projectId: 'p1', title: 'One', content: currentText, order: 0, updatedAt: Date.now() }],
-      analysis: null,
-    }));
-
-    await act(async () => {
-      await result.current.sendMessage('Rewrite the intro');
-    });
-
-    expect(editorActions.updateText).toHaveBeenCalledWith('Hi world', 'Agent: Manuscript update');
-    expect(currentText).toBe('Hi world');
-    expect(mockSendMessage.mock.calls.length).toBeGreaterThanOrEqual(3); // init + user + function response
+    await expect(handleToolAction('update_manuscript', { oldText: 'Missing text', newText: 'Hi' })).resolves.toBe(
+      'Error: Could not find the text "Missing text..." in the document',
+    );
   });
 
-  it('handles undo requests from the agent', async () => {
-    mockSendMessage.mockImplementation(async payload => {
-      if (Array.isArray((payload as any).message)) {
-        return { text: 'Undone' };
-      }
+  it('short-circuits manuscript updates when the review callback rejects', async () => {
+    const onPendingEdit = vi.fn().mockResolvedValue(false);
+    const handleToolAction = renderEditorHook({ onPendingEdit });
 
-      if (typeof (payload as any).message === 'string' && (payload as any).message.includes('[USER CONTEXT]')) {
-        return { functionCalls: [{ id: 'undo', name: 'undo_last_change', args: {} }] };
-      }
+    const result = await handleToolAction('update_manuscript', { oldText: 'quick', newText: 'slow' });
 
-      return { text: '' };
+    expect(result).toBe('Edit rejected by user');
+    expect(onPendingEdit).toHaveBeenCalledWith({
+      oldText: 'quick',
+      newText: 'slow',
+      description: expect.stringContaining('Agent edit'),
     });
+    expect(editorActions.updateText).not.toHaveBeenCalled();
+    expect(currentText).toBe('The quick brown fox jumps over the lazy dog');
+  });
 
-    const { result } = renderHook(() => useAgenticEditor({
-      editorActions,
-      chapters: [{ id: 'ch1', projectId: 'p1', title: 'One', content: currentText, order: 0, updatedAt: Date.now() }],
-      analysis: null,
-    }));
+  it('returns correct status for undo and redo tool outcomes', async () => {
+    const handleToolAction = renderEditorHook();
 
-    await act(async () => {
-      await result.current.sendMessage('Undo the last change');
-    });
+    editorActions.undo.mockReturnValueOnce(true);
+    await expect(handleToolAction('undo_last_change', {})).resolves.toBe('Undid the last change');
 
-    expect(editorActions.undo).toHaveBeenCalled();
-    expect(result.current.messages.at(-1)?.text).toBe('Undone');
+    editorActions.undo.mockReturnValueOnce(false);
+    await expect(handleToolAction('undo_last_change', {})).resolves.toBe('Nothing to undo');
+
+    editorActions.redo.mockReturnValueOnce(true);
+    await expect(handleToolAction('redo_last_change', {})).resolves.toBe('Redid the last change');
+
+    editorActions.redo.mockReturnValueOnce(false);
+    await expect(handleToolAction('redo_last_change', {})).resolves.toBe('Nothing to redo');
+  });
+
+  it('returns text slices and search results for context tools', async () => {
+    const handleToolAction = renderEditorHook();
+
+    const context = await handleToolAction('get_text_context', { start: 4, end: 9 });
+    expect(context).toBe('quick');
+
+    const searchResult = await handleToolAction('search_text', { query: 'brown' });
+    const parsed = JSON.parse(searchResult);
+
+    expect(parsed).toMatchObject({ found: true, index: 10 });
+    expect(parsed.context).toContain('brown');
   });
 });
