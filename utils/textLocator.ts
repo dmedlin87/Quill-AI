@@ -1,3 +1,5 @@
+import { AnalysisResult } from '../types';
+
 export interface TextRange {
   start: number;
   end: number;
@@ -64,4 +66,111 @@ export const findQuoteRange = (fullText: string, quote: string): TextRange | nul
   }
 
   return null;
+};
+
+/**
+ * Enriches an AnalysisResult with position indices for all quotes.
+ * This enables deep-linking from analysis cards to text positions.
+ */
+export const enrichAnalysisWithPositions = (
+  analysis: AnalysisResult,
+  fullText: string
+): AnalysisResult => {
+  // Deep clone to avoid mutation
+  const enriched = JSON.parse(JSON.stringify(analysis)) as AnalysisResult;
+
+  // Enrich plot issues
+  enriched.plotIssues = enriched.plotIssues.map(issue => {
+    if (issue.quote) {
+      const range = findQuoteRange(fullText, issue.quote);
+      if (range) {
+        return { ...issue, startIndex: range.start, endIndex: range.end };
+      }
+    }
+    return issue;
+  });
+
+  // Enrich setting issues
+  if (enriched.settingAnalysis?.issues) {
+    enriched.settingAnalysis.issues = enriched.settingAnalysis.issues.map(issue => {
+      const range = findQuoteRange(fullText, issue.quote);
+      if (range) {
+        return { ...issue, startIndex: range.start, endIndex: range.end };
+      }
+      return issue;
+    });
+  }
+
+  // Enrich character inconsistencies
+  enriched.characters = enriched.characters.map(character => ({
+    ...character,
+    inconsistencies: character.inconsistencies.map(inc => {
+      if (inc.quote) {
+        const range = findQuoteRange(fullText, inc.quote);
+        if (range) {
+          return { ...inc, startIndex: range.start, endIndex: range.end };
+        }
+      }
+      return inc;
+    })
+  }));
+
+  return enriched;
+};
+
+/**
+ * Get a clickable issue with resolved position
+ */
+export interface ClickableIssue {
+  type: 'plot' | 'setting' | 'character';
+  issue: string;
+  suggestion?: string;
+  quote?: string;
+  range: TextRange | null;
+}
+
+/**
+ * Extract all clickable issues from an analysis result
+ */
+export const extractClickableIssues = (
+  analysis: AnalysisResult,
+  fullText: string
+): ClickableIssue[] => {
+  const issues: ClickableIssue[] = [];
+
+  // Plot issues
+  analysis.plotIssues.forEach(issue => {
+    issues.push({
+      type: 'plot',
+      issue: issue.issue,
+      suggestion: issue.suggestion,
+      quote: issue.quote,
+      range: issue.quote ? findQuoteRange(fullText, issue.quote) : null
+    });
+  });
+
+  // Setting issues
+  analysis.settingAnalysis?.issues.forEach(issue => {
+    issues.push({
+      type: 'setting',
+      issue: issue.issue,
+      suggestion: issue.suggestion,
+      quote: issue.quote,
+      range: findQuoteRange(fullText, issue.quote)
+    });
+  });
+
+  // Character inconsistencies
+  analysis.characters.forEach(char => {
+    char.inconsistencies.forEach(inc => {
+      issues.push({
+        type: 'character',
+        issue: `${char.name}: ${inc.issue}`,
+        quote: inc.quote,
+        range: inc.quote ? findQuoteRange(fullText, inc.quote) : null
+      });
+    });
+  });
+
+  return issues;
 };

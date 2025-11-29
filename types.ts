@@ -17,6 +17,8 @@ export interface CharacterProfile {
   inconsistencies: Array<{
     issue: string;
     quote?: string;
+    startIndex?: number;
+    endIndex?: number;
   }>;
   developmentSuggestion: string;
 }
@@ -29,8 +31,18 @@ export interface AnalysisResult {
   pacing: {
     score: number;
     analysis: string;
-    slowSections: string[];
-    fastSections: string[];
+    slowSections: Array<{
+      description: string;
+      quote?: string;
+      startIndex?: number;
+      endIndex?: number;
+    }> | string[];
+    fastSections: Array<{
+      description: string;
+      quote?: string;
+      startIndex?: number;
+      endIndex?: number;
+    }> | string[];
   };
 
   settingAnalysis?: {
@@ -48,7 +60,9 @@ export interface AnalysisResult {
     issue: string;
     location: string;
     suggestion: string;
-    quote?: string; // New: Text snippet for locating
+    quote?: string;
+    startIndex?: number;
+    endIndex?: number;
   }>;
 
   characters: CharacterProfile[];

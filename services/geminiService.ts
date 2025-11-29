@@ -13,7 +13,20 @@
  */
 
 // Re-export from modular services for backward compatibility
-export { analyzeDraft, generatePlotIdeas } from './gemini/analysis';
+export { 
+  analyzeDraft, 
+  generatePlotIdeas,
+  // Parallel analysis functions (new)
+  fetchPacingAnalysis,
+  fetchCharacterAnalysis,
+  fetchPlotAnalysis,
+  fetchSettingAnalysis,
+  // Types
+  type PacingAnalysisResult,
+  type CharacterAnalysisResult,
+  type PlotAnalysisResult,
+  type SettingAnalysisResult
+} from './gemini/analysis';
 export { createAgentSession, rewriteText, getContextualHelp, agentTools } from './gemini/agent';
 export { generateSpeech, connectLiveSession } from './gemini/audio';
 export { cleanJsonOutput, safeParseJson } from './gemini/resilientParser';

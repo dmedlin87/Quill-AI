@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useEditor } from '../context/EditorContext';
+import { useManuscript } from '../contexts/ManuscriptContext';
 import { useProjectStore } from '../store/useProjectStore';
 import { useDraftSmithEngine } from '../hooks/useDraftSmithEngine';
 import { useManuscriptIndexer } from '../hooks/useManuscriptIndexer';
@@ -26,7 +26,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onHomeClick }) => {
     clearSelection,
     activeHighlight,
     handleNavigateToIssue
-  } = useEditor();
+  } = useManuscript();
 
   const { 
     currentProject, 
