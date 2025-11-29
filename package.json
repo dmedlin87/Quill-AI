@@ -15,7 +15,8 @@
     "jspdf": "^3.0.4",
     "dexie": "^4.0.1",
     "zustand": "^4.5.0",
-    "diff": "^5.2.0"
+    "diff": "^5.2.0",
+    "diff-match-patch": "^1.0.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

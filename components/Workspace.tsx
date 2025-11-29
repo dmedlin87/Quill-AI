@@ -32,6 +32,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onHomeClick }) => {
   const { 
     currentProject, 
     activeChapterId, 
+    chapters,
     updateChapterAnalysis, 
     updateProjectLore,
     getActiveChapter 
@@ -72,7 +73,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onHomeClick }) => {
       isSidebarCollapsed={isSidebarCollapsed} onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       isToolsCollapsed={isToolsCollapsed} onToggleTools={() => setIsToolsCollapsed(!isToolsCollapsed)}
       onHomeClick={onHomeClick}
-      currentProject={currentProject} activeChapter={activeChapter} currentText={currentText} history={history}
+      currentProject={currentProject} activeChapter={activeChapter} chapters={chapters} currentText={currentText} history={history}
       textareaRef={textareaRef} backdropRef={backdropRef}
       onEditorChange={handleEditorChange} onDirectTextChange={updateText} onSelectionChange={handleSelectionChange} onMouseUp={handleMouseUp} onScroll={handleScroll}
       selectionRange={selectionRange} selectionPos={selectionPos} activeHighlight={activeHighlight}

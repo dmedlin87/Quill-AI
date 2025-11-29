@@ -11,7 +11,7 @@ const ai = new GoogleGenAI({ apiKey });
 export const agentTools: FunctionDeclaration[] = [
   {
     name: 'update_manuscript',
-    description: 'Replaces a specific section of text with new content. Use this to rewrite sentences, paragraphs, or fix typos. Provide the exact text to find and the replacement text.',
+    description: 'Replaces a specific section of text in the ACTIVE CHAPTER with new content. Use this to rewrite sentences, paragraphs, or fix typos. Provide the exact text to find and the replacement text.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -24,7 +24,7 @@ export const agentTools: FunctionDeclaration[] = [
   },
   {
     name: 'append_to_manuscript',
-    description: 'Adds new text to the very end of the manuscript.',
+    description: 'Adds new text to the very end of the ACTIVE CHAPTER.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -311,10 +311,17 @@ export const getContextualHelp = async (text: string, type: 'Explain' | 'Thesaur
 };
 
 // 2. Chat Bot Agent
-export const createAgentSession = (lore?: Lore) => {
+export const createAgentSession = (lore?: Lore, analysis?: AnalysisResult, fullManuscriptContext?: string) => {
   let loreContext = "";
   if (lore) {
-    const chars = lore.characters.map(c => `- ${c.name}: ${c.bio} (Arc: ${c.arc})`).join('\n');
+    const chars = lore.characters.map(c => `
+    - Name: ${c.name}
+    - Bio: ${c.bio}
+    - Arc Summary: ${c.arc}
+    - Key Development Suggestion: ${c.developmentSuggestion}
+    - Known Inconsistencies: ${c.inconsistencies.map(i => i.issue).join(', ') || "None"}
+    `).join('\n');
+    
     const rules = lore.worldRules.map(r => `- ${r}`).join('\n');
     
     loreContext = `
@@ -329,19 +336,45 @@ export const createAgentSession = (lore?: Lore) => {
     `;
   }
 
+  // Inject Analysis Context (The "Brain" of the editor)
+  let analysisContext = "";
+  if (analysis) {
+    analysisContext = `
+    [DEEP ANALYSIS INSIGHTS]
+    Use these insights to answer questions about plot holes, pacing, and character arcs.
+    
+    SUMMARY: ${analysis.summary}
+    STRENGTHS: ${analysis.strengths.join(', ')}
+    WEAKNESSES: ${analysis.weaknesses.join(', ')}
+    
+    PLOT ISSUES:
+    ${analysis.plotIssues.map(p => `- ${p.issue} (Fix: ${p.suggestion})`).join('\n')}
+    
+    CHARACTERS (FROM ANALYSIS):
+    ${analysis.characters.map(c => `- ${c.name}: ${c.arc} (Suggestion: ${c.developmentSuggestion})`).join('\n')}
+    `;
+  }
+
   return ai.chats.create({
-    model: 'gemini-2.5-flash', // Fast for tool calling loops
+    model: 'gemini-2.5-flash', 
     config: {
       systemInstruction: `You are DraftSmith Agent, an advanced AI editor embedded in a text editor. 
       
       CAPABILITIES:
       1. You can READ the user's cursor position and selection.
       2. You can EDIT the manuscript directly using tools.
+      3. You have access to the Full Manuscript and Deep Analysis below.
       
       ${loreContext}
+
+      ${analysisContext}
+
+      [FULL MANUSCRIPT CONTEXT]
+      ${fullManuscriptContext || "No manuscript content loaded."}
       
       BEHAVIOR:
-      - If the user asks to change, rewrite, or fix something, USE THE 'update_manuscript' TOOL. Do not just output the text.
+      - If the user asks to change, rewrite, or fix something in the ACTIVE CHAPTER, USE THE 'update_manuscript' TOOL. Do not just output the text.
+      - If the user asks to edit a DIFFERENT chapter (not marked as ACTIVE), tell them: "I found a spot in [Chapter Name], but you need to switch to that chapter for me to apply the edit."
       - If the user asks to undo, USE THE 'undo_last_change' TOOL.
       - Always look at the cursor context provided in the user message.
       - Be concise in your text responses. Actions speak louder than words.

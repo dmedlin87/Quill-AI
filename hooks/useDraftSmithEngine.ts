@@ -5,7 +5,7 @@ import { Lore } from '../types/schema';
 
 // Define proper types
 interface ProjectContext {
-  id: string; // added id
+  id: string;
   setting?: {
     timePeriod: string;
     location: string;
@@ -33,6 +33,13 @@ interface UseDraftSmithEngineProps {
   commit: (text: string, desc: string, author: 'User' | 'Agent') => void;
   selectionRange: SelectionRange | null;
   clearSelection: () => void;
+}
+
+export interface PendingDiff {
+  original: string;
+  modified: string;
+  description: string;
+  author: 'User' | 'Agent';
 }
 
 const calculateTextReplacement = (
@@ -73,6 +80,9 @@ export function useDraftSmithEngine({
   const [isMagicLoading, setIsMagicLoading] = useState(false);
   const [magicError, setMagicError] = useState<string | null>(null);
   const magicAbortRef = useRef<AbortController | null>(null);
+
+  // Review Mode State
+  const [pendingDiff, setPendingDiff] = useState<PendingDiff | null>(null);
 
   // Capture selection at operation start to detect staleness
   const operationSelectionRef = useRef<SelectionRange | null>(null);
@@ -263,6 +273,18 @@ export function useDraftSmithEngine({
 
 
   // --- 3. Agent Logic ---
+  
+  const acceptDiff = useCallback(() => {
+    if (pendingDiff) {
+        commit(pendingDiff.modified, pendingDiff.description, pendingDiff.author);
+        setPendingDiff(null);
+    }
+  }, [pendingDiff, commit]);
+
+  const rejectDiff = useCallback(() => {
+    setPendingDiff(null);
+  }, []);
+
   const handleAgentAction = useCallback(async (
     action: AgentAction['action'], 
     params: AgentAction['params']
@@ -274,8 +296,16 @@ export function useDraftSmithEngine({
       const { search_text, replacement_text, description } = params as Extract<AgentAction, { action: 'update_manuscript' }>['params'];
       try {
         const newText = calculateTextReplacement(currentText, search_text, replacement_text);
-        commit(newText, description || "Agent Edit", 'Agent');
-        return "Success: Text updated.";
+        
+        // Instead of committing, set pending state for review
+        setPendingDiff({
+          original: currentText,
+          modified: newText,
+          description: description || "Agent Edit",
+          author: 'Agent'
+        });
+        
+        return "Edit proposed. Waiting for user review.";
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         throw new Error(message);
@@ -293,8 +323,16 @@ export function useDraftSmithEngine({
           : '\n';
       
       const newText = currentText + separator + text_to_add;
-      commit(newText, description || "Agent Append", 'Agent');
-      return "Success: Text appended.";
+      
+      // Instead of committing, set pending state for review
+      setPendingDiff({
+          original: currentText,
+          modified: newText,
+          description: description || "Agent Append",
+          author: 'Agent'
+      });
+      
+      return "Edit proposed. Waiting for user review.";
     }
 
     if (action === 'undo_last_change') {
@@ -302,7 +340,7 @@ export function useDraftSmithEngine({
     }
 
     return "Unknown action.";
-  }, [getCurrentText, commit]);
+  }, [getCurrentText]);
 
   return {
     state: {
@@ -313,6 +351,7 @@ export function useDraftSmithEngine({
       magicHelpType,
       isMagicLoading,
       magicError,
+      pendingDiff,
     },
     actions: {
       runAnalysis,
@@ -322,6 +361,8 @@ export function useDraftSmithEngine({
       applyVariation,
       closeMagicBar,
       handleAgentAction,
+      acceptDiff,
+      rejectDiff
     }
   };
 }

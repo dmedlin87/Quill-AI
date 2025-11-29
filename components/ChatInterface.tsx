@@ -1,32 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChatMessage, EditorContext } from '../types';
+import { ChatMessage, EditorContext, AnalysisResult } from '../types';
 import { createAgentSession } from '../services/geminiService';
 import { Chat } from "@google/genai";
-import { Lore } from '../types/schema';
-import { DiffViewer } from './DiffViewer';
+import { Lore, Chapter } from '../types/schema';
 
 interface ChatInterfaceProps {
   editorContext: EditorContext;
   fullText: string;
   onAgentAction: (action: string, params: any) => Promise<string>; // callback to App.tsx
   lore?: Lore;
+  chapters?: Chapter[];
+  analysis?: AnalysisResult | null;
 }
 
-interface PendingEdit {
-  id: string; // tool call id
-  searchText: string;
-  replacementText: string;
-  description: string;
-  resolve: (result: string) => void;
-  reject: (reason: string) => void;
-}
-
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ editorContext, fullText, onAgentAction, lore }) => {
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
+    editorContext, 
+    fullText, 
+    onAgentAction, 
+    lore,
+    chapters = [],
+    analysis 
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [agentState, setAgentState] = useState<'idle' | 'thinking' | 'writing' | 'waiting_approval'>('idle');
-  const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+  const [agentState, setAgentState] = useState<'idle' | 'thinking' | 'writing'>('idle');
   
   const chatRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -34,21 +32,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ editorContext, ful
   // Initialize Chat Session
   useEffect(() => {
     if (!chatRef.current) {
-      chatRef.current = createAgentSession(lore);
+      // Construct a single string containing all chapters for context
+      const fullManuscript = chapters.map(c => {
+         // Check if this is the active chapter by comparing text content (simple heuristic) or ID if we had it here
+         const isActive = c.content === fullText;
+         return `[CHAPTER: ${c.title}]${isActive ? " (ACTIVE - You can edit this)" : " (READ ONLY - Request user to switch)"}\n${c.content}\n`;
+      }).join('\n-------------------\n');
+
+      chatRef.current = createAgentSession(lore, analysis || undefined, fullManuscript);
+      
       // Initialize with instructions but no visible message
       const init = async () => {
          await chatRef.current?.sendMessage({ 
-             message: `I have loaded the manuscript. Length: ${fullText.length} characters. I am ready to help.` 
+             message: `I have loaded the manuscript. Total Chapters: ${chapters.length}. Active Chapter Length: ${fullText.length} characters. I am ready to help.` 
          });
       };
       init();
     }
-  }, [lore]);
+  }, [lore, analysis, chapters, fullText]);
 
   // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, agentState, pendingEdit]);
+  }, [messages, agentState]);
 
   const sendMessage = async () => {
     if (!input.trim() || !chatRef.current) return;
@@ -88,68 +94,38 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ editorContext, ful
            }]);
 
            try {
-             if (call.name === 'update_manuscript') {
-                // Intercept update_manuscript for Diff Review
-                setAgentState('waiting_approval');
-                
-                // Create a promise that waits for user interaction in the UI
-                const approvalResult = await new Promise<string>((resolve, reject) => {
-                    setPendingEdit({
-                        id: call.id,
-                        searchText: call.args.search_text,
-                        replacementText: call.args.replacement_text,
-                        description: call.args.description || 'Suggested Edit',
-                        resolve,
-                        reject
-                    });
-                });
+             // Execute Action (This now triggers the Global Review Modal if needed)
+             const actionResult = await onAgentAction(call.name, call.args);
+             
+             functionResponses.push({
+               id: call.id,
+               name: call.name,
+               response: { result: actionResult } 
+             });
 
-                // User Accepted -> Execute Action
-                setAgentState('writing');
-                const actionResult = await onAgentAction(call.name, call.args);
-                
-                functionResponses.push({
-                   id: call.id,
-                   name: call.name,
-                   response: { result: actionResult } 
-                });
-
-                // Add success message
+             // Add success/status message
+             if (actionResult.includes('Waiting for user review')) {
                 setMessages(prev => [...prev, {
                     role: 'model',
-                    text: `✅ Edit accepted and applied.`,
+                    text: `📝 Reviewing proposed edit...`,
                     timestamp: new Date()
                 }]);
-
-             } else {
-                 // Other tools (e.g. undo, append) run immediately for now
-                 const actionResult = await onAgentAction(call.name, call.args);
-                 functionResponses.push({
-                   id: call.id,
-                   name: call.name,
-                   response: { result: actionResult } 
-                 });
              }
 
            } catch (err: any) {
-             // Handle Rejection or Errors
-             const errorMsg = err === 'User rejected' ? "User rejected the edit." : err.message || "Unknown error";
+             const errorMsg = err.message || "Unknown error";
              
-             if (err === 'User rejected') {
-                setMessages(prev => [...prev, {
-                    role: 'model',
-                    text: `❌ Edit rejected.`,
-                    timestamp: new Date()
-                }]);
-             }
+             setMessages(prev => [...prev, {
+                role: 'model',
+                text: `❌ Error: ${errorMsg}`,
+                timestamp: new Date()
+            }]);
 
              functionResponses.push({
                id: call.id,
                name: call.name,
-               response: { result: errorMsg } // Returning result as error message string so model knows what happened
+               response: { result: errorMsg } 
              });
-           } finally {
-             setPendingEdit(null);
            }
         }
 
@@ -178,7 +154,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ editorContext, ful
     } finally {
       setIsLoading(false);
       setAgentState('idle');
-      setPendingEdit(null); // Ensure cleanup
     }
   };
 
@@ -192,6 +167,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ editorContext, ful
          </div>
          <div className="flex gap-4">
              {lore && <span title="Lore Bible Active" className="text-indigo-600 font-bold">📖 Lore Active</span>}
+             {analysis && <span title="Deep Analysis Context Active" className="text-purple-600 font-bold">🧠 Analysis Active</span>}
              <div className="font-mono">
                 Ln {Math.floor(editorContext.cursorPosition / 80) + 1} : Col {editorContext.cursorPosition % 80}
              </div>
@@ -204,32 +180,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ editorContext, ful
             <div className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
               msg.text.startsWith('🛠️') 
                 ? 'bg-gray-50 text-gray-500 border border-gray-100 font-mono text-xs py-2 w-full max-w-none text-center' 
-                : msg.text.startsWith('✅') || msg.text.startsWith('❌')
-                  ? 'bg-gray-50 text-gray-600 text-xs py-2 w-full max-w-none text-center italic'
-                  : msg.role === 'user' 
-                    ? 'bg-indigo-600 text-white rounded-br-none' 
-                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
+                : msg.text.startsWith('📝')
+                  ? 'bg-indigo-50 text-indigo-700 text-xs py-2 w-full max-w-none text-center italic border border-indigo-100'
+                  : msg.text.startsWith('❌')
+                    ? 'bg-red-50 text-red-600 text-xs py-2 w-full max-w-none text-center italic border border-red-100'
+                    : msg.role === 'user' 
+                      ? 'bg-indigo-600 text-white rounded-br-none' 
+                      : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
             }`}>
               {msg.text}
             </div>
           </div>
         ))}
-        
-        {/* Pending Edit Diff Viewer */}
-        {pendingEdit && (
-            <div className="mx-2">
-                <DiffViewer 
-                    oldText={pendingEdit.searchText}
-                    newText={pendingEdit.replacementText}
-                    description={pendingEdit.description}
-                    onAccept={() => pendingEdit.resolve('User accepted')}
-                    onReject={() => pendingEdit.reject('User rejected')}
-                />
-            </div>
-        )}
 
         {/* Loading / State Indicators */}
-        {agentState !== 'idle' && agentState !== 'waiting_approval' && (
+        {agentState !== 'idle' && (
           <div className="flex justify-start">
             <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 rounded-bl-none flex items-center gap-3">
                <div className="flex space-x-1">
@@ -251,15 +216,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ editorContext, ful
           <input
             type="text"
             className="flex-1 border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow disabled:bg-gray-100 disabled:text-gray-400"
-            placeholder={pendingEdit ? "Review proposed changes above..." : "Type / to use tools or ask Agent to edit..."}
+            placeholder="Type / to use tools or ask Agent to edit..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !pendingEdit && sendMessage()}
-            disabled={isLoading || pendingEdit !== null}
+            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+            disabled={isLoading}
           />
           <button 
             onClick={sendMessage}
-            disabled={!input.trim() || isLoading || pendingEdit !== null}
+            disabled={!input.trim() || isLoading}
             className="bg-indigo-600 text-white rounded-lg p-3 hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">

@@ -7,6 +7,9 @@ import { ActivityFeed } from '../ActivityFeed';
 import { VoiceMode } from '../VoiceMode';
 import { MagicBar } from '../MagicBar';
 import { FindReplaceModal } from '../FindReplaceModal';
+import { VisualDiff } from '../VisualDiff';
+import { PendingDiff } from '../../hooks/useDraftSmithEngine';
+import { Chapter } from '../../types/schema';
 
 interface EditorLayoutProps {
   // Navigation State
@@ -21,6 +24,7 @@ interface EditorLayoutProps {
   // Data & Content
   currentProject: any;
   activeChapter: any;
+  chapters: Chapter[];
   currentText: string;
   history: HistoryItem[];
 
@@ -48,6 +52,7 @@ interface EditorLayoutProps {
     magicHelpResult?: string;
     magicHelpType?: 'Explain' | 'Thesaurus' | null;
     isMagicLoading: boolean;
+    pendingDiff: PendingDiff | null;
   };
   engineActions: {
     runAnalysis: () => void;
@@ -56,6 +61,8 @@ interface EditorLayoutProps {
     applyVariation: (text: string) => void;
     closeMagicBar: () => void;
     handleAgentAction: (action: string, params: any) => Promise<string>;
+    acceptDiff: () => void;
+    rejectDiff: () => void;
   };
 }
 
@@ -64,7 +71,7 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
   isSidebarCollapsed, onToggleSidebar,
   isToolsCollapsed, onToggleTools,
   onHomeClick,
-  currentProject, activeChapter, currentText, history,
+  currentProject, activeChapter, chapters, currentText, history,
   textareaRef, backdropRef,
   onEditorChange, onDirectTextChange, onSelectionChange, onMouseUp, onScroll,
   selectionRange, selectionPos, activeHighlight,
@@ -73,6 +80,7 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
 }) => {
 
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
+  const [viewingHistoryDiff, setViewingHistoryDiff] = useState<{original: string, modified: string, description: string} | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -91,6 +99,14 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
     cursorPosition: textareaRef.current?.selectionStart || 0,
     selection: selectionRange,
     totalLength: currentText.length
+  };
+
+  const handleInspectHistory = (item: HistoryItem) => {
+    setViewingHistoryDiff({
+        original: item.previousContent,
+        modified: item.newContent,
+        description: item.description
+    });
   };
 
   const renderHighlights = () => {
@@ -236,6 +252,107 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
           </div>
           <div className="h-16"></div>
         </div>
+
+        {/* Global Review Modal (Agent) */}
+        {engineState.pendingDiff && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                 <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                         </svg>
+                     </div>
+                     <div>
+                        <h3 className="font-serif font-bold text-gray-800">Review Agent Suggestions</h3>
+                        <p className="text-xs text-gray-500">The agent has proposed changes to your manuscript.</p>
+                     </div>
+                 </div>
+                 <button onClick={engineActions.rejectDiff} className="text-gray-400 hover:text-gray-600">
+                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                     </svg>
+                 </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 bg-white relative">
+                 <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg">
+                    <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1 block">Agent Note</span>
+                    <p className="text-indigo-900 text-sm font-medium">{engineState.pendingDiff.description}</p>
+                 </div>
+                 
+                 <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-inner min-h-[200px]">
+                    <VisualDiff original={engineState.pendingDiff.original} modified={engineState.pendingDiff.modified} />
+                 </div>
+              </div>
+
+              <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                 <button 
+                    onClick={engineActions.rejectDiff} 
+                    className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-white hover:border-gray-400 hover:shadow-sm transition-all"
+                 >
+                    Reject Changes
+                 </button>
+                 <button 
+                    onClick={engineActions.acceptDiff} 
+                    className="px-6 py-2.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-200 hover:shadow-xl transition-all flex items-center gap-2"
+                 >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                    </svg>
+                    Accept Changes
+                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Global History Diff Modal (Read Only) */}
+        {viewingHistoryDiff && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                 <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600">
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                         </svg>
+                     </div>
+                     <div>
+                        <h3 className="font-serif font-bold text-gray-800">Change History</h3>
+                        <p className="text-xs text-gray-500">Comparing version state.</p>
+                     </div>
+                 </div>
+                 <button onClick={() => setViewingHistoryDiff(null)} className="text-gray-400 hover:text-gray-600">
+                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                     </svg>
+                 </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 bg-white relative">
+                 <div className="mb-6 p-4 bg-gray-50 border border-gray-100 rounded-lg">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Change Description</span>
+                    <p className="text-gray-900 text-sm font-medium">{viewingHistoryDiff.description}</p>
+                 </div>
+                 
+                 <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-inner min-h-[200px]">
+                    <VisualDiff original={viewingHistoryDiff.original} modified={viewingHistoryDiff.modified} />
+                 </div>
+              </div>
+
+              <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                 <button 
+                    onClick={() => setViewingHistoryDiff(null)} 
+                    className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-white hover:border-gray-400 hover:shadow-sm transition-all"
+                 >
+                    Close
+                 </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 4. Right Tools Panel */}
@@ -264,10 +381,16 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
                 fullText={currentText} 
                 onAgentAction={engineActions.handleAgentAction} 
                 lore={currentProject?.lore}
+                chapters={chapters}
+                analysis={activeChapter?.lastAnalysis}
               />
             )}
             {activeTab === SidebarTab.HISTORY && (
-              <ActivityFeed history={history} onRestore={onRestoreHistory} />
+              <ActivityFeed 
+                history={history} 
+                onRestore={onRestoreHistory} 
+                onInspect={handleInspectHistory} 
+              />
             )}
             {activeTab === SidebarTab.VOICE && (
               <VoiceMode />
