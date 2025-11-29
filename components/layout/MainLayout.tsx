@@ -3,9 +3,7 @@ import { SidebarTab } from '../../types';
 import { ProjectSidebar } from '../ProjectSidebar';
 import { EditorWorkspace } from '../editor/EditorWorkspace';
 import { useProjectStore } from '../../store/useProjectStore';
-import { ProjectDashboard } from '../ProjectDashboard';
 import { UploadLayout } from '../layouts/UploadLayout';
-import { AnalysisPanel } from '../AnalysisPanel';
 import { ChatInterface } from '../ChatInterface';
 import { ActivityFeed } from '../ActivityFeed';
 import { VoiceMode } from '../VoiceMode';
@@ -14,6 +12,7 @@ import { useDraftSmithEngine } from '../../hooks/useDraftSmithEngine';
 import { Dashboard } from '../dashboard/Dashboard';
 import { useManuscriptIndexer } from '../../hooks/useManuscriptIndexer';
 import { Contradiction } from '../../types/schema';
+import { UsageBadge } from '../UsageBadge';
 
 // Nav Icons
 const Icons = {
@@ -73,14 +72,6 @@ export const MainLayout: React.FC = () => {
   };
 
   const handleHomeClick = () => {
-     // Ideally this would navigate back to project list, but store doesn't explicitly have "close project"
-     // We can simulate it by reloading or clearing current project if store supported it.
-     // For now, we'll reload page to go back to project selection if that's the desired behavior,
-     // or simply do nothing if the store persists state.
-     // Based on App.tsx logic: setMode(AppMode.UPLOAD) -> which essentially renders UploadLayout
-     // but we need to reset currentProject in store to truly go back?
-     // useProjectStore doesn't expose a 'closeProject'. We'll implement a workaround by reloading for now 
-     // or assume the user wants to stay in the project but see the list (not fully supported by current store).
      window.location.reload(); 
   };
 
@@ -119,6 +110,10 @@ export const MainLayout: React.FC = () => {
             )}
           </button>
         ))}
+
+        <div className="mt-auto mb-2">
+            {/* Nav bottom placeholder */}
+        </div>
       </nav>
 
       {/* 2. Chapter Sidebar */}
@@ -130,11 +125,18 @@ export const MainLayout: React.FC = () => {
       )}
 
       {/* 3. Editor Workspace */}
-      <EditorWorkspace 
-         engineState={engine.state}
-         engineActions={engine.actions}
-         contradictions={contradictions}
-      />
+      <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex items-center justify-between px-6 py-2 bg-[var(--parchment-50)] border-b border-[var(--ink-100)]">
+              <div className="flex items-center gap-4">
+                  <UsageBadge />
+              </div>
+          </div>
+          <EditorWorkspace 
+            engineState={engine.state}
+            engineActions={engine.actions}
+            contradictions={contradictions}
+          />
+      </div>
 
       {/* 4. Tools Panel */}
       {!isToolsCollapsed && (

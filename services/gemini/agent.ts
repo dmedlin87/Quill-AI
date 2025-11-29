@@ -1,4 +1,4 @@
-import { Type, FunctionDeclaration } from "@google/genai";
+import { Type, FunctionDeclaration, UsageMetadata } from "@google/genai";
 import { AnalysisResult } from "../../types";
 import { Lore } from "../../types/schema";
 import { ai } from "./client";
@@ -40,7 +40,7 @@ export const agentTools: FunctionDeclaration[] = [
   }
 ];
 
-export const rewriteText = async (text: string, mode: string, tone?: string, setting?: { timePeriod: string, location: string }, _signal?: AbortSignal): Promise<string[]> => {
+export const rewriteText = async (text: string, mode: string, tone?: string, setting?: { timePeriod: string, location: string }, _signal?: AbortSignal): Promise<{ result: string[]; usage?: UsageMetadata }> => {
   const model = 'gemini-3-pro-preview';
 
   const settingInstruction = setting 
@@ -75,14 +75,17 @@ ${mode === 'Tone Tuner' ? `Target Tone: ${tone}` : ''}`;
 
     const jsonText = response.text || "{}";
     const result = JSON.parse(jsonText);
-    return result.variations || [];
+    return {
+      result: result.variations || [],
+      usage: response.usageMetadata
+    };
   } catch (e) {
     console.error("Rewrite failed", e);
-    return [];
+    return { result: [] };
   }
 };
 
-export const getContextualHelp = async (text: string, type: 'Explain' | 'Thesaurus', _signal?: AbortSignal): Promise<string> => {
+export const getContextualHelp = async (text: string, type: 'Explain' | 'Thesaurus', _signal?: AbortSignal): Promise<{ result: string; usage?: UsageMetadata }> => {
   const model = 'gemini-2.5-flash'; 
   
   const prompt = `Type: ${type}\nText: "${text}"\nKeep the answer short and helpful.`;
@@ -93,7 +96,10 @@ export const getContextualHelp = async (text: string, type: 'Explain' | 'Thesaur
     config: { systemInstruction: CONTEXTUAL_HELP_SYSTEM_INSTRUCTION }
   });
   
-  return response.text || "No result found.";
+  return {
+    result: response.text || "No result found.",
+    usage: response.usageMetadata
+  };
 };
 
 export const createAgentSession = (lore?: Lore, analysis?: AnalysisResult, fullManuscriptContext?: string) => {

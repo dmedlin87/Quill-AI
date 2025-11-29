@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useProjectStore } from './store/useProjectStore';
 import { ManuscriptProvider } from './contexts/ManuscriptContext';
 import { AnalysisProvider } from './contexts/AnalysisContext';
+import { UsageProvider } from './contexts/UsageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MainLayout } from './components/layout/MainLayout';
 
@@ -14,11 +15,13 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <ManuscriptProvider>
-        <AnalysisProvider>
-          <MainLayout />
-        </AnalysisProvider>
-      </ManuscriptProvider>
+      <UsageProvider>
+        <ManuscriptProvider>
+          <AnalysisProvider>
+            <MainLayout />
+          </AnalysisProvider>
+        </ManuscriptProvider>
+      </UsageProvider>
     </ErrorBoundary>
   );
 };

@@ -1,4 +1,4 @@
-import { Type } from "@google/genai";
+import { Type, UsageMetadata } from "@google/genai";
 import { AnalysisResult, PlotSuggestion } from "../../types";
 import { ManuscriptIndex } from "../../types/schema";
 import { ai } from "./client";
@@ -9,7 +9,7 @@ export const analyzeDraft = async (
     setting?: { timePeriod: string, location: string }, 
     manuscriptIndex?: ManuscriptIndex,
     _signal?: AbortSignal
-): Promise<AnalysisResult> => {
+): Promise<{ result: AnalysisResult; usage?: UsageMetadata }> => {
   const model = 'gemini-3-pro-preview'; 
   
   const settingContext = setting 
@@ -146,10 +146,13 @@ export const analyzeDraft = async (
   });
 
   const jsonText = response.text || "{}";
-  return JSON.parse(jsonText) as AnalysisResult;
+  return {
+    result: JSON.parse(jsonText) as AnalysisResult,
+    usage: response.usageMetadata
+  };
 };
 
-export const generatePlotIdeas = async (text: string, userInstruction?: string, suggestionType: string = 'General'): Promise<PlotSuggestion[]> => {
+export const generatePlotIdeas = async (text: string, userInstruction?: string, suggestionType: string = 'General'): Promise<{ result: PlotSuggestion[]; usage?: UsageMetadata }> => {
   const model = 'gemini-3-pro-preview';
   
   const prompt = PLOT_IDEAS_PROMPT
@@ -179,5 +182,8 @@ export const generatePlotIdeas = async (text: string, userInstruction?: string, 
   });
 
   const jsonText = response.text || "[]";
-  return JSON.parse(jsonText) as PlotSuggestion[];
+  return {
+    result: JSON.parse(jsonText) as PlotSuggestion[],
+    usage: response.usageMetadata
+  };
 };

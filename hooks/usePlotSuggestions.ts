@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef } from 'react';
 import { generatePlotIdeas } from '../services/gemini/analysis';
 import { PlotSuggestion } from '../types';
+import { useUsage } from '../contexts/UsageContext';
 
 export function usePlotSuggestions(currentText: string) {
   const [suggestions, setSuggestions] = useState<PlotSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { trackUsage } = useUsage();
   
   // Track the latest request ID to handle race conditions
   const requestIdRef = useRef(0);
@@ -20,7 +22,8 @@ export function usePlotSuggestions(currentText: string) {
     setError(null);
 
     try {
-      const ideas = await generatePlotIdeas(currentText, query, type);
+      const { result: ideas, usage } = await generatePlotIdeas(currentText, query, type);
+      trackUsage(usage);
       
       // Only update state if this is still the most recent request
       if (requestId === requestIdRef.current) {
@@ -36,7 +39,7 @@ export function usePlotSuggestions(currentText: string) {
         setIsLoading(false);
       }
     }
-  }, [currentText]);
+  }, [currentText, trackUsage]);
 
   return { suggestions, isLoading, error, generate };
 }

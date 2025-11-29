@@ -3,6 +3,7 @@ import { analyzeDraft } from '../services/gemini/analysis';
 import { rewriteText, getContextualHelp } from '../services/gemini/agent';
 import { AnalysisResult } from '../types';
 import { Lore, ManuscriptIndex } from '../types/schema';
+import { useUsage } from '../contexts/UsageContext';
 
 // Define proper types
 interface ProjectContext {
@@ -70,6 +71,8 @@ export function useDraftSmithEngine({
   clearSelection
 }: UseDraftSmithEngineProps) {
   
+  const { trackUsage } = useUsage();
+
   // Analysis State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -111,7 +114,8 @@ export function useDraftSmithEngine({
     setAnalysisError(null);
     
     try {
-      const result = await analyzeDraft(text, projectSetting, manuscriptIndex, signal);
+      const { result, usage } = await analyzeDraft(text, projectSetting, manuscriptIndex, signal);
+      trackUsage(usage);
       
       if (signal.aborted) return;
       
@@ -144,7 +148,7 @@ export function useDraftSmithEngine({
         setIsAnalyzing(false);
       }
     }
-  }, [getCurrentText, activeChapterId, projectSetting, manuscriptIndex, projectId, updateChapterAnalysis, updateProjectLore]);
+  }, [getCurrentText, activeChapterId, projectSetting, manuscriptIndex, projectId, updateChapterAnalysis, updateProjectLore, trackUsage]);
 
   const cancelAnalysis = useCallback(() => {
     analysisAbortRef.current?.abort();
@@ -182,13 +186,14 @@ export function useDraftSmithEngine({
     setIsMagicLoading(true);
 
     try {
-      const variations = await rewriteText(
+      const { result: variations, usage } = await rewriteText(
         selectionRange.text, 
         mode, 
         tone, 
         projectSetting,
         signal // pass signal to service
       );
+      trackUsage(usage);
       
       if (signal.aborted) return;
       
@@ -203,7 +208,7 @@ export function useDraftSmithEngine({
         setIsMagicLoading(false);
       }
     }
-  }, [selectionRange, projectSetting, abortMagicOperation, resetMagicState]);
+  }, [selectionRange, projectSetting, abortMagicOperation, resetMagicState, trackUsage]);
 
   const handleHelp = useCallback(async (type: 'Explain' | 'Thesaurus') => {
     if (!selectionRange) return;
@@ -219,7 +224,8 @@ export function useDraftSmithEngine({
     setIsMagicLoading(true);
 
     try {
-      const result = await getContextualHelp(selectionRange.text, type, signal);
+      const { result, usage } = await getContextualHelp(selectionRange.text, type, signal);
+      trackUsage(usage);
       
       if (signal.aborted) return;
       
@@ -234,7 +240,7 @@ export function useDraftSmithEngine({
         setIsMagicLoading(false);
       }
     }
-  }, [selectionRange, abortMagicOperation, resetMagicState]);
+  }, [selectionRange, abortMagicOperation, resetMagicState, trackUsage]);
 
   const closeMagicBar = useCallback(() => {
     abortMagicOperation();
