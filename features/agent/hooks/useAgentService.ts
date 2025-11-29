@@ -150,6 +150,7 @@ export function useAgentService(
     // Cancel any pending requests
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
+    const abortSignal = abortControllerRef.current.signal;
 
     const userMsg: ChatMessage = { 
       role: 'user', 
@@ -178,8 +179,13 @@ export function useAgentService(
 
       // Tool execution loop
       while (result.functionCalls && result.functionCalls.length > 0) {
+        if (abortSignal.aborted) {
+          return;
+        }
         const functionResponses = await processToolCalls(result.functionCalls);
-        
+        if (abortSignal.aborted) {
+          return;
+        }
         setAgentState({ status: 'thinking' });
         result = await chatRef.current.sendMessage({
           message: functionResponses.map(resp => ({ functionResponse: resp }))
@@ -197,6 +203,9 @@ export function useAgentService(
       setAgentState({ status: 'idle' });
 
     } catch (e) {
+      if (abortSignal.aborted) {
+        return;
+      }
       console.error('[AgentService] Error:', e);
       
       const errorMessage = e instanceof Error ? e.message : 'Unknown error';
@@ -211,7 +220,9 @@ export function useAgentService(
         timestamp: new Date()
       }]);
     } finally {
-      setIsProcessing(false);
+      if (!abortSignal.aborted) {
+        setIsProcessing(false);
+      }
     }
   }, [processToolCalls]);
 

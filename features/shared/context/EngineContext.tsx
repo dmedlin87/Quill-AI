@@ -17,6 +17,7 @@ import { Contradiction } from '@/types/schema';
 export interface EngineState {
   isAnalyzing: boolean;
   analysisError?: string | null;
+  analysisWarning?: string | null;
   magicVariations: string[];
   activeMagicMode?: string | null;
   magicHelpResult?: string;

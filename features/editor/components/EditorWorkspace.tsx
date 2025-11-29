@@ -37,7 +37,7 @@ export const EditorWorkspace: React.FC = () => {
     } = useEditor();
 
     const { getActiveChapter, currentProject } = useProjectStore();
-    const { state: engineState, actions: engineActions, contradictions } = useEngine();
+    const { state: engineState, actions: engineActions } = useEngine();
     
     const activeChapter = getActiveChapter();
 
@@ -85,7 +85,7 @@ export const EditorWorkspace: React.FC = () => {
             });
         }
         return highlights;
-    }, [activeChapter, currentText, contradictions]);
+    }, [activeChapter, currentText]);
 
     return (
         <div className={`flex-1 flex flex-col min-w-0 bg-[var(--parchment-200)] relative transition-all duration-500 ${isZenMode ? 'items-center' : ''}`}>

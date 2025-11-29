@@ -34,9 +34,10 @@ interface AnalysisPanelProps {
   currentText: string;
   onNavigate: (start: number, end: number) => void;
   onFixRequest?: (issueContext: string, suggestion: string) => void;
+  warning?: string | null;
 }
 
-export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoading, currentText, onNavigate, onFixRequest }) => {
+export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoading, currentText, onNavigate, onFixRequest, warning }) => {
   
   const handleQuoteClick = (quote?: string) => {
     if (!quote) return;
@@ -95,6 +96,19 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoadin
       animate="visible"
       className="h-full overflow-y-auto p-5 space-y-6"
     >
+      {warning && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-start gap-3 p-3 rounded-lg border border-[var(--warning-300)] bg-[var(--warning-50)] text-[var(--warning-800)]"
+        >
+          <div className="mt-0.5 text-[var(--warning-600)] font-bold">!</div>
+          <div>
+            <p className="text-[var(--text-sm)] font-semibold text-[var(--warning-800)]">Analysis Warning</p>
+            <p className="text-[var(--text-xs)] leading-relaxed">{warning}</p>
+          </div>
+        </motion.div>
+      )}
       
       {/* Score Card */}
       <motion.div 

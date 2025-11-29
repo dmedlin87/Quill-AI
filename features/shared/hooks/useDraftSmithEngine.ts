@@ -81,6 +81,7 @@ export function useQuillAIEngine({
   // Analysis State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisWarning, setAnalysisWarning] = useState<string | null>(null);
   const analysisAbortRef = useRef<AbortController | null>(null);
 
   // Magic Editor (delegated to useMagicEditor hook)
@@ -109,12 +110,14 @@ export function useQuillAIEngine({
     
     setIsAnalyzing(true);
     setAnalysisError(null);
+    setAnalysisWarning(null);
     
     try {
-      const { result, usage } = await analyzeDraft(text, projectSetting, manuscriptIndex, signal);
+      const { result, usage, warning } = await analyzeDraft(text, projectSetting, manuscriptIndex, signal);
       trackUsage(usage);
       
       if (signal.aborted) return;
+      setAnalysisWarning(warning || null);
       
       // Verify chapter hasn't changed during async operation
       if (chapterId !== activeChapterId) {
@@ -139,6 +142,7 @@ export function useQuillAIEngine({
       if (signal.aborted) return;
       const message = e instanceof Error ? e.message : 'Analysis failed';
       setAnalysisError(message);
+      setAnalysisWarning(null);
       console.error("Analysis failed", e);
     } finally {
       if (!signal.aborted) {
@@ -228,6 +232,7 @@ export function useQuillAIEngine({
       analysisError,
       ...magicState,
       pendingDiff,
+      analysisWarning,
     },
     actions: {
       runAnalysis,

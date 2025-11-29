@@ -32,12 +32,54 @@ interface ProjectState {
   getActiveChapter: () => Chapter | undefined;
 }
 
-export const useProjectStore = create<ProjectState>((set, get) => ({
-  projects: [],
-  currentProject: null,
-  chapters: [],
-  activeChapterId: null,
-  isLoading: true,
+export const useProjectStore = create<ProjectState>((set, get) => {
+  const WRITE_DEBOUNCE_MS = 400;
+  const pendingChapterWrites = new Map<string, { timer: ReturnType<typeof setTimeout>; promise: Promise<void>; resolve?: () => void }>();
+  const latestChapterContent = new Map<string, { content: string; updatedAt: number }>();
+
+  const scheduleChapterPersist = (chapterId: string, payload: { content: string; updatedAt: number }) => {
+    latestChapterContent.set(chapterId, payload);
+
+    const existing = pendingChapterWrites.get(chapterId);
+    if (existing?.timer) {
+      clearTimeout(existing.timer);
+    }
+
+    let resolveFn = existing?.resolve;
+    const promise = existing?.promise || new Promise<void>((resolve) => {
+      resolveFn = resolve;
+    });
+
+    const timer = setTimeout(async () => {
+      try {
+        const latest = latestChapterContent.get(chapterId);
+        if (!latest) return;
+
+        await db.chapters.update(chapterId, { content: latest.content, updatedAt: latest.updatedAt });
+        
+        const { currentProject } = get();
+        if (currentProject) {
+            await db.projects.update(currentProject.id, { updatedAt: latest.updatedAt });
+        }
+      } catch (error) {
+        console.error('[ProjectStore] Failed to persist chapter content', error);
+      } finally {
+        latestChapterContent.delete(chapterId);
+        pendingChapterWrites.delete(chapterId);
+        resolveFn?.();
+      }
+    }, WRITE_DEBOUNCE_MS);
+
+    pendingChapterWrites.set(chapterId, { timer, promise, resolve: resolveFn });
+    return promise;
+  };
+
+  return {
+    projects: [],
+    currentProject: null,
+    chapters: [],
+    activeChapterId: null,
+    isLoading: true,
 
   init: async () => {
     const projects = await db.projects.orderBy('updatedAt').reverse().toArray();
@@ -188,20 +230,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   updateChapterContent: async (chapterId, content) => {
+      const updatedAt = Date.now();
       // Update local state immediately for responsiveness
       set(state => ({
           chapters: state.chapters.map(c => 
-              c.id === chapterId ? { ...c, content, updatedAt: Date.now() } : c
+              c.id === chapterId ? { ...c, content, updatedAt } : c
           )
       }));
 
-      // Persist to DB (debounce could be handled here or in UI, relying on fast IndexedDB for now)
-      await db.chapters.update(chapterId, { content, updatedAt: Date.now() });
-      
-      const { currentProject } = get();
-      if (currentProject) {
-          await db.projects.update(currentProject.id, { updatedAt: Date.now() });
-      }
+      return scheduleChapterPersist(chapterId, { content, updatedAt });
   },
 
   updateChapterTitle: async (chapterId, title) => {
@@ -256,4 +293,5 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const { chapters, activeChapterId } = get();
       return chapters.find(c => c.id === activeChapterId);
   }
-}));
+  };
+});

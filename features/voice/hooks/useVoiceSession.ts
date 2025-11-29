@@ -176,7 +176,12 @@ export function useVoiceSession(): UseVoiceSessionResult {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ 
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextCtor) {
+        throw new Error('Web Audio API not supported in this environment.');
+      }
+
+      const audioContext = new AudioContextCtor({ 
         sampleRate: 16000 
       });
       audioContextRef.current = audioContext;
@@ -201,7 +206,7 @@ export function useVoiceSession(): UseVoiceSessionResult {
       workletNode.connect(audioContext.destination);
 
       // 4. Setup playback output
-      const playbackContext = new (window.AudioContext || (window as any).webkitAudioContext)({ 
+      const playbackContext = new AudioContextCtor({ 
         sampleRate: 24000 
       });
       playbackContextRef.current = playbackContext;

@@ -52,6 +52,7 @@ beforeEach(() => {
   engineState = {
     isAnalyzing: false,
     analysisError: null,
+    analysisWarning: null,
     magicVariations: [],
     activeMagicMode: null,
     magicHelpResult: undefined,

@@ -63,9 +63,12 @@ export function useAudioController(options: AudioControllerOptions = {}) {
       return audioContextRef.current;
     }
 
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate,
-    });
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) {
+      throw new Error('Web Audio API not supported in this environment.');
+    }
+
+    const ctx = new AudioContextCtor({ sampleRate });
     
     audioContextRef.current = ctx;
     nextStartTimeRef.current = ctx.currentTime;

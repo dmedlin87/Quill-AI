@@ -36,7 +36,11 @@ export function useTextToSpeech() {
       if (abortControllerRef.current?.signal.aborted) return;
 
       if (audioBuffer) {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextCtor) {
+          throw new Error('Web Audio API not supported in this environment.');
+        }
+        const ctx = new AudioContextCtor();
         audioContextRef.current = ctx;
 
         const source = ctx.createBufferSource();

@@ -8,9 +8,10 @@ interface DashboardProps {
     analysis: AnalysisResult | null;
     currentText: string;
     onFixRequest?: (issueContext: string, suggestion: string) => void;
+    warning?: string | null;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ isLoading, analysis, currentText, onFixRequest }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ isLoading, analysis, currentText, onFixRequest, warning }) => {
     const { handleNavigateToIssue } = useEditor();
 
     return (
@@ -20,6 +21,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ isLoading, analysis, curre
             currentText={currentText}
             onNavigate={handleNavigateToIssue}
             onFixRequest={onFixRequest}
+            warning={warning}
         />
     );
 };

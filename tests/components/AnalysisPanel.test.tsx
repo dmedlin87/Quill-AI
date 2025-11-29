@@ -74,6 +74,21 @@ describe('AnalysisPanel', () => {
     expect(screen.getByText('Run an analysis to reveal insights.')).toBeInTheDocument();
   });
 
+  it('shows a warning banner when provided', () => {
+    render(
+      <AnalysisPanel
+        analysis={baseAnalysis}
+        isLoading={false}
+        currentText=""
+        onNavigate={vi.fn()}
+        warning="Text truncated"
+      />
+    );
+
+    expect(screen.getByText('Analysis Warning')).toBeInTheDocument();
+    expect(screen.getByText('Text truncated')).toBeInTheDocument();
+  });
+
   it('renders analysis content and supports navigation and fix actions', () => {
     const onNavigate = vi.fn();
     const onFixRequest = vi.fn();

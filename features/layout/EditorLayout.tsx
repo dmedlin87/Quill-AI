@@ -62,7 +62,7 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
   } = useEditor();
 
   const { currentProject, getActiveChapter, chapters } = useProjectStore();
-  const { state: engineState, actions: engineActions, contradictions } = useEngine();
+  const { state: engineState, actions: engineActions } = useEngine();
   
   const activeChapter = getActiveChapter();
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
@@ -113,7 +113,7 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
             });
         }
         return highlights;
-    }, [activeChapter, currentText, contradictions]);
+    }, [activeChapter, currentText]);
 
   return (
     <div className="flex w-full h-full bg-[var(--surface-tertiary)] text-[var(--text-primary)] font-sans">
@@ -258,7 +258,8 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
                   analysis={activeChapter?.lastAnalysis || null} 
                   isLoading={engineState.isAnalyzing} 
                   currentText={currentText}
-                  onNavigate={handleNavigateToIssue} 
+                  onNavigate={handleNavigateToIssue}
+                  warning={engineState.analysisWarning} 
                 />
               )}
               {activeTab === SidebarTab.CHAT && (

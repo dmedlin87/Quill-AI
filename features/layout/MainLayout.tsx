@@ -260,6 +260,7 @@ export const MainLayout: React.FC = () => {
                    analysis={activeChapter?.lastAnalysis || null}
                    currentText={currentText}
                    onFixRequest={handleFixRequest}
+                   warning={engineState.analysisWarning}
                 />
               )}
               {activeTab === SidebarTab.CHAT && (

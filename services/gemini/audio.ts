@@ -10,6 +10,14 @@ export interface LiveSessionClient {
   disconnect: () => Promise<void>;
 }
 
+const getAudioContextCtor = () => {
+  const ctor = window.AudioContext || window.webkitAudioContext;
+  if (!ctor) {
+    throw new Error('Web Audio API not supported in this environment.');
+  }
+  return ctor;
+};
+
 export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
   try {
     const response = await ai.models.generateContent({
@@ -28,7 +36,8 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) return null;
 
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    const AudioContextCtor = getAudioContextCtor();
+    const audioContext = new AudioContextCtor({ sampleRate: 24000 });
     const buffer = await decodeAudioData(
       base64ToUint8Array(base64Audio),
       audioContext,
@@ -49,7 +58,8 @@ export const connectLiveSession = async (
   onAudioData: (buffer: AudioBuffer) => void,
   onClose: () => void
 ): Promise<LiveSessionClient> => {
-  const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+  const AudioContextCtor = getAudioContextCtor();
+  const outputAudioContext = new AudioContextCtor({ sampleRate: 24000 });
   
   const sessionPromise = ai.live.connect({
     model: ModelConfig.liveAudio,

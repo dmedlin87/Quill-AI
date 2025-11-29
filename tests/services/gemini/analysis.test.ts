@@ -211,7 +211,7 @@ describe('analyzeDraft', () => {
     const result = await analyzeDraft('Sample text');
 
     expect(result.result).toEqual(mockAnalysisResult);
-    expect(result.warning).toBe('Response required sanitization');
+    expect(result.warning).toBe('AI response needed cleanup; results may be incomplete.');
   });
 
   it('supports explicit suggestion type without user instruction', async () => {
@@ -728,7 +728,7 @@ describe('generatePlotIdeas', () => {
     const result = await generatePlotIdeas('Sample text');
 
     expect(result.result).toEqual([{ title: 'Idea' }]);
-    expect(result.warning).toBe('Response required sanitization');
+    expect(result.warning).toBe('AI response needed cleanup; results may be incomplete.');
   });
 
   it('supports abort signal', async () => {

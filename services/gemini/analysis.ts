@@ -215,7 +215,7 @@ export const analyzeDraft = async (
   return {
     result: zodResult.data as AnalysisResult,
     usage: response.usageMetadata,
-    warning: warning || (parseResult.sanitized ? 'Response required sanitization' : undefined),
+    warning: warning || (parseResult.sanitized ? 'AI response needed cleanup; results may be incomplete.' : undefined),
   };
 };
 

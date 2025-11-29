@@ -111,6 +111,17 @@ export interface ParseResult<T> {
   rawResponse?: string;
 }
 
+export interface ParseFailureContext {
+  error: string;
+  rawResponse?: string | null;
+  snippet?: string;
+  sanitized?: boolean;
+}
+
+export interface ParseOptions {
+  onFailure?: (context: ParseFailureContext) => void;
+}
+
 /**
  * Safely parses JSON from an LLM response with automatic sanitization.
  * 
@@ -120,9 +131,23 @@ export interface ParseResult<T> {
  */
 export function safeParseJson<T>(
   response: string | undefined | null,
-  fallback: T
+  fallback: T,
+  options?: ParseOptions
 ): ParseResult<T> {
+  const notifyFailure = (errorMessage: string, sanitized: boolean = false) => {
+    const snippet = response ? response.substring(0, 200) : undefined;
+    const context: ParseFailureContext = {
+      error: errorMessage,
+      rawResponse: response,
+      snippet,
+      sanitized,
+    };
+    reportError(new Error(errorMessage), context);
+    options?.onFailure?.(context);
+  };
+
   if (!response) {
+    notifyFailure('Empty response received');
     return {
       success: false,
       data: fallback,
@@ -156,6 +181,7 @@ export function safeParseJson<T>(
   }
   
   // Final: return fallback
+  notifyFailure('Failed to parse JSON after sanitization', Boolean(extracted));
   return {
     success: false,
     data: fallback,
@@ -191,6 +217,10 @@ export function safeParseJsonWithValidation<T>(
       sanitized: result.sanitized,
     };
   }
+
+  reportError(new Error('Response does not match expected schema'), {
+    rawResponse: result.rawResponse,
+  });
   
   return {
     success: false,
@@ -215,3 +245,4 @@ export const validators = {
   isVariationsResponse: (data: unknown): data is { variations: string[] } =>
     validators.hasProperty(data, 'variations') && Array.isArray(data.variations),
 };
+import { reportError } from '@/services/telemetry/errorReporter';
