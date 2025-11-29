@@ -21,6 +21,7 @@ vi.mock('@/App', () => ({
 
 describe('index entrypoint', () => {
   beforeEach(() => {
+    vi.resetModules();
     document.body.innerHTML = '<div id="root"></div>';
     renderMock.mockClear();
     createRootMock.mockClear();
@@ -33,5 +34,22 @@ describe('index entrypoint', () => {
     expect(createRootMock).toHaveBeenCalledTimes(1);
     expect(createRootMock).toHaveBeenCalledWith(rootElement);
     expect(renderMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws when the root element is missing', async () => {
+    const originalGetElementById = document.getElementById;
+    const getElementByIdMock = vi
+      .fn<typeof document.getElementById>()
+      .mockReturnValue(null);
+
+    (document.getElementById as typeof document.getElementById) = getElementByIdMock;
+
+    try {
+      await expect(import('@/index.tsx')).rejects.toThrowError(
+        'Could not find root element to mount to',
+      );
+    } finally {
+      document.getElementById = originalGetElementById;
+    }
   });
 });
