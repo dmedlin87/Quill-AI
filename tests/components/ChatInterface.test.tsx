@@ -40,6 +40,7 @@ describe('ChatInterface', () => {
     mockSendMessage.mockReset();
     mockSendMessage.mockResolvedValue({ text: '', functionCalls: [] });
     mockCreateAgentSession.mockClear();
+    baseProps.onAgentAction = vi.fn().mockResolvedValue('action complete');
   });
 
   it('renders with persona selector and input', async () => {
@@ -160,6 +161,329 @@ describe('ChatInterface', () => {
       expect(
         screen.getByText('Sorry, I encountered an error connecting to the Agent.'),
       ).toBeInTheDocument();
+    });
+  });
+
+  // NEW: Tool execution loop with multi-turn conversation
+  it('executes complete tool loop: user message → tool call → tool result → final response', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      // First response: tool call
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [
+          { id: 'tool-1', name: 'update_manuscript', args: { content: 'Fixed typo' } },
+        ],
+      })
+      // Second response after tool result: final text
+      .mockResolvedValueOnce({ text: 'I have fixed the typo for you.', functionCalls: [] });
+
+    const onAgentAction = vi.fn().mockResolvedValue('Waiting for user review: Edit pending');
+
+    render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
+
+    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
+
+    fireEvent.change(input, { target: { value: 'Fix typo' } });
+    if (sendButton) {
+      fireEvent.click(sendButton);
+    }
+
+    // Step 1: Tool call message appears
+    await waitFor(() => {
+      expect(screen.getByText(/🛠️ Suggesting Action: update_manuscript/)).toBeInTheDocument();
+    });
+
+    // Step 2: onAgentAction is called
+    await waitFor(() => {
+      expect(onAgentAction).toHaveBeenCalledWith('update_manuscript', { content: 'Fixed typo' });
+    });
+
+    // Step 3: Review status appears
+    await waitFor(() => {
+      expect(screen.getByText(/📝 Reviewing proposed edit/)).toBeInTheDocument();
+    });
+
+    // Step 4: Tool result sent back to model
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.arrayContaining([
+            expect.objectContaining({
+              functionResponse: expect.objectContaining({
+                id: 'tool-1',
+                name: 'update_manuscript',
+                response: { result: 'Waiting for user review: Edit pending' },
+              }),
+            }),
+          ]),
+        })
+      );
+    });
+
+    // Step 5: Final response displayed
+    await waitFor(() => {
+      expect(screen.getByText('I have fixed the typo for you.')).toBeInTheDocument();
+    });
+
+    expect(mockSendMessage).toHaveBeenCalledTimes(3); // init + user msg + tool response
+  });
+
+  // NEW: Tool execution failure handling
+  it('handles tool execution failure and sends error back to model', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [
+          { id: 'tool-2', name: 'invalid_action', args: {} },
+        ],
+      })
+      .mockResolvedValueOnce({ text: 'I apologize for the error.', functionCalls: [] });
+
+    const onAgentAction = vi.fn().mockRejectedValue(new Error('Tool not found'));
+
+    render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
+
+    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
+
+    fireEvent.change(input, { target: { value: 'Do invalid action' } });
+    if (sendButton) {
+      fireEvent.click(sendButton);
+    }
+
+    // Error message should be displayed
+    await waitFor(() => {
+      expect(screen.getByText(/❌ Error: Tool not found/)).toBeInTheDocument();
+    });
+
+    // Error should be sent back to model as function response
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.arrayContaining([
+            expect.objectContaining({
+              functionResponse: expect.objectContaining({
+                id: 'tool-2',
+                name: 'invalid_action',
+                response: { result: 'Tool not found' },
+              }),
+            }),
+          ]),
+        })
+      );
+    });
+
+    // Agent should respond after error
+    await waitFor(() => {
+      expect(screen.getByText('I apologize for the error.')).toBeInTheDocument();
+    });
+  });
+
+  // NEW: Multiple sequential tool calls
+  it('handles multiple tool calls in sequence', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [
+          { id: 'tool-a', name: 'analyze', args: { type: 'grammar' } },
+          { id: 'tool-b', name: 'applyEdit', args: { text: 'corrected' } },
+        ],
+      })
+      .mockResolvedValueOnce({ text: 'All corrections applied.', functionCalls: [] });
+
+    const onAgentAction = vi.fn()
+      .mockResolvedValueOnce('Analysis complete')
+      .mockResolvedValueOnce('Edit applied');
+
+    render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
+
+    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
+
+    fireEvent.change(input, { target: { value: 'Analyze and fix' } });
+    if (sendButton) {
+      fireEvent.click(sendButton);
+    }
+
+    // Both tool calls should appear
+    await waitFor(() => {
+      expect(screen.getByText(/🛠️ Suggesting Action: analyze/)).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/🛠️ Suggesting Action: applyEdit/)).toBeInTheDocument();
+    });
+
+    // Both tools should be executed
+    await waitFor(() => {
+      expect(onAgentAction).toHaveBeenCalledWith('analyze', { type: 'grammar' });
+      expect(onAgentAction).toHaveBeenCalledWith('applyEdit', { text: 'corrected' });
+    });
+
+    // Both function responses sent back together
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.arrayContaining([
+            expect.objectContaining({
+              functionResponse: expect.objectContaining({ id: 'tool-a' }),
+            }),
+            expect.objectContaining({
+              functionResponse: expect.objectContaining({ id: 'tool-b' }),
+            }),
+          ]),
+        })
+      );
+    });
+  });
+
+  // NEW: User context prompt construction
+  it('constructs user context prompt with cursor position and selection', async () => {
+    const contextWithSelection: EditorContext = {
+      cursorPosition: 42,
+      selection: { text: 'selected text', start: 30, end: 43 },
+      totalLength: 100,
+    };
+
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      .mockResolvedValueOnce({ text: 'Got it!', functionCalls: [] });
+
+    render(<ChatInterface {...baseProps} editorContext={contextWithSelection} />);
+
+    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
+
+    fireEvent.change(input, { target: { value: 'Check this' } });
+    if (sendButton) {
+      fireEvent.click(sendButton);
+    }
+
+    // Verify context is included in the message
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Cursor Index: 42'),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Selection: "selected text"'),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Total Text Length: 100'),
+        })
+      );
+    });
+  });
+
+  // NEW: Persona initialization and switching
+  it('reinitializes session when persona is changed', async () => {
+    mockSendMessage.mockResolvedValue({ text: 'init', functionCalls: [] });
+
+    render(<ChatInterface {...baseProps} />);
+
+    // Wait for initial session
+    await waitFor(() => {
+      expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+    });
+
+    const initialCalls = mockCreateAgentSession.mock.calls.length;
+
+    // Change persona
+    const personaButton = await screen.findByTitle(`Current: ${DEFAULT_PERSONAS[0].name}`);
+    fireEvent.click(personaButton);
+
+    const nextPersona = DEFAULT_PERSONAS[1];
+    fireEvent.click(await screen.findByText(nextPersona.name));
+
+    // Session should be reinitialized
+    await waitFor(() => {
+      expect(mockCreateAgentSession.mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+
+    // System message should appear
+    await waitFor(() => {
+      expect(
+        screen.getByText(`${nextPersona.icon} Switching to ${nextPersona.name} mode. ${nextPersona.role}.`)
+      ).toBeInTheDocument();
+    });
+  });
+
+  // NEW: Empty message handling
+  it('does not send empty or whitespace-only messages', async () => {
+    mockSendMessage.mockResolvedValueOnce({ text: 'init', functionCalls: [] });
+
+    render(<ChatInterface {...baseProps} />);
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(1); // Only init
+    });
+
+    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
+
+    // Try sending empty message
+    fireEvent.change(input, { target: { value: '   ' } });
+    if (sendButton) {
+      fireEvent.click(sendButton);
+    }
+
+    // Should still only have the init call
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // NEW: Tool execution without "Waiting for user review"
+  it('handles tool execution that does not require review', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [
+          { id: 'tool-3', name: 'getInfo', args: { query: 'test' } },
+        ],
+      })
+      .mockResolvedValueOnce({ text: 'Here is the info.', functionCalls: [] });
+
+    const onAgentAction = vi.fn().mockResolvedValue('Info retrieved successfully');
+
+    render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
+
+    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
+
+    fireEvent.change(input, { target: { value: 'Get info' } });
+    if (sendButton) {
+      fireEvent.click(sendButton);
+    }
+
+    // Tool action message should appear
+    await waitFor(() => {
+      expect(screen.getByText(/🛠️ Suggesting Action: getInfo/)).toBeInTheDocument();
+    });
+
+    // No review message should appear (no "Waiting for user review" in result)
+    await waitFor(() => {
+      expect(screen.queryByText(/📝 Reviewing/)).not.toBeInTheDocument();
+    });
+
+    // Final response should appear
+    await waitFor(() => {
+      expect(screen.getByText('Here is the info.')).toBeInTheDocument();
     });
   });
 });

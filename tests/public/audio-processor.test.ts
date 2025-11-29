@@ -56,4 +56,37 @@ describe('audio-processor worklet', () => {
     expect(instance.process([[]], [], {})).toBe(true);
     expect(instance.process([[new Float32Array([])]], [], {})).toBe(true);
   });
+
+  it('buffers audio into chunks and posts them to main thread', async () => {
+    const registerProcessor = vi.fn();
+
+    class FakeWorkletProcessor {
+      public port = { postMessage: vi.fn() };
+    }
+
+    Object.assign(globalThis as any, {
+      AudioWorkletProcessor: FakeWorkletProcessor,
+      registerProcessor,
+      sampleRate: 16_000,
+    });
+
+    await import('@/public/audio-processor.js');
+
+    const ProcessorCtor = registerProcessor.mock.calls[0][1] as any;
+    const instance = new ProcessorCtor();
+
+    const samples = new Float32Array(4096);
+    samples.fill(0.5);
+
+    const keepAlive = instance.process([[samples]], [], {});
+    expect(keepAlive).toBe(true);
+
+    const postMessage = (instance.port as any).postMessage as any;
+    expect(postMessage).toHaveBeenCalled();
+
+    const [message] = postMessage.mock.calls[0];
+    expect(message.type).toBe('audio');
+    expect(message.sampleRate).toBe(16_000);
+    expect(message.audioData).toBeInstanceOf(ArrayBuffer);
+  });
 });
