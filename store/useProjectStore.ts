@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { db } from '../services/db';
-import { Project, Chapter, Lore } from '../types/schema';
+import { Project, Chapter, Lore, ManuscriptIndex } from '../types/schema';
 import { AnalysisResult } from '../types';
 import { ParsedChapter } from '../services/manuscriptParser';
+import { createEmptyIndex } from '../services/manuscriptIndexer';
 
 interface ProjectState {
   // State
@@ -25,6 +26,7 @@ interface ProjectState {
   updateChapterTitle: (chapterId: string, title: string) => Promise<void>;
   updateChapterAnalysis: (chapterId: string, analysis: AnalysisResult) => Promise<void>;
   updateProjectLore: (projectId: string, lore: Lore) => Promise<void>;
+  updateManuscriptIndex: (projectId: string, index: ManuscriptIndex) => Promise<void>;
   deleteChapter: (chapterId: string) => Promise<void>;
   
   getActiveChapter: () => Chapter | undefined;
@@ -54,6 +56,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       title,
       author,
       setting,
+      manuscriptIndex: createEmptyIndex(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -73,6 +76,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       title,
       author,
       setting,
+      manuscriptIndex: createEmptyIndex(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -224,6 +228,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         projects: state.projects.map(p => p.id === projectId ? { ...p, lore } : p)
     }));
     await db.projects.update(projectId, { lore, updatedAt: Date.now() });
+  },
+
+  updateManuscriptIndex: async (projectId, index) => {
+    set(state => ({
+        currentProject: state.currentProject?.id === projectId ? { ...state.currentProject, manuscriptIndex: index } : state.currentProject,
+        projects: state.projects.map(p => p.id === projectId ? { ...p, manuscriptIndex: index } : p)
+    }));
+    await db.projects.update(projectId, { manuscriptIndex: index, updatedAt: Date.now() });
   },
 
   deleteChapter: async (chapterId) => {

@@ -1,12 +1,5 @@
 import React from 'react';
 import { AnalysisResult } from '../types';
-import { ExecutiveSummary } from './analysis/ExecutiveSummary';
-import { StrengthsWeaknesses } from './analysis/StrengthsWeaknesses';
-import { PacingSection } from './analysis/PacingSection';
-import { PlotIssuesSection } from './analysis/PlotIssuesSection';
-import { CharactersSection } from './analysis/CharactersSection';
-import { SettingConsistencySection } from './analysis/SettingConsistencySection';
-import { BrainstormingPanel } from './analysis/BrainstormingPanel';
 import { findQuoteRange } from '../utils/textLocator';
 
 interface AnalysisPanelProps {
@@ -21,68 +14,74 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoadin
   const handleQuoteClick = (quote?: string) => {
     if (!quote) return;
     const range = findQuoteRange(currentText, quote);
-    if (range) {
-      onNavigate(range.start, range.end);
-    } else {
-      alert("Could not locate this exact text in the current chapter.");
-    }
+    if (range) onNavigate(range.start, range.end);
   };
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center text-gray-500 space-y-4">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
-        <p className="animate-pulse font-serif text-lg">Analyzing pacing, detecting plot holes, and profiling characters...</p>
-        <p className="text-xs text-gray-400">Using Gemini 3.0 Pro Thinking Mode</p>
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-4">
+         <div className="w-8 h-8 border-2 border-[var(--magic-400)] border-t-transparent rounded-full animate-spin"></div>
+         <p className="font-serif text-[var(--ink-500)] animate-pulse">Consulting the muse...</p>
       </div>
     );
   }
 
   if (!analysis) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center text-gray-400">
-        <p>Run an analysis to see insights here.</p>
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+        <p className="text-[var(--ink-400)] font-serif italic">Run an analysis to reveal insights.</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-8 prose-content">
-      <ExecutiveSummary summary={analysis.summary} />
-      <StrengthsWeaknesses strengths={analysis.strengths} weaknesses={analysis.weaknesses} />
+    <div className="h-full overflow-y-auto p-5 space-y-6">
       
-      {analysis.settingAnalysis && (
-        <SettingConsistencySection 
-            issues={analysis.settingAnalysis.issues} 
-            score={analysis.settingAnalysis.score}
-            onQuoteClick={handleQuoteClick}
-        />
-      )}
-
-      <PacingSection pacing={analysis.pacing} currentText={currentText} />
-      
-      <PlotIssuesSection 
-        issues={analysis.plotIssues} 
-        onQuoteClick={handleQuoteClick}
-      />
-      
-      <CharactersSection 
-        characters={analysis.characters} 
-        onQuoteClick={handleQuoteClick}
-      />
-      
-      <div>
-         <h3 className="text-lg font-serif font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4">General Suggestions</h3>
-         <ul className="space-y-3">
-           {analysis.generalSuggestions.map((suggestion, i) => (
-             <li key={i} className="text-sm text-gray-700 pl-4 border-l-2 border-indigo-300">
-               {suggestion}
-             </li>
-           ))}
-         </ul>
+      {/* Score Card */}
+      <div className="bg-gradient-to-br from-[var(--magic-100)] to-[var(--parchment-100)] rounded-[var(--radius-lg)] p-5 border border-[var(--magic-200)] shadow-sm">
+        <div className="flex justify-between items-start mb-3">
+          <span className="text-[var(--text-sm)] font-semibold text-[var(--ink-600)]">Pacing Score</span>
+          <span className="text-[var(--text-2xl)] font-bold text-[var(--magic-500)] font-serif">{analysis.pacing.score}</span>
+        </div>
+        <div className="h-1.5 bg-[var(--parchment-200)] rounded-full overflow-hidden">
+           <div 
+             className="h-full bg-gradient-to-r from-[var(--magic-400)] to-[var(--magic-300)] rounded-full transition-all duration-500"
+             style={{ width: `${(analysis.pacing.score / 10) * 100}%` }}
+           />
+        </div>
       </div>
 
-      <BrainstormingPanel currentText={currentText} />
+      <section>
+        <h4 className="text-[var(--text-sm)] font-semibold text-[var(--ink-700)] mb-3">Executive Summary</h4>
+        <p className="text-[var(--text-sm)] text-[var(--ink-600)] leading-relaxed font-serif">{analysis.summary}</p>
+      </section>
+
+      {/* Issues List */}
+      <section>
+        <h4 className="text-[var(--text-sm)] font-semibold text-[var(--ink-700)] mb-3">Detected Issues</h4>
+        <div className="space-y-3">
+          {analysis.plotIssues.map((issue, i) => (
+             <div 
+               key={i}
+               onClick={() => handleQuoteClick(issue.quote)}
+               className="p-3 bg-[var(--error-100)] border-l-4 border-[var(--error-500)] rounded-r-md cursor-pointer hover:translate-x-1 transition-transform"
+             >
+                <h5 className="text-[var(--text-sm)] font-semibold text-[var(--error-500)] mb-1">{issue.issue}</h5>
+                <p className="text-[var(--text-xs)] text-[var(--ink-600)]">{issue.suggestion}</p>
+             </div>
+          ))}
+          {analysis.settingAnalysis?.issues.map((issue, i) => (
+             <div 
+               key={`setting-${i}`}
+               onClick={() => handleQuoteClick(issue.quote)}
+               className="p-3 bg-[var(--warning-100)] border-l-4 border-[var(--warning-500)] rounded-r-md cursor-pointer hover:translate-x-1 transition-transform"
+             >
+                <h5 className="text-[var(--text-sm)] font-semibold text-[var(--warning-500)] mb-1">{issue.issue}</h5>
+                <p className="text-[var(--text-xs)] text-[var(--ink-600)]">{issue.suggestion}</p>
+             </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

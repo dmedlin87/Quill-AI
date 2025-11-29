@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { useEditor } from '../context/EditorContext';
 import { useProjectStore } from '../store/useProjectStore';
 import { useDraftSmithEngine } from '../hooks/useDraftSmithEngine';
+import { useManuscriptIndexer } from '../hooks/useManuscriptIndexer';
 import { EditorLayout } from './layouts/EditorLayout';
 import { SidebarTab } from '../types';
+import { Contradiction } from '../types/schema';
 
 interface WorkspaceProps {
   onHomeClick: () => void;
@@ -11,8 +13,8 @@ interface WorkspaceProps {
 
 export const Workspace: React.FC<WorkspaceProps> = ({ onHomeClick }) => {
   const {
-    textareaRef,
-    backdropRef,
+    editor,
+    setEditor,
     currentText,
     updateText,
     commit,
@@ -20,12 +22,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onHomeClick }) => {
     restore,
     selectionRange,
     selectionPos,
-    handleSelectionChange,
-    handleMouseUp,
+    setSelectionState,
     clearSelection,
     activeHighlight,
-    setActiveHighlight,
-    handleScroll,
     handleNavigateToIssue
   } = useEditor();
 
@@ -52,6 +51,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onHomeClick }) => {
     clearSelection
   });
 
+  // Background Indexing for Contradictions
+  const [contradictions, setContradictions] = useState<Contradiction[]>([]);
+  useManuscriptIndexer(
+    currentText,
+    activeChapterId,
+    (c) => setContradictions(prev => [...prev, ...c])
+  );
+
   // View State
   const [activeTab, setActiveTab] = useState<SidebarTab>(SidebarTab.ANALYSIS);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -62,11 +69,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onHomeClick }) => {
     setIsToolsCollapsed(false);
   };
 
-  const handleEditorChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    updateText(e.target.value);
-    if (activeHighlight) setActiveHighlight(null);
-  };
-
   return (
     <EditorLayout 
       activeTab={activeTab} onTabChange={handleTabChange}
@@ -74,11 +76,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onHomeClick }) => {
       isToolsCollapsed={isToolsCollapsed} onToggleTools={() => setIsToolsCollapsed(!isToolsCollapsed)}
       onHomeClick={onHomeClick}
       currentProject={currentProject} activeChapter={activeChapter} chapters={chapters} currentText={currentText} history={history}
-      textareaRef={textareaRef} backdropRef={backdropRef}
-      onEditorChange={handleEditorChange} onDirectTextChange={updateText} onSelectionChange={handleSelectionChange} onMouseUp={handleMouseUp} onScroll={handleScroll}
+      editor={editor} setEditor={setEditor}
+      onDirectTextChange={updateText} setSelectionState={setSelectionState}
       selectionRange={selectionRange} selectionPos={selectionPos} activeHighlight={activeHighlight}
       onNavigateToIssue={handleNavigateToIssue} onRestoreHistory={restore} onClearSelection={clearSelection}
       engineState={engine.state} engineActions={engine.actions}
+      contradictions={contradictions}
     />
   );
 };

@@ -1,14 +1,13 @@
-import React, { createContext, useContext, useRef, useCallback, useState, RefObject } from 'react';
+import React, { createContext, useContext, useCallback, useState } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 import { useDocumentHistory } from '../hooks/useDocumentHistory';
-import { useTextSelection } from '../hooks/useTextSelection';
-import { useAutoResize } from '../hooks/useAutoResize';
 import { HistoryItem, HighlightRange } from '../types';
+import { Editor } from '@tiptap/react';
 
 export interface EditorContextValue {
-  // Refs
-  textareaRef: RefObject<HTMLTextAreaElement | null>;
-  backdropRef: RefObject<HTMLDivElement | null>;
+  // Editor Instance
+  editor: Editor | null;
+  setEditor: (editor: Editor | null) => void;
 
   // Text & History
   currentText: string;
@@ -22,14 +21,13 @@ export interface EditorContextValue {
   selectionRange: { start: number; end: number; text: string } | null;
   selectionPos: { top: number; left: number } | null;
   cursorPosition: number;
-  handleSelectionChange: () => void;
-  handleMouseUp: (e: React.MouseEvent<HTMLTextAreaElement>) => void;
+  
+  // Selection Setters (called by RichTextEditor)
+  setSelectionState: (range: { start: number; end: number; text: string } | null, pos: { top: number; left: number } | null) => void;
   clearSelection: () => void;
 
   // UI State
   activeHighlight: HighlightRange | null;
-  setActiveHighlight: (range: HighlightRange | null) => void;
-  handleScroll: (e: React.UIEvent<HTMLTextAreaElement>) => void;
   handleNavigateToIssue: (start: number, end: number) => void;
 }
 
@@ -44,9 +42,8 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   
   const activeChapter = getActiveChapter();
 
-  // Refs
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
+  // Tiptap Editor Instance
+  const [editor, setEditor] = useState<Editor | null>(null);
 
   // Persistence Callback
   const handleSaveContent = useCallback((text: string) => {
@@ -60,43 +57,37 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     handleSaveContent
   );
 
-  // Selection Hook
-  const { 
-    selection: selectionRange, 
-    position: selectionPos, 
-    cursorPosition,
-    handleSelectionChange, 
-    handleMouseUp, 
-    clearSelection 
-  } = useTextSelection(textareaRef);
+  // Selection State
+  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number; text: string } | null>(null);
+  const [selectionPos, setSelectionPos] = useState<{ top: number; left: number } | null>(null);
+  
+  // Tiptap provides 'from' as cursor position if empty selection
+  const cursorPosition = editor?.state.selection.from || 0;
 
-  // Auto Resize Hook
-  useAutoResize(textareaRef, currentText, 'EDITOR');
+  const setSelectionState = useCallback((
+      range: { start: number; end: number; text: string } | null, 
+      pos: { top: number; left: number } | null
+  ) => {
+      setSelectionRange(range);
+      setSelectionPos(pos);
+  }, []);
+
+  const clearSelection = useCallback(() => {
+      setSelectionRange(null);
+      setSelectionPos(null);
+      editor?.commands.focus();
+  }, [editor]);
 
   // UI State
   const [activeHighlight, setActiveHighlight] = useState<HighlightRange | null>(null);
 
-  const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
-    if (backdropRef.current) {
-      backdropRef.current.scrollTop = e.currentTarget.scrollTop;
-    }
-  }, []);
-
   const handleNavigateToIssue = useCallback((start: number, end: number) => {
     setActiveHighlight({ start, end, type: 'issue' });
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-      textareaRef.current.setSelectionRange(start, end);
-      const lineHeight = 32;
-      const lines = currentText.substring(0, start).split('\n').length;
-      textareaRef.current.scrollTop = Math.max(0, (lines - 1) * lineHeight - 100);
-      if (backdropRef.current) backdropRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-  }, [currentText]);
+  }, []);
 
   const value: EditorContextValue = {
-    textareaRef,
-    backdropRef,
+    editor,
+    setEditor,
     currentText,
     updateText,
     commit,
@@ -106,12 +97,9 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     selectionRange,
     selectionPos,
     cursorPosition,
-    handleSelectionChange,
-    handleMouseUp,
+    setSelectionState,
     clearSelection,
     activeHighlight,
-    setActiveHighlight,
-    handleScroll,
     handleNavigateToIssue
   };
 

@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, Modality, LiveServerMessage, FunctionDeclaration } from "@google/genai";
 import { AnalysisResult, PlotSuggestion } from "../types";
-import { Lore } from "../types/schema";
+import { Lore, ManuscriptIndex } from "../types/schema";
 import { base64ToUint8Array, createBlob, decodeAudioData } from "./audioUtils";
 
 const apiKey = process.env.API_KEY || '';
@@ -45,19 +45,36 @@ export const agentTools: FunctionDeclaration[] = [
 ];
 
 // 1. Content Analysis (Deep Thinking)
-export const analyzeDraft = async (text: string, setting?: { timePeriod: string, location: string }, _signal?: AbortSignal): Promise<AnalysisResult> => {
+export const analyzeDraft = async (
+    text: string, 
+    setting?: { timePeriod: string, location: string }, 
+    manuscriptIndex?: ManuscriptIndex,
+    _signal?: AbortSignal
+): Promise<AnalysisResult> => {
   const model = 'gemini-3-pro-preview'; 
   
   const settingContext = setting 
     ? `SETTING CONTEXT: Time Period: ${setting.timePeriod}, Location: ${setting.location}.` 
     : `SETTING CONTEXT: General Fiction (Unknown setting).`;
 
+  // Inject Known Facts from Index
+  const indexContext = manuscriptIndex 
+  ? `KNOWN CHARACTER FACTS (from previous chapters):
+     ${Object.entries(manuscriptIndex.characters).map(([name, data]) => 
+         `${name}: ${Object.entries(data.attributes || {})
+           .map(([attr, vals]) => `${attr}=${vals[0]?.value}`)
+           .join(', ')}`
+       ).join('\n')}`
+  : '';
+
   const prompt = `You are a world-class literary editor. Analyze the following book draft text.
   ${settingContext}
+
+  ${indexContext}
   
   Your task is to provide a deep, comprehensive critique focusing specifically on:
   1. PACING & FLOW: Evaluate the rhythm.
-  2. PLOT HOLES & INCONSISTENCIES: Scrutinize logic gaps. CRITICAL: For every issue, provide a short "quote" from the text that evidences the problem.
+  2. PLOT HOLES & INCONSISTENCIES: Scrutinize logic gaps. CRITICAL: For every issue, provide a short "quote" from the text that evidences the problem. Flag ANY contradictions with the KNOWN CHARACTER FACTS above.
   3. CHARACTER ARCS & RELATIONSHIPS: Track development.
   4. SETTING & ERA CONSISTENCY: Identify anachronisms, language/slang that doesn't fit the ${setting ? 'specified time period' : 'apparent setting'}, or tone mismatches. E.g. using modern slang in 1800s. Provide specific replacement suggestions.
   

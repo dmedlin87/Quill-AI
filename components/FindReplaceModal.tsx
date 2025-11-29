@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Editor } from '@tiptap/react';
 
 interface FindReplaceModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentText: string;
   onTextChange: (text: string) => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  editor: Editor | null;
 }
 
 export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
@@ -13,7 +14,7 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
   onClose,
   currentText,
   onTextChange,
-  textareaRef
+  editor
 }) => {
   const [findTerm, setFindTerm] = useState('');
   const [replaceTerm, setReplaceTerm] = useState('');
@@ -24,18 +25,16 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       document.getElementById('find-input')?.focus();
-      // Select all text in find input
       (document.getElementById('find-input') as HTMLInputElement)?.select();
     }
   }, [isOpen]);
 
-  // Calculate matches
+  // Calculate matches using regex on plain text for simplicity
   const matches = useMemo(() => {
     if (!findTerm) return [];
     const indices: number[] = [];
     
     try {
-      // Escape regex characters if we aren't using regex mode (not implemented yet, assuming literal)
       const escapedTerm = findTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapedTerm, isCaseSensitive ? 'g' : 'gi');
       
@@ -49,7 +48,6 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
     return indices;
   }, [currentText, findTerm, isCaseSensitive]);
 
-  // Reset index when matches change
   useEffect(() => {
     if (currentMatchIndex >= matches.length) {
       setCurrentMatchIndex(0);
@@ -57,25 +55,19 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
   }, [matches.length]);
 
   const scrollToMatch = (index: number) => {
-    if (!textareaRef.current || index === -1) return;
+    if (!editor || index === -1) return;
     
     const matchPos = matches[index];
     if (matchPos === undefined) return;
-
-    const textarea = textareaRef.current;
     
-    textarea.focus();
-    textarea.setSelectionRange(matchPos, matchPos + findTerm.length);
+    // Select the text at the position
+    // Note: This relies on Markdown indices matching Tiptap doc indices. 
+    // For simple formatting they are usually close enough.
+    const from = matchPos;
+    const to = matchPos + findTerm.length;
     
-    // Simple scroll logic: estimate line height
-    const textBefore = currentText.substring(0, matchPos);
-    const lines = textBefore.split('\n').length;
-    const lineHeight = 32; // Approx line height from CSS
-    const scrollPos = Math.max(0, (lines - 1) * lineHeight - 150); // Center-ish
-    
-    textarea.scrollTop = scrollPos;
-    // Trigger scroll event manually if needed for synced backdrop
-    textarea.dispatchEvent(new Event('scroll'));
+    editor.commands.setTextSelection({ from, to });
+    editor.commands.scrollIntoView();
   };
 
   const handleNext = () => {
@@ -93,27 +85,29 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
   };
 
   const handleReplace = () => {
-    if (matches.length === 0) return;
+    if (matches.length === 0 || !editor) return;
     
     const matchPos = matches[currentMatchIndex];
-    const before = currentText.substring(0, matchPos);
-    const after = currentText.substring(matchPos + findTerm.length);
     
-    const newText = before + replaceTerm + after;
-    onTextChange(newText);
+    // Use Tiptap command to replace range, preserving history stack
+    const from = matchPos;
+    const to = matchPos + findTerm.length;
     
-    // Stay at roughly the same position? 
-    // The matches array will recalculate automatically.
+    editor.chain().focus().setTextSelection({ from, to }).insertContent(replaceTerm).run();
+    
+    // Trigger next update cycle naturally via editor
   };
 
   const handleReplaceAll = () => {
-    if (!findTerm) return;
+    if (!findTerm || !editor) return;
     
     const escapedTerm = findTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(escapedTerm, isCaseSensitive ? 'g' : 'gi');
     
     const newText = currentText.replace(regex, replaceTerm);
-    onTextChange(newText);
+    
+    // Replace full content
+    editor.commands.setContent(newText);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

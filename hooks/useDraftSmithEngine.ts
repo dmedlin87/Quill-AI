@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { analyzeDraft, rewriteText, getContextualHelp } from '../services/geminiService';
 import { AnalysisResult } from '../types';
-import { Lore } from '../types/schema';
+import { Lore, ManuscriptIndex } from '../types/schema';
 
 // Define proper types
 interface ProjectContext {
@@ -10,6 +10,7 @@ interface ProjectContext {
     timePeriod: string;
     location: string;
   };
+  manuscriptIndex?: ManuscriptIndex;
 }
 
 interface SelectionRange {
@@ -90,6 +91,7 @@ export function useDraftSmithEngine({
   // Stable ref for project setting
   const projectSetting = currentProject?.setting;
   const projectId = currentProject?.id;
+  const manuscriptIndex = currentProject?.manuscriptIndex;
 
   // --- 1. Analysis Logic ---
   const runAnalysis = useCallback(async () => {
@@ -107,7 +109,7 @@ export function useDraftSmithEngine({
     setAnalysisError(null);
     
     try {
-      const result = await analyzeDraft(text, projectSetting, signal);
+      const result = await analyzeDraft(text, projectSetting, manuscriptIndex, signal);
       
       if (signal.aborted) return;
       
@@ -119,8 +121,8 @@ export function useDraftSmithEngine({
       
       await updateChapterAnalysis(chapterId, result);
 
-      // --- LORE BIBLE UPDATE ---
-      // Automatically update the project lore with the latest findings
+      // --- LORE BIBLE UPDATE (Legacy) ---
+      // We still update Lore for backward compatibility with the Chat Agent
       if (projectId) {
           const worldRules = result.settingAnalysis?.issues.map(i => `Avoid ${i.issue}: ${i.suggestion}`) || [];
           const lore: Lore = {
@@ -140,7 +142,7 @@ export function useDraftSmithEngine({
         setIsAnalyzing(false);
       }
     }
-  }, [getCurrentText, activeChapterId, projectSetting, projectId, updateChapterAnalysis, updateProjectLore]);
+  }, [getCurrentText, activeChapterId, projectSetting, manuscriptIndex, projectId, updateChapterAnalysis, updateProjectLore]);
 
   const cancelAnalysis = useCallback(() => {
     analysisAbortRef.current?.abort();
