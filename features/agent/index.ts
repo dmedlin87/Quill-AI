@@ -8,6 +8,7 @@
 export { ChatInterface } from './components/ChatInterface';
 export { ActivityFeed } from './components/ActivityFeed';
 export { PersonaSelector } from './components/PersonaSelector';
+export { AIPresenceOrb, type OrbStatus, type AIPresenceOrbProps } from './components/AIPresenceOrb';
 
 // Hooks
 export { useAgenticEditor, type EditorActions, type UseAgenticEditorOptions, type UseAgenticEditorResult } from './hooks/useAgenticEditor';

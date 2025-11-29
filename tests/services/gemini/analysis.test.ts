@@ -728,7 +728,7 @@ describe('generatePlotIdeas', () => {
     const result = await generatePlotIdeas('Sample text');
 
     expect(result.result).toEqual([{ title: 'Idea' }]);
-    expect(result.warning).toBe('AI response needed cleanup; results may be incomplete.');
+    expect(result.warning).toBe('Response required sanitization');
   });
 
   it('supports abort signal', async () => {

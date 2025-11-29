@@ -60,7 +60,7 @@ describe('ProjectDashboard', () => {
 
     render(<ProjectDashboard />);
 
-    fireEvent.click(screen.getByText('Create New Novel'));
+    fireEvent.click(screen.getByText('New Novel'));
     const titleInput = await screen.findByPlaceholderText('e.g. The Winds of Winter');
 
     fireEvent.change(titleInput, { target: { value: 'New Saga' } });

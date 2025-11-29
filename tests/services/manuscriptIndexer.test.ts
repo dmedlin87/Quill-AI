@@ -1,5 +1,20 @@
-import { describe, it, expect } from 'vitest';
-import { createEmptyIndex, mergeIntoIndex } from '@/services/manuscriptIndexer';
+import { describe, it, expect, vi } from 'vitest';
+import { createEmptyIndex, mergeIntoIndex, extractEntities } from '@/services/manuscriptIndexer';
+
+// Mock GoogleGenAI
+vi.mock('@google/genai', () => ({
+  GoogleGenAI: vi.fn().mockImplementation(() => ({
+    models: {
+      generateContent: vi.fn(),
+    },
+  })),
+  Type: {
+    OBJECT: 'OBJECT',
+    ARRAY: 'ARRAY',
+    STRING: 'STRING',
+    NUMBER: 'NUMBER',
+  },
+}));
 import { ManuscriptIndex } from '@/types/schema';
 
 describe('createEmptyIndex', () => {
@@ -206,5 +221,63 @@ describe('mergeIntoIndex', () => {
 
     expect(originalIndex.characters).toEqual({});
     expect(originalIndex.lastUpdated).toEqual({});
+  });
+
+  it('handles characters without attributes property', () => {
+    const emptyIndex = createEmptyIndex();
+    const extraction = {
+      characters: [{ name: 'NoAttrs', attributes: null, position: 100 }]
+    };
+
+    const { updatedIndex, contradictions } = mergeIntoIndex(
+      emptyIndex,
+      extraction as any,
+      'chapter-1'
+    );
+
+    expect(contradictions).toHaveLength(0);
+    expect(updatedIndex.characters['NoAttrs']).toBeDefined();
+  });
+
+  it('trims character name keys', () => {
+    const emptyIndex = createEmptyIndex();
+    const extraction = {
+      characters: [{ name: '  Spacy Name  ', attributes: {}, position: 100 }]
+    };
+
+    const { updatedIndex } = mergeIntoIndex(emptyIndex, extraction, 'chapter-1');
+
+    expect(updatedIndex.characters['Spacy Name']).toBeDefined();
+  });
+
+  it('handles multiple attribute types per character', () => {
+    const emptyIndex = createEmptyIndex();
+    const extraction = {
+      characters: [{
+        name: 'Alice',
+        attributes: { eye_color: 'blue', hair_color: 'blonde', age: '25' },
+        position: 100
+      }]
+    };
+
+    const { updatedIndex } = mergeIntoIndex(emptyIndex, extraction, 'chapter-1');
+
+    expect(updatedIndex.characters['Alice'].attributes.eye_color).toHaveLength(1);
+    expect(updatedIndex.characters['Alice'].attributes.hair_color).toHaveLength(1);
+    expect(updatedIndex.characters['Alice'].attributes.age).toHaveLength(1);
+  });
+});
+
+describe('extractEntities', () => {
+  it('returns empty result for text shorter than 50 characters', async () => {
+    const result = await extractEntities('Short text', 'chapter-1');
+    
+    expect(result).toEqual({ characters: [] });
+  });
+
+  it('returns empty result for empty text', async () => {
+    const result = await extractEntities('', 'chapter-1');
+    
+    expect(result).toEqual({ characters: [] });
   });
 });

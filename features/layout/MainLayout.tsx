@@ -4,11 +4,21 @@ import { SidebarTab, MainView, CharacterProfile } from '@/types';
 import { ProjectSidebar, StoryBoard, useProjectStore } from '@/features/project';
 import { EditorWorkspace } from '@/features/editor';
 import { UploadLayout } from './UploadLayout';
-import { ChatInterface, ActivityFeed } from '@/features/agent';
+import { ChatInterface, ActivityFeed, AIPresenceOrb, type OrbStatus } from '@/features/agent';
+import { DEFAULT_PERSONAS } from '@/types/personas';
 import { VoiceMode } from '@/features/voice';
 import { useEditor, useEngine, UsageBadge } from '@/features/shared';
 import { Dashboard } from '@/features/analysis';
 import { KnowledgeGraph, LoreManager } from '@/features/lore';
+
+/**
+ * Derive orb status from engine state
+ */
+function deriveOrbStatus(isAnalyzing: boolean, isMagicLoading: boolean): OrbStatus {
+  if (isMagicLoading) return 'writing';
+  if (isAnalyzing) return 'thinking';
+  return 'idle';
+}
 
 // Nav Icons
 const Icons = {
@@ -44,6 +54,8 @@ export const MainLayout: React.FC = () => {
   const [selectedGraphCharacter, setSelectedGraphCharacter] = useState<CharacterProfile | null>(null);
   const [isExitZenHovered, setIsExitZenHovered] = useState(false);
   const [isHeaderHovered, setIsHeaderHovered] = useState(false);
+  const [currentPersonaIndex, setCurrentPersonaIndex] = useState(0);
+  const currentPersona = DEFAULT_PERSONAS[currentPersonaIndex];
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('quillai-theme') as 'light' | 'dark') || 'light';
@@ -136,9 +148,17 @@ export const MainLayout: React.FC = () => {
 
         <div className="w-8 border-t border-[var(--border-primary)] mb-2" />
 
+        {/* AIPresenceOrb replaces static Agent icon */}
+        <AIPresenceOrb
+          status={deriveOrbStatus(engineState.isAnalyzing, engineState.isMagicLoading)}
+          persona={currentPersona}
+          analysisReady={Boolean(activeChapter?.lastAnalysis)}
+          onClick={() => handleTabChange(SidebarTab.CHAT)}
+          isActive={activeTab === SidebarTab.CHAT}
+        />
+
         {[
           { tab: SidebarTab.ANALYSIS, icon: <Icons.Analysis />, label: "Analysis" },
-          { tab: SidebarTab.CHAT, icon: <Icons.Agent />, label: "Agent" },
           { tab: SidebarTab.HISTORY, icon: <Icons.History />, label: "History" },
           { tab: SidebarTab.VOICE, icon: <Icons.Mic />, label: "Voice" },
           { tab: SidebarTab.GRAPH, icon: <Icons.Graph />, label: "Graph" },
