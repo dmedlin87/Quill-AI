@@ -138,4 +138,118 @@ describe('useQuillAIEngine', () => {
     expect(commitMock).not.toHaveBeenCalled();
     expect(result.current.state.pendingDiff).toBeNull();
   });
+
+  it('handles rapid analysis calls by aborting previous requests', async () => {
+    let resolveFirst: (value: typeof baseResult) => void;
+    let resolveSecond: (value: typeof baseResult) => void;
+    const firstCallPromise = new Promise<typeof baseResult>((resolve) => { resolveFirst = resolve; });
+    const secondCallPromise = new Promise<typeof baseResult>((resolve) => { resolveSecond = resolve; });
+    
+    let callCount = 0;
+    analyzeDraftMock.mockImplementation((_text: string, _setting: unknown, _index: unknown, signal: AbortSignal) => {
+      callCount++;
+      if (callCount === 1) {
+        return firstCallPromise.then(result => {
+          if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+          return result;
+        });
+      }
+      return secondCallPromise.then(result => {
+        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+        return result;
+      });
+    });
+
+    const { result } = buildHook();
+
+    // Start first analysis
+    let firstAnalysisPromise: Promise<void>;
+    act(() => {
+      firstAnalysisPromise = result.current.actions.runAnalysis();
+    });
+
+    expect(result.current.state.isAnalyzing).toBe(true);
+
+    // Start second analysis before first completes (should abort first)
+    let secondAnalysisPromise: Promise<void>;
+    act(() => {
+      secondAnalysisPromise = result.current.actions.runAnalysis();
+    });
+
+    // Complete second analysis first
+    await act(async () => {
+      resolveSecond!(baseResult);
+      await secondAnalysisPromise!;
+    });
+
+    // Complete first analysis (should be ignored due to abort)
+    await act(async () => {
+      resolveFirst!(baseResult);
+      try { await firstAnalysisPromise!; } catch { /* expected abort */ }
+    });
+
+    // Only second call should have updated chapter analysis
+    expect(updateChapterAnalysisMock).toHaveBeenCalledTimes(1);
+    expect(result.current.state.isAnalyzing).toBe(false);
+  });
+
+  it('returns error message when update_manuscript fails to find text', async () => {
+    const { result } = renderHook(() => useQuillAIEngine({
+      getCurrentText: () => 'completely different text',
+      currentProject: project,
+      activeChapterId: 'chapter-1',
+      updateChapterAnalysis: updateChapterAnalysisMock,
+      updateProjectLore: updateProjectLoreMock,
+      commit: commitMock,
+      selectionRange: null,
+      clearSelection: vi.fn(),
+    }));
+
+    await expect(
+      act(async () => {
+        await result.current.actions.handleAgentAction('update_manuscript', {
+          search_text: 'nonexistent phrase',
+          replacement_text: 'replacement',
+          description: 'test'
+        });
+      })
+    ).rejects.toThrow('Could not find the exact text to replace');
+
+    expect(result.current.state.pendingDiff).toBeNull();
+  });
+
+  it('handles unknown agent actions gracefully', async () => {
+    const { result } = buildHook();
+
+    let response: string;
+    await act(async () => {
+      response = await result.current.actions.handleAgentAction(
+        'invalid_action' as never,
+        undefined
+      );
+    });
+
+    expect(response!).toBe('Unknown action.');
+    expect(result.current.state.pendingDiff).toBeNull();
+  });
+
+  it('skips analysis when text is empty', async () => {
+    const { result } = renderHook(() => useQuillAIEngine({
+      getCurrentText: () => '   ',
+      currentProject: project,
+      activeChapterId: 'chapter-1',
+      updateChapterAnalysis: updateChapterAnalysisMock,
+      updateProjectLore: updateProjectLoreMock,
+      commit: commitMock,
+      selectionRange: null,
+      clearSelection: vi.fn(),
+    }));
+
+    await act(async () => {
+      await result.current.actions.runAnalysis();
+    });
+
+    expect(analyzeDraftMock).not.toHaveBeenCalled();
+    expect(result.current.state.isAnalyzing).toBe(false);
+  });
 });
