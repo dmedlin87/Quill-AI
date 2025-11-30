@@ -289,21 +289,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     try {
       // 1. Construct Context-Aware Prompt
-      let deepVoiceContext = '';
-      if (isDeepMode && voiceFingerprint && Object.keys(voiceFingerprint.profiles).length > 0) {
-        deepVoiceContext += '[DEEP ANALYSIS: VOICE FINGERPRINTS]\n';
-        const profiles = Object.values(voiceFingerprint.profiles);
-        for (const profile of profiles.slice(0, 5)) {
-           const latinatePct = Math.round(profile.metrics.latinateRatio * 100);
-           const contractionPct = Math.round(profile.metrics.contractionRatio * 100);
-           deepVoiceContext += `• ${profile.speakerName}: ${profile.impression} (${latinatePct}% Formal, ${contractionPct}% Casual).\n`;
-        }
-        deepVoiceContext += 'Use these metrics to ensure character voice consistency.\n\n';
-      }
-
       const contextPrompt = `
       [DEEP MODE]: ${isDeepMode ? 'ON' : 'OFF'}
-      ${deepVoiceContext}
       [USER CONTEXT]
       Cursor Index: ${editorContext.cursorPosition}
       Selection: ${editorContext.selection ? `"${editorContext.selection.text}"` : "None"}
