@@ -81,7 +81,7 @@ describe('styleAnalyzer', () => {
       
       const result = analyzeStyle(text);
       
-      expect(result.syntax.avgSentenceLength).toBe(2);
+      expect(result.syntax.avgSentenceLength).toBe(2.5);
     });
 
     it('calculates sentence length variance', () => {

@@ -22,12 +22,14 @@ import {
 // LEXICONS & PATTERNS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Scene break patterns
+// Scene break patterns (zero-length matches removed to prevent infinite loops)
 const SCENE_BREAK_PATTERNS = [
-  /^#{1,3}\s+/m,                                    // Markdown headers
+  /^#{1,3}\s*/m,                                    // Markdown headers (### or ### text)
+  /^\*\s*\*\s*\*.*$/m,                              // Spaced asterisks (* * *)
   /^\*{3,}$/m,                                      // *** dividers
   /^-{3,}$/m,                                       // --- dividers
-  /^\s*$/m,                                         // Multiple blank lines (handled separately)
+  /^Chapter\s+\d+/im,                               // Chapter headings (Chapter 1, Chapter 2, etc.)
+  // Note: Multiple blank lines handled separately in detectScenes
 ];
 
 // Time markers for scene classification
@@ -397,7 +399,7 @@ export const detectScenes = (text: string, paragraphs: ClassifiedParagraph[]): S
     const startOffset = sortedBreaks[i];
     const endOffset = sortedBreaks[i + 1];
     
-    if (endOffset - startOffset < 50) continue; // Skip tiny fragments
+    if (endOffset - startOffset < 10) continue; // Skip tiny fragments (dividers, empty sections)
     
     const sceneText = text.slice(startOffset, endOffset);
     const sceneParagraphs = paragraphs.filter(
@@ -485,6 +487,27 @@ export const calculateStats = (
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const parseStructure = (text: string): StructuralFingerprint => {
+  // Guard against empty or whitespace-only text
+  if (!text || !text.trim()) {
+    return {
+      scenes: [],
+      paragraphs: [],
+      dialogueMap: [],
+      stats: {
+        totalWords: 0,
+        totalSentences: 0,
+        totalParagraphs: 0,
+        avgSentenceLength: 0,
+        sentenceLengthVariance: 0,
+        dialogueRatio: 0,
+        sceneCount: 0,
+        povShifts: 0,
+        avgSceneLength: 0,
+      },
+      processedAt: Date.now(),
+    };
+  }
+
   const paragraphs = parseParagraphs(text);
   const dialogueMap = extractDialogue(text);
   const scenes = detectScenes(text, paragraphs);

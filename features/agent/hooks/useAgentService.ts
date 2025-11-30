@@ -6,14 +6,21 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Chat, FunctionCall } from "@google/genai";
-import { createAgentSession } from '@/services/gemini/agent';
 import { ChatMessage, EditorContext, AnalysisResult, CharacterProfile } from '@/types';
 import { Lore, Chapter } from '@/types/schema';
 import { Persona, DEFAULT_PERSONAS } from '@/types/personas';
 import { useSettingsStore } from '@/features/settings';
 import { ManuscriptHUD } from '@/types/intelligence';
 import { getMemoriesForContext, getActiveGoals, formatMemoriesForPrompt, formatGoalsForPrompt } from '@/services/memory';
+import {
+  DefaultAgentController,
+  AgentController,
+  AgentContextInput,
+  AgentControllerDependencies,
+  AgentControllerEvents,
+  AgentToolExecutor,
+  MemoryProvider,
+} from '@/services/core/AgentController';
 
 // Tool action handler type
 export type ToolActionHandler = (toolName: string, args: Record<string, unknown>) => Promise<string>;
@@ -64,8 +71,8 @@ export function useAgentService(
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPersona, setCurrentPersona] = useState<Persona>(initialPersona || DEFAULT_PERSONAS[0]);
   
-  const chatRef = useRef<Chat | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const controllerRef = useRef<AgentController | null>(null);
+  const isInitialMount = useRef(true);
   
   // Subscribe to settings changes
   const critiqueIntensity = useSettingsStore(state => state.critiqueIntensity);
@@ -105,85 +112,130 @@ export function useAgentService(
     }
   }, [projectId]);
 
+  const createToolExecutor = useCallback((): AgentToolExecutor => ({
+    async execute(toolName, args) {
+      try {
+        const message = await onToolAction(toolName, args);
+        return { success: true, message };
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+        return {
+          success: false,
+          message: `Error executing ${toolName}: ${errorMessage}`,
+          error: errorMessage,
+        };
+      }
+    },
+  }), [onToolAction]);
+
+  const createMemoryProvider = useCallback((): MemoryProvider | undefined => {
+    if (!projectId) return undefined;
+    return {
+      async buildMemoryContext(_projectId: string): Promise<string> {
+        return buildMemoryContext();
+      },
+    };
+  }, [projectId, buildMemoryContext]);
+
   /**
    * Initialize or reinitialize the chat session
    */
   const initSession = useCallback(async () => {
-    // Construct manuscript context for the agent
-    const fullManuscript = chapters.map(c => {
-      const isActive = c.content === fullText;
-      return `[CHAPTER: ${c.title}]${isActive ? " (ACTIVE - You can edit this)" : " (READ ONLY - Request user to switch)"}\n${c.content}\n`;
-    }).join('\n-------------------\n');
-
-    // Fetch memory context (async)
-    const memoryContext = await buildMemoryContext();
-
-    chatRef.current = createAgentSession({
-      lore, 
-      analysis: analysis || undefined, 
-      fullManuscriptContext: fullManuscript, 
-      persona: currentPersona, 
-      intensity: critiqueIntensity,
-      experience: experienceLevel,
-      autonomy: autonomyMode,
-      intelligenceHUD,
-      interviewTarget,
-      memoryContext,
-    });
-    
-    // Silent initialization message with persona and memory status
-    const memoryStatus = memoryContext ? 'Memory loaded.' : 'No memories yet.';
-    chatRef.current?.sendMessage({ 
-      message: `I have loaded the manuscript. Total Chapters: ${chapters.length}. Active Chapter Length: ${fullText.length} characters. ${memoryStatus} I am ${currentPersona.name}, ready to help with my ${currentPersona.role} expertise.` 
-    }).catch(console.error);
-  }, [lore, analysis, chapters, fullText, currentPersona, critiqueIntensity, experienceLevel, autonomyMode, intelligenceHUD, interviewTarget, buildMemoryContext]);
+    if (!controllerRef.current) return;
+    await controllerRef.current.initializeChat(currentPersona, projectId ?? null);
+  }, [currentPersona, projectId]);
 
   // Initialize session on mount and when dependencies change
   useEffect(() => {
-    initSession().catch(console.error);
-  }, [initSession]);
+    const context: AgentContextInput = {
+      fullText,
+      chapters,
+      lore,
+      analysis: analysis || null,
+      intelligenceHUD,
+      interviewTarget,
+      projectId: projectId ?? null,
+      critiqueIntensity,
+      experienceLevel,
+      autonomyMode,
+    };
 
-  /**
-   * Process tool calls from the agent response
-   */
-  const processToolCalls = useCallback(async (
-    functionCalls: FunctionCall[]
-  ): Promise<Array<{ id: string; name: string; response: { result: string } }>> => {
-    const responses = [];
+    const deps: AgentControllerDependencies = {
+      toolExecutor: createToolExecutor(),
+      memoryProvider: createMemoryProvider(),
+    };
 
-    for (const call of functionCalls) {
-      setAgentState({ status: 'executing' });
-      
-      // Add tool call indicator to messages
-      setMessages(prev => [...prev, {
-        role: 'model',
-        text: `🛠️ Suggesting Action: ${call.name}...`,
-        timestamp: new Date()
-      }]);
-
-      try {
-        const actionResult = await onToolAction(call.name, call.args as Record<string, unknown>);
-        
-        responses.push({
-          id: call.id || crypto.randomUUID(),
-          name: call.name,
-          response: { result: actionResult }
-        });
-
-        if (actionResult.includes('Waiting for user review')) {
+    const events: AgentControllerEvents = {
+      onStateChange: (state) => {
+        setAgentState(state);
+        setIsProcessing(state.status === 'thinking' || state.status === 'executing');
+      },
+      onMessage: (message) => {
+        setMessages(prev => [...prev, message]);
+      },
+      onToolCallStart: ({ name }) => {
+        setAgentState({ status: 'executing' });
+        setMessages(prev => [...prev, {
+          role: 'model',
+          text: `🛠️ Suggesting Action: ${name}...`,
+          timestamp: new Date()
+        }]);
+      },
+      onToolCallEnd: ({ result }) => {
+        if (result.message.includes('Waiting for user review')) {
           setMessages(prev => [...prev, {
             role: 'model',
             text: `📝 Reviewing proposed edit...`,
             timestamp: new Date()
           }]);
         }
-      } catch (_err: unknown) {
-        // Sabotage: swallow tool execution errors silently without updating state or messages
-      }
-    }
+      },
+      onError: (error) => {
+        console.error('[AgentService] Error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setAgentState({
+          status: 'error',
+          lastError: errorMessage
+        });
+        setMessages(prev => [...prev, {
+          role: 'model',
+          text: "Sorry, I encountered an error connecting to the Agent.",
+          timestamp: new Date()
+        }]);
+      },
+    };
 
-    return responses;
-  }, [onToolAction]);
+    const controller = new DefaultAgentController({
+      context,
+      deps,
+      events,
+      initialPersona: currentPersona,
+    });
+
+    controllerRef.current = controller;
+
+    initSession().catch(console.error);
+
+    return () => {
+      controller.dispose();
+      controllerRef.current = null;
+    };
+  }, [
+    fullText,
+    chapters,
+    lore,
+    analysis,
+    intelligenceHUD,
+    interviewTarget,
+    projectId,
+    critiqueIntensity,
+    experienceLevel,
+    autonomyMode,
+    createToolExecutor,
+    createMemoryProvider,
+    currentPersona,
+    initSession,
+  ]);
 
   /**
    * Send a message to the agent and process the response
@@ -192,92 +244,20 @@ export function useAgentService(
     messageText: string,
     editorContext: EditorContext
   ) => {
-    if (!messageText.trim() || !chatRef.current) return;
+    if (!messageText.trim()) return;
+    if (!controllerRef.current) return;
 
-    // Cancel any pending requests
-    // abortControllerRef.current?.abort(); // Sabotage: allow overlapping requests to proceed
-    abortControllerRef.current = new AbortController();
-    const abortSignal = abortControllerRef.current.signal;
-
-    const userMsg: ChatMessage = { 
-      role: 'user', 
-      text: messageText, 
-      timestamp: new Date() 
-    };
-    
-    setMessages(prev => [...prev, userMsg]);
-    setIsProcessing(true);
-    setAgentState({ status: 'thinking' });
-
-    try {
-      // Build context-aware prompt
-      const contextPrompt = `
-      [USER CONTEXT]
-      Cursor Index: ${editorContext.cursorPosition}
-      Selection: ${editorContext.selection ? `"${editorContext.selection.text}"` : "None"}
-      Total Text Length: ${editorContext.totalLength}
-      
-      [USER REQUEST]
-      ${messageText}
-      `;
-
-      // Send to agent
-      let result = await chatRef.current.sendMessage({ message: contextPrompt });
-
-      // Tool execution loop
-      while (result.functionCalls && result.functionCalls.length > 0) {
-        if (abortSignal.aborted) {
-          return;
-        }
-        const functionResponses = await processToolCalls(result.functionCalls);
-        if (abortSignal.aborted) {
-          return;
-        }
-        setAgentState({ status: 'thinking' });
-        result = await chatRef.current.sendMessage({
-          message: functionResponses.map(resp => ({ functionResponse: resp }))
-        });
-      }
-
-      // Final text response
-      const responseText = result.text;
-      setMessages(prev => [...prev, {
-        role: 'model',
-        text: responseText || "Done.",
-        timestamp: new Date()
-      }]);
-      
-      setAgentState({ status: 'idle' });
-
-    } catch (e) {
-      if (abortSignal.aborted) {
-        return;
-      }
-      console.error('[AgentService] Error:', e);
-      
-      const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-      setAgentState({ 
-        status: 'error', 
-        lastError: errorMessage 
-      });
-      
-      setMessages(prev => [...prev, {
-        role: 'model',
-        text: "Sorry, I encountered an error connecting to the Agent.",
-        timestamp: new Date()
-      }]);
-    } finally {
-      if (!abortSignal.aborted) {
-        setIsProcessing(false);
-      }
-    }
-  }, [processToolCalls]);
+    await controllerRef.current.sendMessage({
+      text: messageText,
+      editorContext,
+    });
+  }, []);
 
   /**
    * Reset the chat session (keeps messages)
    */
   const resetSession = useCallback(async () => {
-    abortControllerRef.current?.abort();
+    controllerRef.current?.abortCurrentRequest();
     await initSession();
     setAgentState({ status: 'idle' });
   }, [initSession]);
@@ -298,9 +278,13 @@ export function useAgentService(
     // Session will reinitialize via useEffect dependency
   }, []);
 
-  // Reinitialize when persona changes
+  // Reinitialize when persona changes (skip initial mount)
   useEffect(() => {
-    if (chatRef.current) {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (controllerRef.current) {
       initSession().then(() => {
         setMessages(prev => [...prev, {
           role: 'model',
@@ -314,7 +298,7 @@ export function useAgentService(
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      abortControllerRef.current?.abort();
+      controllerRef.current?.abortCurrentRequest();
     };
   }, []);
 
