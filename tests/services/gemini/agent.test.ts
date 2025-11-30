@@ -7,8 +7,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { 
   rewriteText, 
   getContextualHelp, 
-  createAgentSession, 
-  agentTools 
+  createAgentSessionLegacy as createAgentSession, 
+  agentTools,
+  ALL_AGENT_TOOLS,
 } from '@/services/gemini/agent';
 import { 
   mockUsageMetadata,
@@ -291,7 +292,7 @@ describe('createAgentSession', () => {
       model: expect.any(String),
       config: {
         systemInstruction: expect.stringContaining('LORE BIBLE & CONTEXTUAL MEMORY'),
-        tools: [{ functionDeclarations: agentTools }]
+        tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
       }
     });
 
@@ -311,7 +312,7 @@ describe('createAgentSession', () => {
       model: expect.any(String),
       config: {
         systemInstruction: expect.stringContaining('DEEP ANALYSIS INSIGHTS'),
-        tools: [{ functionDeclarations: agentTools }]
+        tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
       }
     });
 
@@ -331,7 +332,7 @@ describe('createAgentSession', () => {
       model: expect.any(String),
       config: {
         systemInstruction: expect.stringContaining(manuscriptText),
-        tools: [{ functionDeclarations: agentTools }]
+        tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
       }
     });
   });
@@ -347,7 +348,7 @@ describe('createAgentSession', () => {
       model: expect.any(String),
       config: {
         systemInstruction: expect.stringContaining('The Architect'),
-        tools: [{ functionDeclarations: agentTools }]
+        tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
       }
     });
   });
@@ -394,7 +395,7 @@ describe('createAgentSession', () => {
       model: expect.any(String),
       config: {
         systemInstruction: expect.stringContaining('No manuscript content loaded'),
-        tools: [{ functionDeclarations: agentTools }]
+        tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
       }
     });
   });

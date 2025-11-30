@@ -4,14 +4,22 @@ import { vi } from 'vitest';
 
 const { mockCreateAgentSession, mockSendMessage } = vi.hoisted(() => {
   const sendMessage = vi.fn();
+
+  // Use this as the QuillAgent constructor mock. When used with `new`,
+  // returning an object will make that the constructed instance.
+  const createAgentSession = vi.fn(() => ({
+    initialize: vi.fn().mockResolvedValue(undefined),
+    sendMessage,
+  }));
+
   return {
     mockSendMessage: sendMessage,
-    mockCreateAgentSession: vi.fn(() => ({ sendMessage })),
+    mockCreateAgentSession: createAgentSession,
   };
 });
 
 vi.mock('@/services/gemini/agent', () => ({
-  createAgentSession: mockCreateAgentSession,
+  QuillAgent: mockCreateAgentSession,
 }));
 
 import { ChatInterface } from '@/features/agent/components/ChatInterface';

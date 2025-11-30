@@ -384,6 +384,70 @@
         line-height: var(--line-height-prose);
         max-width: 60ch;
       }
+
+      /* ═══════════════════════════════════════════════════════════
+         EDITOR DECORATIONS - Analysis & Comment Highlights
+         CSS classes instead of inline styles for performance
+         ═══════════════════════════════════════════════════════════ */
+      
+      /* Base decoration styles */
+      .decoration-base {
+        cursor: help;
+        border-bottom-width: 2px;
+        border-bottom-style: solid;
+        transition: background-color 150ms ease;
+      }
+      
+      /* Error severity (red) */
+      .decoration-error {
+        background-color: rgba(239, 68, 68, 0.15);
+        border-bottom-color: rgb(239, 68, 68);
+      }
+      .decoration-error:hover {
+        background-color: rgba(239, 68, 68, 0.25);
+      }
+      
+      /* Warning severity (amber) */
+      .decoration-warning {
+        background-color: rgba(245, 158, 11, 0.15);
+        border-bottom-color: rgb(245, 158, 11);
+      }
+      .decoration-warning:hover {
+        background-color: rgba(245, 158, 11, 0.25);
+      }
+      
+      /* Info severity (indigo) */
+      .decoration-info {
+        background-color: rgba(99, 102, 241, 0.12);
+        border-bottom-color: rgb(99, 102, 241);
+      }
+      .decoration-info:hover {
+        background-color: rgba(99, 102, 241, 0.22);
+      }
+      
+      /* Success (green) */
+      .decoration-success {
+        background-color: rgba(34, 197, 94, 0.15);
+        border-bottom-color: rgb(34, 197, 94);
+      }
+      
+      /* Analysis highlight (gold) */
+      .decoration-analysis {
+        background-color: rgba(201, 162, 39, 0.12);
+        border-bottom-color: rgb(201, 162, 39);
+      }
+      .decoration-analysis:hover {
+        background-color: rgba(201, 162, 39, 0.22);
+      }
+      
+      /* Inline comment highlight - clickable */
+      .inline-comment-highlight {
+        cursor: pointer;
+        transition: background-color 150ms ease, transform 50ms ease;
+      }
+      .inline-comment-highlight:hover {
+        filter: brightness(1.1);
+      }
       
       /* Utilities */
       .paper-shadow { box-shadow: var(--shadow-lg); }
