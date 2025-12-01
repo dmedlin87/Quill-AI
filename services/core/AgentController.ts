@@ -9,6 +9,7 @@ import { ManuscriptHUD } from '@/types/intelligence';
 import type { UsageMetadata, Chat, FunctionCall } from '@google/genai';
 import type { ToolResult } from '@/services/gemini/toolExecutor';
 import { createAgentSession } from '@/services/gemini/agent';
+import { runAgentToolLoop, AgentToolLoopModelResult } from '@/services/core/agentToolLoop';
 
 // ---- Shared with existing hook ----
 
@@ -362,23 +363,26 @@ export class DefaultAgentController implements AgentController {
       ${input.text}
       `;
 
-      // Send to agent
-      let result = await chat.sendMessage({ message: contextPrompt });
+      // Send to agent and run shared tool loop
+      const initialResult = (await chat.sendMessage({
+        message: contextPrompt,
+      })) as AgentToolLoopModelResult;
 
-      // Tool execution loop
-      while (result.functionCalls && result.functionCalls.length > 0) {
-        if (abortSignal.aborted) {
-          return;
-        }
-        const functionResponses = await this.processToolCalls(result.functionCalls);
-        if (abortSignal.aborted) {
-          return;
-        }
-        this.updateState({ status: 'thinking', lastError: undefined });
-        result = await chat.sendMessage({
-          message: functionResponses.map(resp => ({ functionResponse: resp })),
-        });
+      const finalResult = await runAgentToolLoop<AgentToolLoopModelResult>({
+        chat,
+        initialResult,
+        abortSignal,
+        processToolCalls: functionCalls => this.processToolCalls(functionCalls),
+        onThinkingRoundStart: () => {
+          this.updateState({ status: 'thinking', lastError: undefined });
+        },
+      });
+
+      if (abortSignal.aborted) {
+        return;
       }
+
+      const result = finalResult;
 
       // Final text response
       const responseText = (result as any).text as string | undefined;

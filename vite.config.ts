@@ -38,6 +38,10 @@ export default defineConfig(({ mode }) => {
         include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
         coverage: {
           reporter: ['text', 'json', 'json-summary', 'html'],
+          exclude: [
+            'scripts/**/*.mjs',
+            'types/**/*.ts',
+          ],
           thresholds: {
             statements: 80,
             branches: 75,

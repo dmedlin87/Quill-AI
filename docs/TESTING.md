@@ -224,7 +224,13 @@ Key hook families:
   - `features/voice/hooks/useTextToSpeech.ts`
   - `features/voice/hooks/useAudioController.ts`
 
-When adding new hooks, follow the same pattern: unit‑test decision logic and side effects.
+When adding new hooks, follow the same pattern: unit-test decision logic and side effects.
+
+For the agent layer specifically, the shared Gemini tool-call loop and its orchestrators are covered by:
+
+- `tests/services/core/agentToolLoop.test.ts` – pure helper loop behavior (tool rounds, abort paths).
+- `tests/services/core/AgentController.test.ts` – `DefaultAgentController` usage of the loop and state transitions.
+- `tests/hooks/useAgentOrchestrator.test.ts` – AppBrain-powered hook behavior, including tool round-trips and abort handling.
 
 ### Phase 4: React Components (Medium)
 

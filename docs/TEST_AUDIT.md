@@ -13,7 +13,6 @@
 | Potentially stale test files | 6 |
 | Large files with low coverage | 0 |
 
-
 ## Source Files Missing Tests
 
 ### High Priority (>100 lines)
@@ -42,7 +41,6 @@
 | `services/gemini/toolExecutor.ts` | 142 | n/a |
 
 *...and 15 more*
-
 
 ### All Missing (45 files)
 
@@ -102,6 +100,7 @@
 ## Potentially Stale Test Files
 
 These test files don't have an obvious matching source file. They may be:
+
 - Integration tests (expected)
 - Tests for deleted code (should be removed)
 - Tests with non-matching names (should be renamed)
@@ -114,7 +113,6 @@ These test files don't have an obvious matching source file. They may be:
 | `tests/features/index.test.ts` | `*/index.ts(x)` |
 | `tests/index.test.tsx` | `*/index.ts(x)` |
 | `tests/public/audio-processor.test.ts` | `*/audio-processor.ts(x)` |
-
 
 ## How to Use This Report
 

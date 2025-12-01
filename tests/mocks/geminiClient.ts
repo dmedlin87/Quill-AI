@@ -133,6 +133,23 @@ export const mockAnalysisResult = {
   },
 };
 
+export const chaosResponses = {
+  emptyText: { text: '', usageMetadata: mockUsageMetadata },
+  malformedJson: { text: 'not json', usageMetadata: mockUsageMetadata },
+};
+
+export const createRateLimitError = (message = 'Rate limit exceeded') => {
+  const error: any = new Error(message);
+  (error as any).status = 429;
+  return error;
+};
+
+export const createContextLengthError = (message = 'Context length exceeded') => {
+  const error: any = new Error(message);
+  (error as any).status = 413;
+  return error;
+};
+
 export const mockLore: Lore = {
   characters: [
     {

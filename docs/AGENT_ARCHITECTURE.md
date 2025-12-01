@@ -469,6 +469,23 @@ export function useAgentOrchestrator(
 }
 ```
 
+#### Centralized tool-call loop
+
+Both the hook and the core controller share a single, testable tool loop:
+
+- `services/core/agentToolLoop.ts` – exports `runAgentToolLoop`, a pure helper that:
+  - Accepts an initial model response (with optional `functionCalls`).
+  - Repeatedly executes tools via a caller-provided `processToolCalls` function.
+  - Sends `functionResponse` payloads back to the model until there are no more tools or an `AbortSignal` fires.
+- `features/agent/hooks/useAgentOrchestrator.ts` – passes UI-specific `processToolCalls` that:
+  - Emits "🛠️ tool-name..." messages into the chat.
+  - Calls `executeAgentToolCall` and updates the reducer state.
+- `services/core/AgentController.ts` – uses the same helper, but its `processToolCalls`:
+  - Emits tool events via `AgentControllerEvents`.
+  - Delegates to `AgentToolExecutor` for app-side actions.
+
+This keeps the Gemini tool-call loop logic centralized while allowing UI and controller layers to customize side effects.
+
 ### Phase 4: Event Bus
 
 Allow agent to react to user actions proactively:

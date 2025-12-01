@@ -301,6 +301,30 @@ describe('AnalysisContext', () => {
       expect(mockFetchSettingAnalysis).not.toHaveBeenCalled();
       expect(result.current.analysisStatus.setting).toBe('idle');
     });
+
+    it('logs and rethrows when full analysis fails', async () => {
+      const error = new Error('Full analysis failed');
+      mockFetchPacingAnalysis.mockRejectedValueOnce(error);
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { result } = renderHook(() => useAnalysis(), { wrapper });
+
+      let analysisPromise: Promise<unknown>;
+      act(() => {
+        analysisPromise = result.current.runFullAnalysis('Text');
+      });
+
+      await expect(analysisPromise!).rejects.toThrow('Full analysis failed');
+
+      expect(consoleSpy).toHaveBeenCalled();
+      const [firstMessage] = consoleSpy.mock.calls[0];
+      expect(String(firstMessage)).toContain('[AnalysisContext] Full analysis failed:');
+
+      expect(result.current.isAnalyzing).toBe(false);
+
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('clearAnalysis', () => {
@@ -339,6 +363,38 @@ describe('AnalysisContext', () => {
       });
       
       expect(result.current.isAnalyzing).toBe(false);
+    });
+
+    it('aborts the underlying AbortController signal for in-flight full analysis', async () => {
+      let capturedSignal: AbortSignal | undefined;
+
+      mockFetchPacingAnalysis.mockImplementation((_text: string, _setting: any, signal?: AbortSignal) => {
+        capturedSignal = signal;
+        return new Promise(resolve => {
+          // Never resolve; we only care about the signal state
+        });
+      });
+
+      const { result } = renderHook(() => useAnalysis(), { wrapper });
+
+      let analysisPromise: Promise<unknown>;
+      act(() => {
+        analysisPromise = result.current.runFullAnalysis('Text');
+      });
+
+      await waitFor(() => {
+        expect(capturedSignal).toBeDefined();
+      });
+
+      act(() => {
+        result.current.abortAnalysis();
+      });
+
+      expect(capturedSignal!.aborted).toBe(true);
+      expect(result.current.isAnalyzing).toBe(false);
+
+      // Prevent unhandled promise rejection warnings
+      await expect(analysisPromise!).rejects.toBeDefined();
     });
   });
 });

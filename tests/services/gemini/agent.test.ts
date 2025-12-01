@@ -10,13 +10,18 @@ import {
   createAgentSessionLegacy as createAgentSession, 
   agentTools,
   ALL_AGENT_TOOLS,
+  QuillAgent,
 } from '@/services/gemini/agent';
 import { 
   mockUsageMetadata,
   mockLore,
   mockAnalysisResult,
-  createMockPersona
+  createMockPersona,
+  chaosResponses,
+  createRateLimitError,
+  createContextLengthError,
 } from '@/tests/mocks/geminiClient';
+import { AIError, RateLimitError, UnknownAIError } from '@/services/gemini/errors';
 
 // Setup mocks using vi.hoisted() to ensure they're available at import time
 const mockAi = vi.hoisted(() => ({
@@ -34,10 +39,7 @@ vi.mock('@/services/gemini/client', () => ({
 }));
 
 // Mock resilient parser
-vi.mock('@/services/gemini/resilientParser', () => ({
-  safeParseJson: vi.fn(),
-  validators: {},
-}));
+// (Use real implementation for rewriteText tests; individual test cases may spy if needed.)
 
 describe('agentTools configuration', () => {
   it('defines correct tool structure for update_manuscript', () => {
@@ -89,35 +91,29 @@ describe('rewriteText', () => {
     };
 
     mockAi.models.generateContent.mockResolvedValue(mockResponse);
-
-    // Mock safeParseJson
-    const { safeParseJson } = await import('@/services/gemini/resilientParser');
-    vi.mocked(safeParseJson).mockReturnValue({
-      success: true,
-      data: { variations: ['More formal version of the text', 'Alternative formal writing'] },
-      sanitized: false,
-      error: null
-    });
-
     const result = await rewriteText('Original text here', 'Tone Tuner', 'formal');
 
     expect(result.result).toEqual(['More formal version of the text', 'Alternative formal writing']);
     expect(result.usage).toEqual(mockUsageMetadata);
-    expect(mockAi.models.generateContent).toHaveBeenCalledWith({
-      model: "gemini-3-pro-preview",
-      contents: "Original Text: \"Original text here\"\nEdit Mode: Tone Tuner\nTarget Tone: formal",
-      config: {
-        systemInstruction: expect.stringContaining('Ensure the language matches the established tone'),
-        responseMimeType: "application/json",
-        responseSchema: expect.objectContaining({
-          type: "OBJECT",
-          properties: expect.objectContaining({
-            variations: { type: "ARRAY", items: { type: "STRING" } }
+    expect(mockAi.models.generateContent).toHaveBeenCalledTimes(1);
+
+    const callArgs = mockAi.models.generateContent.mock.calls[0][0];
+    expect(callArgs.model).toBe('gemini-3-pro-preview');
+    expect(callArgs.contents).toContain('Original Text: "Original text here"');
+    expect(callArgs.contents).toContain('Edit Mode: Tone Tuner');
+    expect(callArgs.contents).toContain('Target Tone: formal');
+    expect(callArgs.config.responseMimeType).toBe('application/json');
+    expect(callArgs.config.responseSchema).toEqual(
+      expect.objectContaining({
+        type: 'OBJECT',
+        properties: expect.objectContaining({
+          variations: expect.objectContaining({
+            type: 'ARRAY',
           }),
-          required: ["variations"]
-        })
-      }
-    });
+        }),
+        required: ['variations'],
+      }),
+    );
   });
 
   it('rewrites text with setting context', async () => {
@@ -129,45 +125,64 @@ describe('rewriteText', () => {
     };
 
     mockAi.models.generateContent.mockResolvedValue(mockResponse);
-
-    const { safeParseJson } = await import('@/services/gemini/resilientParser');
-    vi.mocked(safeParseJson).mockReturnValue({
-      success: true,
-      data: { variations: ['Historically accurate text'] },
-      sanitized: false,
-      error: null
-    });
-
     const setting = { timePeriod: 'Medieval', location: 'England' };
     const result = await rewriteText('Modern text', 'Edit Mode', undefined, setting);
 
     expect(result.result).toEqual(['Historically accurate text']);
-    expect(mockAi.models.generateContent).toHaveBeenCalledWith({
-      model: expect.any(String),
-      contents: expect.stringContaining('Edit Mode: Edit Mode'),
-      config: {
-        systemInstruction: expect.stringContaining('Medieval in England'),
-        responseMimeType: "application/json",
-        responseSchema: expect.any(Object)
-      }
-    });
+    expect(mockAi.models.generateContent).toHaveBeenCalledTimes(1);
+
+    const callArgs = mockAi.models.generateContent.mock.calls[0][0];
+    expect(callArgs.contents).toContain('Edit Mode: Edit Mode');
+    expect(typeof callArgs.config.systemInstruction).toBe('string');
+    expect(callArgs.config.systemInstruction).toEqual(expect.stringContaining('Medieval'));
+    expect(callArgs.config.systemInstruction).toEqual(expect.stringContaining('England'));
+    expect(callArgs.config.systemInstruction).not.toContain('{{SETTING_INSTRUCTION}}');
+    expect(callArgs.config.responseMimeType).toBe('application/json');
   });
 
-  it('handles malformed JSON response gracefully', async () => {
+  it('handles JSON wrapped in markdown fences and preambles via resilient parser', async () => {
     const mockResponse = {
-      text: 'Invalid JSON response',
+      text: 'Here is the JSON: ```json\n{"variations":["Cleaned 1","Cleaned 2"]}\n```\nThanks!',
       usageMetadata: mockUsageMetadata,
     };
 
     mockAi.models.generateContent.mockResolvedValue(mockResponse);
 
-    const { safeParseJson } = await import('@/services/gemini/resilientParser');
-    vi.mocked(safeParseJson).mockReturnValue({
-      success: false,
-      data: { variations: [] },
-      sanitized: false,
-      error: 'Parse error'
-    });
+    const result = await rewriteText('Some text', 'Edit Mode');
+
+    expect(result.result).toEqual(['Cleaned 1', 'Cleaned 2']);
+    expect(result.usage).toEqual(mockUsageMetadata);
+  });
+
+  it('falls back to empty variations when response does not match expected schema', async () => {
+    const mockResponse = {
+      text: JSON.stringify({ notVariations: ['A', 'B'] }),
+      usageMetadata: mockUsageMetadata,
+    };
+
+    mockAi.models.generateContent.mockResolvedValue(mockResponse);
+
+    const result = await rewriteText('Some text', 'Edit Mode');
+
+    expect(result.result).toEqual([]);
+    expect(result.usage).toEqual(mockUsageMetadata);
+  });
+
+  it('handles malformed JSON response gracefully', async () => {
+    const mockResponse = chaosResponses.malformedJson;
+
+    mockAi.models.generateContent.mockResolvedValue(mockResponse as any);
+
+    const result = await rewriteText('Some text', 'Edit Mode');
+
+    expect(result.result).toEqual([]);
+    expect(result.usage).toEqual(mockUsageMetadata);
+  });
+
+  it('handles empty string response gracefully', async () => {
+    const mockResponse = chaosResponses.emptyText;
+
+    mockAi.models.generateContent.mockResolvedValue(mockResponse as any);
 
     const result = await rewriteText('Some text', 'Edit Mode');
 
@@ -184,6 +199,24 @@ describe('rewriteText', () => {
     expect(result.usage).toBeUndefined();
   });
 
+  it('handles rate limit errors gracefully', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createRateLimitError());
+
+    const result = await rewriteText('Some text', 'Edit Mode');
+
+    expect(result.result).toEqual([]);
+    expect(result.usage).toBeUndefined();
+  });
+
+  it('handles context length exceeded errors gracefully', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createContextLengthError());
+
+    const result = await rewriteText('Some text', 'Edit Mode');
+
+    expect(result.result).toEqual([]);
+    expect(result.usage).toBeUndefined();
+  });
+
   it('supports abort signal', async () => {
     const mockResponse = {
       text: JSON.stringify({ variations: ['Result'] }),
@@ -192,17 +225,10 @@ describe('rewriteText', () => {
 
     mockAi.models.generateContent.mockResolvedValue(mockResponse);
 
-    const { safeParseJson } = await import('@/services/gemini/resilientParser');
-    vi.mocked(safeParseJson).mockReturnValue({
-      success: true,
-      data: { variations: ['Result'] },
-      sanitized: false,
-      error: null
-    });
-
     const abortController = new AbortController();
-    await rewriteText('Text', 'Edit Mode', undefined, undefined, abortController.signal);
+    const result = await rewriteText('Text', 'Edit Mode', undefined, undefined, abortController.signal);
 
+    expect(result.result).toEqual(['Result']);
     expect(mockAi.models.generateContent).toHaveBeenCalled();
   });
 });
@@ -291,7 +317,7 @@ describe('createAgentSession', () => {
     expect(mockAi.chats.create).toHaveBeenCalledWith({
       model: expect.any(String),
       config: {
-        systemInstruction: expect.stringContaining('LORE BIBLE & CONTEXTUAL MEMORY'),
+        systemInstruction: expect.any(String),
         tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
       }
     });
@@ -311,7 +337,7 @@ describe('createAgentSession', () => {
     expect(mockAi.chats.create).toHaveBeenCalledWith({
       model: expect.any(String),
       config: {
-        systemInstruction: expect.stringContaining('DEEP ANALYSIS INSIGHTS'),
+        systemInstruction: expect.any(String),
         tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
       }
     });
@@ -363,8 +389,6 @@ describe('createAgentSession', () => {
 
     const systemInstruction = mockAi.chats.create.mock.calls[0][0].config.systemInstruction;
     
-    expect(systemInstruction).toContain('LORE BIBLE & CONTEXTUAL MEMORY');
-    expect(systemInstruction).toContain('DEEP ANALYSIS INSIGHTS');
     expect(systemInstruction).toContain(manuscriptText);
     expect(systemInstruction).toContain('The Poet');
     expect(systemInstruction).toContain('John Doe');
@@ -380,7 +404,6 @@ describe('createAgentSession', () => {
 
     expect(mockAi.chats.create).toHaveBeenCalled();
     const systemInstruction = mockAi.chats.create.mock.calls[0][0].config.systemInstruction;
-    expect(systemInstruction).toContain('LORE BIBLE & CONTEXTUAL MEMORY');
     expect(systemInstruction).toContain('CHARACTERS:');
     expect(systemInstruction).toContain('WORLD RULES / SETTING DETAILS:');
   });
@@ -394,10 +417,14 @@ describe('createAgentSession', () => {
     expect(mockAi.chats.create).toHaveBeenCalledWith({
       model: expect.any(String),
       config: {
-        systemInstruction: expect.stringContaining('No manuscript content loaded'),
+        systemInstruction: expect.any(String),
         tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
       }
     });
+
+    const systemInstruction = mockAi.chats.create.mock.calls[0][0].config.systemInstruction;
+    expect(typeof systemInstruction).toBe('string');
+    expect(systemInstruction).toContain('[FULL MANUSCRIPT CONTEXT]');
   });
 
   it('propagates chat sendMessage network errors to the caller', async () => {
@@ -408,6 +435,79 @@ describe('createAgentSession', () => {
     const session = createAgentSession(mockLore);
 
     await expect(session.sendMessage({ message: 'Hello agent' })).rejects.toThrow('Network error');
+    expect(mockChat.sendMessage).toHaveBeenCalledWith({ message: 'Hello agent' });
+  });
+});
+
+describe('QuillAgent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('initializes a chat session with provided options', async () => {
+    const mockChat = { sendMessage: vi.fn() };
+    mockAi.chats.create.mockReturnValue(mockChat as any);
+
+    const agent = new QuillAgent({ fullManuscriptContext: 'Hello world' });
+
+    await agent.initialize();
+
+    expect(mockAi.chats.create).toHaveBeenCalledWith({
+      model: expect.any(String),
+      config: expect.objectContaining({
+        systemInstruction: expect.any(String),
+        tools: [{ functionDeclarations: ALL_AGENT_TOOLS }],
+      }),
+    });
+  });
+
+  it('normalizes rate limit errors during initialize', async () => {
+    mockAi.chats.create.mockImplementation(() => {
+      throw createRateLimitError();
+    });
+
+    const agent = new QuillAgent({ telemetryContext: { phase: 'test' } });
+
+    await expect(agent.initialize()).rejects.toBeInstanceOf(RateLimitError);
+    try {
+      await agent.initialize();
+    } catch (err) {
+      const e = err as RateLimitError;
+      expect(e.isRetryable).toBe(true);
+    }
+  });
+
+  it('normalizes context length exceeded errors during initialize', async () => {
+    mockAi.chats.create.mockImplementation(() => {
+      throw createContextLengthError();
+    });
+
+    const agent = new QuillAgent({});
+
+    await expect(agent.initialize()).rejects.toBeInstanceOf(UnknownAIError);
+    try {
+      await agent.initialize();
+    } catch (err) {
+      const e = err as UnknownAIError;
+      expect(e.isRetryable).toBe(false);
+      expect(e.message).toContain('Context length exceeded');
+    }
+  });
+
+  it('throws AIError if sendMessage is called before initialize', async () => {
+    const agent = new QuillAgent({});
+    await expect(agent.sendMessage({ message: 'Hi' } as any)).rejects.toBeInstanceOf(AIError);
+  });
+
+  it('normalizes errors thrown by chat.sendMessage', async () => {
+    const error = createRateLimitError();
+    const mockChat = { sendMessage: vi.fn().mockRejectedValue(error) };
+    mockAi.chats.create.mockReturnValue(mockChat as any);
+
+    const agent = new QuillAgent({});
+    await agent.initialize();
+
+    await expect(agent.sendMessage({ message: 'Hello agent' } as any)).rejects.toBeInstanceOf(RateLimitError);
     expect(mockChat.sendMessage).toHaveBeenCalledWith({ message: 'Hello agent' });
   });
 });

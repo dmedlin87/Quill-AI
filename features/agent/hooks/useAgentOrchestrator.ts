@@ -12,11 +12,18 @@ import { Chat } from '@google/genai';
 import { createAgentSession } from '@/services/gemini/agent';
 import { ALL_AGENT_TOOLS, VOICE_SAFE_TOOLS } from '@/services/gemini/agentTools';
 import { executeAgentToolCall } from '@/services/gemini/toolExecutor';
-import { useAppBrain } from '@/features/shared';
+import { useAppBrain } from '@/features/core';
 import { ChatMessage } from '@/types';
 import { Persona, DEFAULT_PERSONAS } from '@/types/personas';
 import { useSettingsStore } from '@/features/settings';
 import { emitToolExecuted } from '@/services/appBrain';
+import { runAgentToolLoop, AgentToolLoopModelResult } from '@/services/core/agentToolLoop';
+import {
+  agentOrchestratorReducer,
+  initialAgentMachineState,
+  AgentMachineAction,
+  AgentMachineState,
+} from '@/services/core/agentOrchestratorMachine';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -24,26 +31,7 @@ import { emitToolExecuted } from '@/services/appBrain';
 
 export type AgentMode = 'text' | 'voice';
 
-// Internal agent state for reducer (discriminated union)
-type BaseAgentState =
-  | { status: 'idle'; error?: never }
-  | { status: 'thinking'; currentRequest: string }
-  | { status: 'executing'; tool: string }
-  | { status: 'error'; error: string };
-
-type AgentState = BaseAgentState & {
-  isReady: boolean;
-  lastToolCall?: { name: string; success: boolean };
-};
-
-type AgentAction =
-  | { type: 'SESSION_READY' }
-  | { type: 'START_THINKING'; request: string }
-  | { type: 'START_EXECUTION'; tool: string }
-  | { type: 'TOOL_COMPLETE'; tool: string; success: boolean; error?: string }
-  | { type: 'FINISH' }
-  | { type: 'ERROR'; error: string }
-  | { type: 'ABORT' };
+// Internal agent state is now modeled by AgentMachineState/AgentMachineAction in services/core
 
 export interface AgentOrchestratorState {
   status: 'idle' | 'thinking' | 'executing' | 'speaking' | 'error';
@@ -94,72 +82,8 @@ export function useAgentOrchestrator(
   // Local state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [agentState, dispatch] = useReducer<
-    (state: AgentState, action: AgentAction) => AgentState
-  >(
-    (state, action) => {
-      switch (action.type) {
-        case 'SESSION_READY':
-          return { ...state, isReady: true };
-        case 'START_THINKING':
-          return {
-            status: 'thinking',
-            currentRequest: action.request,
-            isReady: state.isReady,
-            lastToolCall: state.lastToolCall,
-          };
-        case 'START_EXECUTION':
-          return {
-            status: 'executing',
-            tool: action.tool,
-            isReady: state.isReady,
-            lastToolCall: { name: action.tool, success: false },
-          };
-        case 'TOOL_COMPLETE':
-          if (action.success) {
-            // After a successful tool call, return to thinking for follow-up model response
-            const previousRequest =
-              state.status === 'thinking' ? state.currentRequest : '';
-            return {
-              status: 'thinking',
-              currentRequest: previousRequest,
-              isReady: state.isReady,
-              lastToolCall: { name: action.tool, success: true },
-            };
-          }
-          return {
-            status: 'error',
-            error: action.error ?? 'Unknown error',
-            isReady: state.isReady,
-            lastToolCall: { name: action.tool, success: false },
-          };
-        case 'FINISH':
-          return {
-            status: 'idle',
-            isReady: state.isReady,
-            lastToolCall: state.lastToolCall,
-          };
-        case 'ERROR':
-          return {
-            status: 'error',
-            error: action.error,
-            isReady: state.isReady,
-            lastToolCall: state.lastToolCall,
-          };
-        case 'ABORT':
-          return {
-            status: 'idle',
-            isReady: state.isReady,
-            lastToolCall: state.lastToolCall,
-          };
-        default:
-          return state;
-      }
-    },
-    {
-      status: 'idle',
-      isReady: false,
-    }
-  );
+    (state: AgentMachineState, action: AgentMachineAction) => AgentMachineState
+  >(agentOrchestratorReducer, initialAgentMachineState);
   const [currentPersona, setCurrentPersona] = useState<Persona>(
     initialPersona || DEFAULT_PERSONAS[0]
   );
@@ -180,7 +104,7 @@ export function useAgentOrchestrator(
   // SESSION INITIALIZATION
   // ─────────────────────────────────────────────────────────────────────────
 
-  const initSession = useCallback(() => {
+  const initSession = useCallback(async () => {
     const { manuscript, lore, analysis, intelligence } = brain.state;
     
     // Build full manuscript context
@@ -201,12 +125,19 @@ export function useAgentOrchestrator(
       intelligenceHUD: intelligence.hud || undefined,
     });
 
-    // Silent initialization
-    chatRef.current?.sendMessage({
-      message: `Session initialized. Project: "${manuscript.projectTitle}". Chapters: ${manuscript.chapters.length}. Active: "${manuscript.chapters.find(c => c.id === manuscript.activeChapterId)?.title}". I am ${currentPersona.name}, ready to assist.`
-    }).then(() => {
-      dispatch({ type: 'SESSION_READY' });
-    }).catch(console.error);
+    // Silent initialization – tolerate providers or mocks that don't return a Promise
+    try {
+      const session = chatRef.current;
+      if (session && typeof session.sendMessage === 'function') {
+        await session.sendMessage({
+          message: `Session initialized. Project: "${manuscript.projectTitle}". Chapters: ${manuscript.chapters.length}. Active: "${manuscript.chapters.find(c => c.id === manuscript.activeChapterId)?.title}". I am ${currentPersona.name}, ready to assist.`,
+        } as any);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+
+    dispatch({ type: 'SESSION_READY' });
   }, [brain.state, currentPersona, critiqueIntensity, experienceLevel, autonomyMode]);
 
   // Initialize on mount
@@ -217,10 +148,9 @@ export function useAgentOrchestrator(
     };
   }, [initSession]);
 
-  // Reinit when persona changes
+  // Persona change announcement (session reinit is handled by the initSession effect)
   useEffect(() => {
     if (chatRef.current && isReady) {
-      initSession();
       setMessages(prev => [...prev, {
         role: 'model',
         text: `${currentPersona.icon} Switched to ${currentPersona.name}. ${currentPersona.role}.`,
@@ -293,46 +223,52 @@ Selection: ${ui.selection ? `"${ui.selection.text.slice(0, 100)}${ui.selection.t
 ${messageText}
 `;
 
-      // Send to agent
-      let result = await chatRef.current.sendMessage({ message: contextPrompt });
+      const chat = chatRef.current;
+      if (!chat) return;
 
-      // Tool execution loop
-      while (result.functionCalls && result.functionCalls.length > 0) {
-        if (signal.aborted) return;
+      // Send to agent and run shared tool loop
+      const initialResult = (await chat.sendMessage({
+        message: contextPrompt,
+      })) as AgentToolLoopModelResult;
 
-        const functionResponses = [];
-        for (const call of result.functionCalls) {
-          // Show tool call in UI
-          setMessages(prev => [...prev, {
-            role: 'model',
-            text: `🛠️ ${call.name}...`,
-            timestamp: new Date()
-          }]);
+      const finalResult = await runAgentToolLoop<AgentToolLoopModelResult>({
+        chat,
+        initialResult,
+        abortSignal: signal,
+        processToolCalls: async functionCalls => {
+          const functionResponses: { id: string; name: string; response: { result: string } }[] = [];
+          for (const call of functionCalls) {
+            // Show tool call in UI
+            setMessages(prev => [...prev, {
+              role: 'model',
+              text: `🛠️ ${call.name}...`,
+              timestamp: new Date()
+            }]);
 
-          const actionResult = await executeToolCall(
-            call.name,
-            call.args as Record<string, unknown>
-          );
+            const actionResult = await executeToolCall(
+              call.name,
+              call.args as Record<string, unknown>
+            );
 
-          functionResponses.push({
-            id: call.id || crypto.randomUUID(),
-            name: call.name,
-            response: { result: actionResult }
-          });
-        }
+            functionResponses.push({
+              id: call.id || crypto.randomUUID(),
+              name: call.name,
+              response: { result: actionResult }
+            });
+          }
+          return functionResponses;
+        },
+        onThinkingRoundStart: () => {
+          dispatch({ type: 'START_THINKING', request: messageText });
+        },
+      });
 
-        if (signal.aborted) return;
-        
-        dispatch({ type: 'START_THINKING', request: messageText });
-        result = await chatRef.current.sendMessage({
-          message: functionResponses.map(resp => ({ functionResponse: resp }))
-        });
-      }
+      if (signal.aborted) return;
 
       // Final response
       setMessages(prev => [...prev, {
         role: 'model',
-        text: result.text || 'Done.',
+        text: finalResult.text || 'Done.',
         timestamp: new Date()
       }]);
       dispatch({ type: 'FINISH' });
@@ -386,7 +322,7 @@ ${messageText}
     isProcessing,
     state: {
       status: agentState.status,
-      lastError: agentState.status === 'error' ? agentState.error : undefined,
+      lastError: agentState.status === 'error' ? agentState.lastError : undefined,
       lastToolCall: agentState.lastToolCall,
     },
     messages,

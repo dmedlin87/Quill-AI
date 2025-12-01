@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
+import { RateLimitError, AIError } from '@/services/gemini/errors';
 
 const { mockCreateAgentSession, mockSendMessage } = vi.hoisted(() => {
   const sendMessage = vi.fn();
@@ -168,6 +169,50 @@ describe('ChatInterface', () => {
     await waitFor(() => {
       expect(
         screen.getByText('Sorry, I encountered an error connecting to the Agent.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('shows a cool-down message when a RateLimitError is thrown', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      .mockRejectedValueOnce(new RateLimitError());
+
+    render(<ChatInterface {...baseProps} />);
+
+    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
+
+    fireEvent.change(input, { target: { value: 'Trigger rate limit' } });
+    if (sendButton) {
+      fireEvent.click(sendButton);
+    }
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('The AI is cooling down. Please wait a moment.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('shows the AIError message when an AIError is thrown', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      .mockRejectedValueOnce(new AIError('Something went wrong inside the agent'));
+
+    render(<ChatInterface {...baseProps} />);
+
+    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
+
+    fireEvent.change(input, { target: { value: 'Trigger AI error' } });
+    if (sendButton) {
+      fireEvent.click(sendButton);
+    }
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Something went wrong inside the agent'),
       ).toBeInTheDocument();
     });
   });

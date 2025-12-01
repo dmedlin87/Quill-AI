@@ -26,25 +26,27 @@ export type ContradictionType =
   | 'relationship'   // Relationship status inconsistency
   | 'existence';     // Character exists/doesn't exist
 
+export interface ContradictionEvidence {
+  text: string;
+  offset: number;
+  value: string;
+  chapterId?: string;
+}
+
 export interface Contradiction {
   id: string;
   type: ContradictionType;
   entityId: string;
   entityName: string;
-  claim1: {
-    text: string;
-    offset: number;
-    value: string;
-    chapterId?: string;
-  };
-  claim2: {
-    text: string;
-    offset: number;
-    value: string;
-    chapterId?: string;
-  };
+  claim1: ContradictionEvidence;
+  claim2: ContradictionEvidence;
   severity: number;  // 0 to 1
   suggestion: string;
+  // Enhancement 1B: Confidence scoring
+  confidence: number; // 0 to 1 - how certain we are this is a real contradiction
+  evidence: ContradictionEvidence[]; // All supporting evidence
+  suggestedResolution?: string; // AI-friendly resolution hint
+  category?: string; // Specific category (e.g., 'eye_color', 'timeline_death')
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,6 +209,9 @@ const detectAttributeContradictions = (
           const attr2 = attrs[j];
           
           if (!areValuesCompatible(category, attr1.value, attr2.value)) {
+            // Calculate confidence based on multiple factors
+            const confidence = calculateAttributeConfidence(category, attr1, attr2, entity);
+            
             contradictions.push({
               id: generateId(),
               type: 'attribute',
@@ -224,6 +229,13 @@ const detectAttributeContradictions = (
               },
               severity: 0.8,
               suggestion: `${attr1.entityName}'s ${category.replace('_', ' ')} is described as both "${attr1.value}" and "${attr2.value}". Consider making these consistent.`,
+              confidence,
+              evidence: [
+                { text: attr1.context, offset: attr1.offset, value: attr1.value },
+                { text: attr2.context, offset: attr2.offset, value: attr2.value },
+              ],
+              suggestedResolution: generateResolutionHint('attribute', category, attr1.value, attr2.value),
+              category,
             });
           }
         }
@@ -284,6 +296,10 @@ const detectTimelineContradictions = (
       const actionPatterns = /(?:said|asked|walked|ran|looked|smiled|nodded|shook)/i;
       
       if (actionPatterns.test(mentionContext)) {
+        // Calculate confidence based on distance and action type
+        const distance = mention.offset - death.offset;
+        const confidence = calculateTimelineConfidence(distance, mentionContext);
+        
         contradictions.push({
           id: generateId(),
           type: 'timeline',
@@ -301,6 +317,13 @@ const detectTimelineContradictions = (
           },
           severity: 0.95,
           suggestion: `${entity.name} appears to take action after their death. Either the death scene or subsequent action needs revision.`,
+          confidence,
+          evidence: [
+            { text: death.context, offset: death.offset, value: 'death' },
+            { text: mentionContext.slice(0, 80), offset: mention.offset, value: 'post-death action' },
+          ],
+          suggestedResolution: 'Consider: (1) removing the death scene, (2) revising the post-death action as a flashback/memory, or (3) making the death less definitive.',
+          category: 'timeline_death',
         });
         
         break; // One contradiction per dead character is enough
@@ -350,6 +373,13 @@ export const getHighSeverityContradictions = (
   return contradictions.filter(c => c.severity >= threshold);
 };
 
+export const getHighConfidenceContradictions = (
+  contradictions: Contradiction[],
+  threshold: number = 0.7
+): Contradiction[] => {
+  return contradictions.filter(c => c.confidence >= threshold);
+};
+
 export const groupContradictionsByType = (
   contradictions: Contradiction[]
 ): Map<ContradictionType, Contradiction[]> => {
@@ -363,4 +393,232 @@ export const groupContradictionsByType = (
   }
   
   return grouped;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIDENCE CALCULATION (Enhancement 1B)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Calculate confidence for attribute contradictions
+ * Higher confidence = more certain this is a real contradiction
+ */
+const calculateAttributeConfidence = (
+  category: string,
+  attr1: ExtractedAttribute,
+  attr2: ExtractedAttribute,
+  entity: EntityNode | undefined
+): number => {
+  let confidence = 0.7; // Base confidence
+  
+  // Boost if entity is well-established (many mentions)
+  if (entity && entity.mentionCount > 5) {
+    confidence += 0.1;
+  }
+  
+  // Boost for immutable attributes (eye color, height are harder to change)
+  const immutableCategories = ['eye_color', 'height', 'build'];
+  if (immutableCategories.includes(category)) {
+    confidence += 0.1;
+  }
+  
+  // Reduce confidence if values are very different (might be intentional)
+  // e.g., "young" vs "old" could be time passage
+  if (category === 'age') {
+    const age1 = parseInt(attr1.value);
+    const age2 = parseInt(attr2.value);
+    if (!isNaN(age1) && !isNaN(age2) && Math.abs(age1 - age2) > 10) {
+      confidence -= 0.2; // Large age gap might be intentional
+    }
+  }
+  
+  // Reduce if attributes are far apart in text (might be intentional change)
+  const distance = Math.abs(attr2.offset - attr1.offset);
+  if (distance > 10000) {
+    confidence -= 0.1; // Far apart = possibly intentional
+  }
+  
+  return Math.max(0.3, Math.min(1.0, confidence));
+};
+
+/**
+ * Calculate confidence for timeline contradictions
+ */
+const calculateTimelineConfidence = (
+  distance: number,
+  mentionContext: string
+): number => {
+  let confidence = 0.85; // Base confidence for death contradictions
+  
+  // Higher confidence if action is clearly physical
+  const strongActionPatterns = /\b(walked|ran|grabbed|punched|kissed|hugged|stood|sat)\b/i;
+  if (strongActionPatterns.test(mentionContext)) {
+    confidence += 0.1;
+  }
+  
+  // Lower confidence for dialogue (could be flashback/memory)
+  const dialoguePatterns = /\b(said|asked|replied|whispered|shouted)\b/i;
+  if (dialoguePatterns.test(mentionContext)) {
+    confidence -= 0.15;
+  }
+  
+  // Lower confidence for thought/memory patterns
+  const memoryPatterns = /\b(remembered|recalled|thought of|dreamed)\b/i;
+  if (memoryPatterns.test(mentionContext)) {
+    confidence -= 0.3;
+  }
+  
+  // Higher confidence if close to death scene
+  if (distance < 2000) {
+    confidence += 0.05;
+  }
+  
+  return Math.max(0.3, Math.min(1.0, confidence));
+};
+
+/**
+ * Generate AI-friendly resolution hints
+ */
+const generateResolutionHint = (
+  type: ContradictionType,
+  category: string,
+  value1: string,
+  value2: string
+): string => {
+  if (type === 'attribute') {
+    switch (category) {
+      case 'eye_color':
+      case 'hair_color':
+        return `Choose one color and use find-replace to update all instances. Consider: "${value1}" appears first.`;
+      case 'age':
+        return `If intentional time passage, add temporal markers. Otherwise, standardize to the first mentioned age.`;
+      case 'height':
+      case 'build':
+        return `Physical descriptions should be consistent unless transformation is plot-relevant.`;
+      default:
+        return `Standardize to the first value ("${value1}") or add explanation for the change.`;
+    }
+  }
+  
+  return 'Review both passages and decide which version to keep or how to reconcile them.';
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LORE-AWARE CONTRADICTION DETECTION (Enhancement 4B)
+// ─────────────────────────────────────────────────────────────────────────────
+
+import type { MemoryNote } from '../memory/types';
+
+/**
+ * Parse a lore memory note into a structured fact
+ */
+export interface LoreFact {
+  subject: string;
+  predicate: string;
+  object: string;
+  source: 'lore' | 'manuscript';
+  memoryId?: string;
+}
+
+const parseLoreFact = (memory: MemoryNote): LoreFact | null => {
+  // Pattern: "Character has attribute value"
+  const hasPattern = /^(\w+)(?:'s)?\s+(?:has\s+)?(\w+(?:\s+\w+)?):\s*(.+)$/i;
+  const match = memory.text.match(hasPattern);
+  
+  if (match) {
+    return {
+      subject: match[1].toLowerCase(),
+      predicate: match[2].toLowerCase(),
+      object: match[3].toLowerCase(),
+      source: 'lore',
+      memoryId: memory.id,
+    };
+  }
+  
+  // Pattern: "Subject predicate Object"
+  const simplePattern = /^(\w+)\s+(is|has|was)\s+(.+)$/i;
+  const simpleMatch = memory.text.match(simplePattern);
+  
+  if (simpleMatch) {
+    return {
+      subject: simpleMatch[1].toLowerCase(),
+      predicate: simpleMatch[2].toLowerCase(),
+      object: simpleMatch[3].toLowerCase(),
+      source: 'lore',
+      memoryId: memory.id,
+    };
+  }
+  
+  return null;
+};
+
+/**
+ * Detect contradictions with lore memory injection
+ * Compares manuscript text against stored lore facts
+ */
+export const detectContradictionsWithLore = (
+  text: string,
+  entities: EntityGraph,
+  timeline: Timeline,
+  loreMemories: MemoryNote[]
+): Contradiction[] => {
+  // Get base contradictions
+  const contradictions = detectContradictions(text, entities, timeline);
+  
+  // Parse lore facts
+  const loreFacts = loreMemories
+    .filter(m => m.type === 'fact' || m.topicTags.includes('lore'))
+    .map(parseLoreFact)
+    .filter((f): f is LoreFact => f !== null);
+  
+  // Extract manuscript attributes
+  const manuscriptAttrs = extractAttributes(text);
+  
+  // Compare manuscript against lore
+  for (const loreFact of loreFacts) {
+    // Find matching manuscript attributes
+    const matchingAttrs = manuscriptAttrs.filter(attr =>
+      attr.entityName.toLowerCase() === loreFact.subject &&
+      attr.category.includes(loreFact.predicate.replace(/\s+/g, '_'))
+    );
+    
+    for (const attr of matchingAttrs) {
+      if (!areValuesCompatible(attr.category, attr.value, loreFact.object)) {
+        contradictions.push({
+          id: generateId(),
+          type: 'attribute',
+          entityId: entities.nodes.find(e => 
+            e.name.toLowerCase() === loreFact.subject
+          )?.id || '',
+          entityName: attr.entityName,
+          claim1: {
+            text: `[Lore Bible] ${attr.entityName} ${loreFact.predicate}: ${loreFact.object}`,
+            offset: -1, // Lore has no offset
+            value: loreFact.object,
+          },
+          claim2: {
+            text: attr.context,
+            offset: attr.offset,
+            value: attr.value,
+          },
+          severity: 0.9, // High severity for lore violations
+          suggestion: `Manuscript contradicts Lore Bible: ${attr.entityName}'s ${attr.category.replace('_', ' ')} is "${loreFact.object}" in lore but "${attr.value}" in text.`,
+          confidence: 0.95, // High confidence for explicit lore
+          evidence: [
+            { text: `Lore: ${loreFact.object}`, offset: -1, value: loreFact.object },
+            { text: attr.context, offset: attr.offset, value: attr.value },
+          ],
+          suggestedResolution: `Update manuscript to match lore ("${loreFact.object}") or update lore if the change is intentional.`,
+          category: `lore_${attr.category}`,
+        });
+      }
+    }
+  }
+  
+  // Sort by severity and confidence
+  return contradictions.sort((a, b) => {
+    const scoreA = a.severity * 0.6 + a.confidence * 0.4;
+    const scoreB = b.severity * 0.6 + b.confidence * 0.4;
+    return scoreB - scoreA;
+  });
 };

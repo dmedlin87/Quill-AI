@@ -39,10 +39,12 @@ flowchart TD
 - **Persists to:** `Dexie` via `services/db.ts`.
 
 Stored entities:
+
 - **Projects:** metadata, setting, `manuscriptIndex`, `lore`, timestamps.
 - **Chapters:** title, `content`, `lastAnalysis`, chapter ordering.
 
 Key APIs:
+
 - **Project lifecycle:** `init`, `createProject`, `importProject`, `loadProject`.
 - **Chapters:** `createChapter`, `selectChapter`, `reorderChapters`, `updateChapterContent`, `updateChapterTitle`, `deleteChapter`, `getActiveChapter`.
 - **Analysis & lore:** `updateChapterAnalysis`, `updateProjectLore`, `updateManuscriptIndex`.
@@ -55,6 +57,7 @@ The store is the **single source of truth** for persisted manuscript structure a
 - **Responsibility:** Transient editing session state for the active chapter.
 
 Key capabilities:
+
 - **Editor instance:** Holds the Tiptap `Editor` and `setEditor`.
 - **Text & history:** `currentText`, `updateText`, `commit`, `undo`, `redo`, `restore`, `hasUnsavedChanges` via `useDocumentHistory`.
 - **Selection & cursor:** `selectionRange`, `selectionPos`, `cursorPosition`, `setSelection`, `setSelectionState`, `clearSelection` via `useEditorSelection`.
@@ -71,12 +74,14 @@ The EditorContext **subscribes to** the Project Store (active chapter) and expos
 - **Responsibility:** Orchestrates AI features (analysis, magic editor, agent tools) and background indexing.
 
 Composition:
+
 - Reads from **EditorContext**: `currentText`, `commit`, `selectionRange`, `clearSelection`.
 - Reads from **Project Store**: `currentProject`, `activeChapterId`, `updateChapterAnalysis`, `updateProjectLore`.
 - Wraps **`useQuillAIEngine`** from `features/shared/hooks/useDraftSmithEngine.ts` for core AI logic.
 - Runs **`useManuscriptIndexer`** to build and update contradiction data (`contradictions: Contradiction[]`).
 
 Exports:
+
 - **State:** `isAnalyzing`, `analysisError`, `analysisWarning`, magic editor state, and `pendingDiff`.
 - **Actions:** `runAnalysis`, `cancelAnalysis`, magic editor actions, `handleAgentAction`, `acceptDiff`, `rejectDiff`.
 
@@ -104,6 +109,7 @@ The Project Store uses `projects` and `chapters` for manuscript persistence. The
 - Purpose: Avoid hammering IndexedDB while typing, but still keep the DB reasonably fresh.
 
 Algorithm (per chapter):
+
 - In‑memory maps:
   - `pendingChapterWrites: Map<chapterId, { timer, promise, resolve }>`
   - `latestChapterContent: Map<chapterId, { content, updatedAt }>`
@@ -121,6 +127,7 @@ Algorithm (per chapter):
     - Cleans up maps and resolves the stored promise.
 
 Benefits:
+
 - **Write coalescing:** Rapid edits to the same chapter result in **one** DB write after idle.
 - **Per‑chapter isolation:** Debounce is keyed by `chapterId`, so switching chapters does not block others.
 - **Awaitable:** Callers can `await updateChapterContent` to wait until the debounced persist has finished (useful in workflows/tests).
@@ -164,6 +171,7 @@ The AI analysis pipeline flows from UI interactions down to Gemini and back into
   - `prepareAnalysisText` applies `ApiDefaults.maxAnalysisLength` for analysis requests and returns a user‑facing warning.
 
 This pattern ensures:
+
 - Requests remain within model context windows.
 - Large manuscripts degrade gracefully (truncation + explicit warning) instead of throwing opaque 4xx/5xx errors.
 

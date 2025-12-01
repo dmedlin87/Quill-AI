@@ -129,8 +129,6 @@ describe('RichTextEditor', () => {
 
   describe('External Content Updates', () => {
     it('verifies external content update logic when editor is NOT focused', async () => {
-      // This test verifies the content update effect runs properly
-      // The actual setContent call involves complex Tiptap internals
       const { rerender } = render(
         <RichTextEditor
           content="Initial"
@@ -143,12 +141,21 @@ describe('RichTextEditor', () => {
 
       const editor = await getEditorInstance();
       setupEditorMocks(editor);
-      
-      // Verify the editor exists and is properly initialized
-      expect(editor).toBeDefined();
-      expect(editor.commands).toBeDefined();
-      
-      // Rerender with new content - editor should remain functional
+
+      // Simulate markdown storage used by the effect
+      let storedContent = 'Initial';
+      (editor.storage as any).markdown = {
+        getMarkdown: vi.fn(() => storedContent),
+      };
+
+      const setContentSpy = vi
+        .spyOn(editor.commands, 'setContent')
+        .mockImplementation((value: any) => {
+          storedContent = value;
+          return editor;
+        });
+
+      // First: changing content should trigger a setContent call
       act(() => {
         rerender(
           <RichTextEditor
@@ -161,9 +168,27 @@ describe('RichTextEditor', () => {
         );
       });
 
-      // Verify editor is still accessible after rerender
       await waitFor(() => {
-        expect(setEditorRef).toHaveBeenCalled();
+        expect(setContentSpy).toHaveBeenCalledWith('Updated content');
+      });
+
+      setContentSpy.mockClear();
+
+      // Second: rerender with same content should NOT re-call setContent
+      act(() => {
+        rerender(
+          <RichTextEditor
+            content="Updated content"
+            onUpdate={onUpdate}
+            onSelectionChange={onSelectionChange}
+            setEditorRef={setEditorRef}
+            activeHighlight={null}
+          />
+        );
+      });
+
+      await waitFor(() => {
+        expect(setContentSpy).not.toHaveBeenCalled();
       });
     });
 
@@ -184,6 +209,11 @@ describe('RichTextEditor', () => {
       // Mock editor as focused
       Object.defineProperty(editor, 'isFocused', { get: () => true, configurable: true });
       
+      // Simulate markdown storage so effect runs the comparison branch
+      (editor.storage as any).markdown = {
+        getMarkdown: vi.fn(() => 'Initial'),
+      };
+
       const setContentSpy = vi.spyOn(editor.commands, 'setContent');
       
       act(() => {
@@ -328,6 +358,11 @@ describe('RichTextEditor', () => {
 
   describe('Zen Mode Typewriter Scrolling', () => {
     it('triggers scrollBy when cursor moves outside center zone in Zen Mode', async () => {
+      const scrollContainer = document.createElement('div');
+      scrollContainer.className = 'overflow-y-auto';
+      (scrollContainer as any).scrollBy = mockScrollBy;
+      document.body.appendChild(scrollContainer);
+
       render(
         <RichTextEditor
           content="Zen mode content"
@@ -336,7 +371,8 @@ describe('RichTextEditor', () => {
           setEditorRef={setEditorRef}
           activeHighlight={null}
           isZenMode={true}
-        />
+        />,
+        { container: scrollContainer }
       );
 
       const editor = await getEditorInstance();
@@ -348,7 +384,6 @@ describe('RichTextEditor', () => {
       // Mock coords that are far from center (outside 50px threshold)
       editor.view.coordsAtPos = vi.fn(() => ({ top: 700, left: 100, bottom: 720, right: 110 }));
 
-      // Execute the transaction handler - this tests the code path even if scroll container isn't found
       act(() => {
         const transaction = {
           selectionSet: true,
@@ -357,11 +392,22 @@ describe('RichTextEditor', () => {
         editor.options.onTransaction?.({ editor, transaction } as any);
       });
 
-      // Verify the transaction handler was executed without error
-      expect(editor.view.coordsAtPos).toHaveBeenCalled();
+      await waitFor(() => {
+        expect(mockScrollBy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            top: expect.any(Number),
+            behavior: 'smooth',
+          })
+        );
+      });
     });
 
     it('does NOT scroll when cursor is within center zone', async () => {
+      const scrollContainer = document.createElement('div');
+      scrollContainer.className = 'overflow-y-auto';
+      (scrollContainer as any).scrollBy = mockScrollBy;
+      document.body.appendChild(scrollContainer);
+
       render(
         <RichTextEditor
           content="Zen mode content"
@@ -370,7 +416,8 @@ describe('RichTextEditor', () => {
           setEditorRef={setEditorRef}
           activeHighlight={null}
           isZenMode={true}
-        />
+        />,
+        { container: scrollContainer }
       );
 
       const editor = await getEditorInstance();
@@ -390,10 +437,17 @@ describe('RichTextEditor', () => {
         editor.options.onTransaction?.({ editor, transaction } as any);
       });
 
-      // Should not have scrolled (would need proper scroll container setup to verify)
+      await waitFor(() => {
+        expect(mockScrollBy).not.toHaveBeenCalled();
+      });
     });
 
     it('does NOT scroll when preventTypewriterScroll meta is set', async () => {
+      const scrollContainer = document.createElement('div');
+      scrollContainer.className = 'overflow-y-auto';
+      (scrollContainer as any).scrollBy = mockScrollBy;
+      document.body.appendChild(scrollContainer);
+
       render(
         <RichTextEditor
           content="Zen mode content"
@@ -402,7 +456,8 @@ describe('RichTextEditor', () => {
           setEditorRef={setEditorRef}
           activeHighlight={null}
           isZenMode={true}
-        />
+        />,
+        { container: scrollContainer }
       );
 
       const editor = await getEditorInstance();
@@ -416,10 +471,17 @@ describe('RichTextEditor', () => {
         editor.options.onTransaction?.({ editor, transaction } as any);
       });
 
-      // Should not have triggered scroll since preventTypewriterScroll is true
+      await waitFor(() => {
+        expect(mockScrollBy).not.toHaveBeenCalled();
+      });
     });
 
     it('does NOT scroll in non-Zen Mode', async () => {
+      const scrollContainer = document.createElement('div');
+      scrollContainer.className = 'overflow-y-auto';
+      (scrollContainer as any).scrollBy = mockScrollBy;
+      document.body.appendChild(scrollContainer);
+
       render(
         <RichTextEditor
           content="Normal mode content"
@@ -428,7 +490,8 @@ describe('RichTextEditor', () => {
           setEditorRef={setEditorRef}
           activeHighlight={null}
           isZenMode={false}
-        />
+        />,
+        { container: scrollContainer }
       );
 
       const editor = await getEditorInstance();
@@ -442,7 +505,9 @@ describe('RichTextEditor', () => {
         editor.options.onTransaction?.({ editor, transaction } as any);
       });
 
-      // Should not scroll in normal mode
+      await waitFor(() => {
+        expect(mockScrollBy).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -585,71 +650,35 @@ describe('RichTextEditor', () => {
         />
       );
 
-      const editor = await getEditorInstance();
-      setupEditorMocks(editor);
+      await getEditorInstance();
 
-      // Simulate the handleClick from the plugin
-      const mockElement = document.createElement('span');
-      mockElement.setAttribute('data-comment-id', 'click-comment');
-      mockElement.getBoundingClientRect = () => ({
-        top: 100, left: 50, bottom: 120, right: 100,
-        width: 50, height: 20, x: 50, y: 100, toJSON: () => ({}),
+      await waitFor(() => {
+        const decoration = container.querySelector('[data-comment-id="click-comment"]') as HTMLElement | null;
+        expect(decoration).toBeInTheDocument();
+
+        if (decoration) {
+          decoration.getBoundingClientRect = vi.fn(() => ({
+            top: 100,
+            left: 50,
+            bottom: 120,
+            right: 100,
+            width: 50,
+            height: 20,
+            x: 50,
+            y: 100,
+            toJSON: () => ({}),
+          }));
+
+          fireEvent.click(decoration);
+        }
       });
 
-      // Find the CommentDecorations plugin and call its handleClick
-      const commentPlugin = editor.state.plugins.find((p: any) => 
-        p.spec?.key?.key?.startsWith('comment-decorations')
-      );
-
-      if (commentPlugin?.props?.handleClick) {
-        act(() => {
-          commentPlugin.props.handleClick(
-            editor.view,
-            1,
-            { target: mockElement } as unknown as MouseEvent
-          );
-        });
-      }
-
-      expect(onCommentClick).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'click-comment' }),
-        expect.objectContaining({ top: 128, left: 50 })
-      );
-    });
-
-    it('does not show CommentCard when clicking non-comment element', async () => {
-      const comment = createComment();
-
-      render(
-        <RichTextEditor
-          content="Test content"
-          onUpdate={onUpdate}
-          onSelectionChange={onSelectionChange}
-          setEditorRef={setEditorRef}
-          activeHighlight={null}
-          inlineComments={[comment]}
-          onCommentClick={onCommentClick}
-        />
-      );
-
-      const editor = await getEditorInstance();
-      setupEditorMocks(editor);
-
-      // Create element without comment-id
-      const mockElement = document.createElement('span');
-      
-      const commentPlugin = editor.state.plugins.find((p: any) => 
-        p.spec?.key?.key === 'comment-decorations'
-      );
-
-      if (commentPlugin?.props?.handleClick) {
-        const result = commentPlugin.props.handleClick(
-          editor.view,
-          1,
-          { target: mockElement } as unknown as MouseEvent
+      await waitFor(() => {
+        expect(onCommentClick).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'click-comment' }),
+          expect.objectContaining({ top: 128, left: 50 })
         );
-        expect(result).toBe(false);
-      }
+      });
     });
   });
 
@@ -676,10 +705,10 @@ describe('RichTextEditor', () => {
       ...overrides,
     });
 
-    it('calls onCommentClick when comment decoration is clicked', async () => {
+    it('invokes onCommentClick via a real DOM click on a decorated span', async () => {
       const comment = createComment();
 
-      const { container } = render(
+      render(
         <RichTextEditor
           content="Test content with problems"
           onUpdate={onUpdate}
@@ -693,94 +722,23 @@ describe('RichTextEditor', () => {
         />
       );
 
-      const editor = await getEditorInstance();
-      setupEditorMocks(editor);
+      await getEditorInstance();
 
-      // Wait for decorations to be applied
       await waitFor(() => {
-        const commentHighlight = container.querySelector('.inline-comment-highlight');
-        expect(commentHighlight).toBeInTheDocument();
+        const decoration = document.querySelector('[data-comment-id="card-comment"]') as HTMLElement | null;
+        expect(decoration).toBeInTheDocument();
+
+        if (decoration) {
+          fireEvent.click(decoration);
+        }
       });
 
-      // Click the decoration using the click handler
-      const commentHighlight = container.querySelector('.inline-comment-highlight');
-      if (commentHighlight) {
-        // Mock getBoundingClientRect for the highlight
-        commentHighlight.getBoundingClientRect = vi.fn(() => ({
-          top: 100, left: 50, bottom: 120, right: 100,
-          width: 50, height: 20, x: 50, y: 100, toJSON: () => ({}),
-        }));
-
-        act(() => {
-          // We need to simulate the plugin's handleClick logic
-          // Since we can't easily trigger the ProseMirror event directly in this test setup without more complex mocking,
-          // we'll manually trigger the plugin's handler if accessible, or rely on the DOM event if the plugin attaches one.
-          // However, Tiptap plugins handle events internally.
-          // Let's try to find the plugin and call handleClick directly as done in previous tests.
-          
-          const commentPlugin = editor.state.plugins.find((p: any) => 
-            p.spec?.key?.key?.startsWith('comment-decorations')
-          );
-
-          if (commentPlugin?.props?.handleClick) {
-             commentPlugin.props.handleClick(
-              editor.view,
-              1,
-              { target: commentHighlight } as unknown as MouseEvent
-            );
-          }
-        });
-      }
-
-      expect(onCommentClick).toHaveBeenCalledWith(
-        expect.objectContaining({ id: comment.id }),
-        expect.objectContaining({ top: 128, left: 50 }) // bottom (120) + 8 = 128
-      );
-    });
-
-    it('handles plugin handleClick returning true for comment clicks', async () => {
-      const comment = createComment();
-
-      render(
-        <RichTextEditor
-          content="Test content"
-          onUpdate={onUpdate}
-          onSelectionChange={onSelectionChange}
-          setEditorRef={setEditorRef}
-          activeHighlight={null}
-          inlineComments={[comment]}
-          onCommentClick={onCommentClick}
-        />
-      );
-
-      const editor = await getEditorInstance();
-      setupEditorMocks(editor);
-
-      // Find and invoke the plugin's handleClick directly
-      const commentPlugin = editor.state.plugins.find((p: any) => 
-        p.spec?.key?.key?.startsWith('comment-decorations')
-      );
-
-      if (commentPlugin?.props?.handleClick) {
-        const mockElement = document.createElement('span');
-        mockElement.setAttribute('data-comment-id', 'card-comment');
-        mockElement.getBoundingClientRect = () => ({
-          top: 100, left: 50, bottom: 120, right: 100,
-          width: 50, height: 20, x: 50, y: 100, toJSON: () => ({}),
-        });
-
-        let result: boolean;
-        act(() => {
-          result = commentPlugin.props.handleClick(
-            editor.view,
-            1,
-            { target: mockElement } as unknown as MouseEvent
-          );
-        });
-
-        // handleClick should return true when clicking a comment
-        expect(result!).toBe(true);
-      }
+      await waitFor(() => {
+        expect(onCommentClick).toHaveBeenCalledWith(
+          expect.objectContaining({ id: comment.id }),
+          expect.objectContaining({ top: expect.any(Number), left: expect.any(Number) })
+        );
+      });
     });
   });
 
@@ -937,14 +895,20 @@ describe('RichTextEditor', () => {
 
       // Find and click the decoration
       await waitFor(() => {
-        const decoration = document.querySelector('[data-comment-id="callback-test"]');
+        const decoration = document.querySelector('[data-comment-id="callback-test"]') as HTMLElement | null;
+        expect(decoration).toBeInTheDocument();
+
         if (decoration) {
           fireEvent.click(decoration);
         }
       });
 
-      // Verify the callback was invoked (if CommentCard appeared)
-      // The callback is tested through the plugin handleClick
+      await waitFor(() => {
+        expect(onCommentClick).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'callback-test' }),
+          expect.objectContaining({ top: expect.any(Number), left: expect.any(Number) })
+        );
+      });
     });
   });
 

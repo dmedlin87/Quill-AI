@@ -4,7 +4,7 @@ import { Lore } from "../../types/schema";
 import { ModelConfig } from "../../config/models";
 import { ai } from "./client";
 import { REWRITE_SYSTEM_INSTRUCTION, CONTEXTUAL_HELP_SYSTEM_INSTRUCTION, AGENT_SYSTEM_INSTRUCTION } from "./prompts";
-import { safeParseJson, validators } from "./resilientParser";
+import { safeParseJsonWithValidation, validators } from "./resilientParser";
 import { Persona, buildPersonaInstruction } from "../../types/personas";
 import { CritiqueIntensity, DEFAULT_CRITIQUE_INTENSITY } from "../../types/critiqueSettings";
 import { ExperienceLevel, AutonomyMode, DEFAULT_EXPERIENCE, DEFAULT_AUTONOMY } from "../../types/experienceSettings";
@@ -152,16 +152,20 @@ ${mode === 'Tone Tuner' ? `Target Tone: ${tone}` : ''}`;
       },
     });
 
-    // Use resilient parser
-    const parseResult = safeParseJson(response.text, { variations: [] });
+    // Use resilient parser with schema validation for variations array
+    const parseResult = safeParseJsonWithValidation(
+      response.text,
+      validators.isVariationsResponse,
+      { variations: [] }
+    );
     
     if (!parseResult.success) {
       console.warn('[rewriteText] Parse failed:', parseResult.error);
     }
     
-    const data = parseResult.data as { variations?: string[] };
+    const data = parseResult.data as { variations: string[] };
     return {
-      result: data?.variations || [],
+      result: data.variations ?? [],
       usage: response.usageMetadata
     };
   } catch (e) {

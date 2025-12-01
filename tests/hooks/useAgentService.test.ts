@@ -68,6 +68,43 @@ describe('useAgentService', () => {
     expect(result.current.isProcessing).toBe(false);
   });
 
+  it('ignores empty or whitespace-only messages', async () => {
+    mockSendMessage.mockResolvedValue({ text: '' });
+
+    const onToolAction = vi.fn().mockResolvedValue('ok');
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [
+          {
+            id: 'ch1',
+            projectId: 'p1',
+            title: 'Chapter 1',
+            content: 'Hello world',
+            order: 0,
+            updatedAt: Date.now(),
+          },
+        ],
+        analysis: null,
+        onToolAction,
+      }),
+    );
+
+    // Wait for initial session initialization
+    await waitFor(() => {
+      expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+    });
+
+    const initialSendCount = mockSendMessage.mock.calls.length;
+
+    await act(async () => {
+      await result.current.sendMessage('   ', baseContext);
+    });
+
+    // No additional sends beyond initialization
+    expect(mockSendMessage.mock.calls.length).toBe(initialSendCount);
+  });
+
   it('clears messages and reinitializes the session', async () => {
     mockSendMessage.mockImplementation(async payload => {
       if (typeof (payload as any).message === 'string' && (payload as any).message.includes('[USER CONTEXT]')) {

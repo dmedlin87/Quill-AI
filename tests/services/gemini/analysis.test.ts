@@ -19,7 +19,10 @@ import {
 import { 
   mockUsageMetadata,
   mockAnalysisResult,
-  mockManuscriptIndex
+  mockManuscriptIndex,
+  chaosResponses,
+  createRateLimitError,
+  createContextLengthError,
 } from '@/tests/mocks/geminiClient';
 
 // Setup mocks using vi.hoisted() to ensure they're available at import time
@@ -37,10 +40,18 @@ vi.mock('@/services/gemini/client', () => ({
   ai: mockAi,
 }));
 
-// Mock resilient parser
-vi.mock('@/services/gemini/resilientParser', () => ({
-  safeParseJson: vi.fn(),
-}));
+// Mock resilient parser, but default safeParseJson to real implementation so
+// tests can opt into true resilient behavior unless they explicitly override.
+vi.mock('@/services/gemini/resilientParser', async () => {
+  const actual = await vi.importActual<typeof import('@/services/gemini/resilientParser')>(
+    '@/services/gemini/resilientParser',
+  );
+
+  return {
+    ...actual,
+    safeParseJson: vi.fn(actual.safeParseJson),
+  };
+});
 
 // Mock token guard
 vi.mock('@/services/gemini/tokenGuard', () => ({
@@ -235,6 +246,39 @@ describe('analyzeDraft', () => {
 
     expect(mockAi.models.generateContent).toHaveBeenCalled();
   });
+
+  it('parses markdown-wrapped analysis JSON via resilient parser', async () => {
+    const { safeParseJson } = await import('@/services/gemini/resilientParser');
+    const actual = await vi.importActual<typeof import('@/services/gemini/resilientParser')>(
+      '@/services/gemini/resilientParser',
+    );
+    vi.mocked(safeParseJson).mockImplementation(actual.safeParseJson);
+
+    const wrappedText = '```json\n' + JSON.stringify(mockAnalysisResult) + '\n```';
+    const mockResponse = {
+      text: wrappedText,
+      usageMetadata: mockUsageMetadata,
+    };
+
+    mockAi.models.generateContent.mockResolvedValue(mockResponse);
+
+    const result = await analyzeDraft('Sample text');
+
+    expect(result.result).toEqual(mockAnalysisResult);
+    expect(result.warning).toBe('AI response needed cleanup; results may be incomplete.');
+  });
+
+  it('propagates rate limit errors from analyzeDraft', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createRateLimitError());
+
+    await expect(analyzeDraft('Sample text')).rejects.toHaveProperty('status', 429);
+  });
+
+  it('propagates context length exceeded errors from analyzeDraft', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createContextLengthError());
+
+    await expect(analyzeDraft('Sample text')).rejects.toHaveProperty('status', 413);
+  });
 });
 
 describe('fetchPacingAnalysis', () => {
@@ -338,6 +382,12 @@ describe('fetchPacingAnalysis', () => {
     await fetchPacingAnalysis('Sample text', undefined, abortController.signal);
 
     expect(mockAi.models.generateContent).toHaveBeenCalled();
+  });
+
+  it('propagates context length exceeded errors from fetchPacingAnalysis', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createContextLengthError());
+
+    await expect(fetchPacingAnalysis('Sample text')).rejects.toHaveProperty('status', 413);
   });
 });
 
@@ -450,6 +500,12 @@ describe('fetchCharacterAnalysis', () => {
 
     expect(mockAi.models.generateContent).toHaveBeenCalled();
   });
+
+  it('propagates rate limit errors from fetchCharacterAnalysis', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createRateLimitError());
+
+    await expect(fetchCharacterAnalysis('Sample text')).rejects.toHaveProperty('status', 429);
+  });
 });
 
 describe('fetchPlotAnalysis', () => {
@@ -522,6 +578,12 @@ describe('fetchPlotAnalysis', () => {
 
     expect(mockAi.models.generateContent).toHaveBeenCalled();
   });
+
+  it('propagates rate limit errors from fetchPlotAnalysis', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createRateLimitError());
+
+    await expect(fetchPlotAnalysis('Sample text')).rejects.toHaveProperty('status', 429);
+  });
 });
 
 describe('fetchSettingAnalysis', () => {
@@ -592,6 +654,12 @@ describe('fetchSettingAnalysis', () => {
     await fetchSettingAnalysis('Sample text', { timePeriod: 'Modern', location: 'City' }, abortController.signal);
 
     expect(mockAi.models.generateContent).toHaveBeenCalled();
+  });
+
+  it('propagates context length exceeded errors from fetchSettingAnalysis', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createContextLengthError());
+
+    await expect(fetchSettingAnalysis('Sample text', { timePeriod: 'Modern', location: 'City' })).rejects.toHaveProperty('status', 413);
   });
 });
 
@@ -751,5 +819,35 @@ describe('generatePlotIdeas', () => {
     await generatePlotIdeas('Sample text', undefined, 'General');
 
     expect(mockAi.models.generateContent).toHaveBeenCalled();
+  });
+
+  it('parses markdown-wrapped plot ideas JSON via resilient parser', async () => {
+    const { safeParseJson } = await import('@/services/gemini/resilientParser');
+    const actual = await vi.importActual<typeof import('@/services/gemini/resilientParser')>(
+      '@/services/gemini/resilientParser',
+    );
+    vi.mocked(safeParseJson).mockImplementation(actual.safeParseJson);
+
+    const ideas = [
+      { title: 'Idea', description: 'Desc', reasoning: 'Why' },
+    ];
+
+    const mockResponse = {
+      text: '```json\n' + JSON.stringify(ideas) + '\n```',
+      usageMetadata: mockUsageMetadata,
+    };
+
+    mockAi.models.generateContent.mockResolvedValue(mockResponse);
+
+    const result = await generatePlotIdeas('Sample text');
+
+    expect(result.result).toEqual(ideas);
+    expect(result.warning).toBe('Response required sanitization');
+  });
+
+  it('propagates rate limit errors from generatePlotIdeas', async () => {
+    mockAi.models.generateContent.mockRejectedValue(createRateLimitError());
+
+    await expect(generatePlotIdeas('Sample text')).rejects.toHaveProperty('status', 429);
   });
 });
