@@ -13,6 +13,7 @@ import {
   formatMemoriesForPrompt,
   formatGoalsForPrompt,
 } from '../memory';
+import { getCommandHistory } from '../commands/history';
 
 /**
  * Build full context string for agent system prompt
@@ -204,6 +205,14 @@ export const buildAgentContext = (
   if (recentEvents) {
     ctx += recentEvents;
     ctx += '\n';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RECENT AGENT ACTIONS (from Command History)
+  // ─────────────────────────────────────────────────────────────────────────
+  const commandHistory = getCommandHistory().formatForPrompt(5);
+  if (commandHistory) {
+    ctx += commandHistory;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

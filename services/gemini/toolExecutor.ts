@@ -9,6 +9,8 @@ import {
   searchMemoriesByTags,
   formatMemoriesForPrompt,
 } from '@/services/memory';
+import { CommandRegistry } from '@/services/commands/registry';
+import { getCommandHistory } from '@/services/commands/history';
 
 export interface ToolResult {
   success: boolean;
@@ -132,6 +134,9 @@ export async function executeAppBrainToolCall(
           mode: args.mode as any,
           targetTone: args.target_tone as string,
         });
+        break;
+      case 'continue_writing':
+        result = await actions.continueWriting();
         break;
 
       default:
@@ -350,14 +355,66 @@ export async function executeAgentToolCall(
 }
 
 /**
+ * Record command execution to history
+ */
+function recordToHistory(
+  toolName: string,
+  params: Record<string, unknown>,
+  result: ToolResult,
+): void {
+  const history = getCommandHistory();
+  history.record({
+    toolName,
+    params,
+    result: result.message,
+    success: result.success,
+    reversible: CommandRegistry.isReversible(toolName),
+  });
+  history.persist();
+}
+
+/**
  * Optional OO-style executor wrapper around AppBrainActions.
  * Pure logic: no React or event/system dependencies.
+ * Now integrates with CommandRegistry and CommandHistory.
  */
 export class ToolExecutor {
-  constructor(private readonly actions: AppBrainActions, private readonly projectId: string | null = null) {}
+  constructor(
+    private readonly actions: AppBrainActions, 
+    private readonly projectId: string | null = null,
+    private readonly recordHistory: boolean = true,
+  ) {}
 
-  execute(toolName: string, args: Record<string, unknown>): Promise<ToolResult> {
-    return executeAgentToolCall(toolName, args, this.actions, this.projectId);
+  async execute(toolName: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const result = await executeAgentToolCall(toolName, args, this.actions, this.projectId);
+    
+    // Record to history (unless it's a memory tool - those have their own tracking)
+    if (this.recordHistory && !isMemoryToolName(toolName)) {
+      recordToHistory(toolName, args, result);
+    }
+    
+    return result;
+  }
+
+  /**
+   * Get command metadata from registry
+   */
+  getCommandInfo(toolName: string) {
+    return CommandRegistry.get(toolName);
+  }
+
+  /**
+   * Check if a command exists
+   */
+  hasCommand(toolName: string): boolean {
+    return CommandRegistry.has(toolName) || isMemoryToolName(toolName);
+  }
+
+  /**
+   * Get recent command history for context
+   */
+  getHistoryForPrompt(n: number = 5): string {
+    return getCommandHistory().formatForPrompt(n);
   }
 }
 

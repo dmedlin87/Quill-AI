@@ -169,10 +169,10 @@ export interface AppBrainActions {
   getCritiqueForSelection: (focus?: string) => Promise<string>;
   runAnalysis: (section?: string) => Promise<string>;
   
-  // UI Control
-  switchPanel: (panel: string) => void;
-  toggleZenMode: () => void;
-  highlightText: (start: number, end: number, style?: string) => void;
+  // UI Control (now async, using Command Pattern)
+  switchPanel: (panel: string) => Promise<string>;
+  toggleZenMode: () => Promise<string>;
+  highlightText: (start: number, end: number, style?: string) => Promise<string>;
   
   // Knowledge
   queryLore: (query: string) => Promise<string>;
@@ -181,6 +181,7 @@ export interface AppBrainActions {
   
   // Generation
   rewriteSelection: (params: RewriteSelectionParams) => Promise<string>;
+  continueWriting: () => Promise<string>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

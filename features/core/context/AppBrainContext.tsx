@@ -32,6 +32,16 @@ import {
 import { UpdateManuscriptCommand, AppendTextCommand } from '@/services/commands/editing';
 import { GetCritiqueCommand, RunAnalysisCommand } from '@/services/commands/analysis';
 import { QueryLoreCommand, GetCharacterInfoCommand } from '@/services/commands/knowledge';
+import {
+  SwitchPanelCommand,
+  ToggleZenModeCommand,
+  HighlightTextCommand,
+  SetSelectionCommand,
+} from '@/services/commands/ui';
+import {
+  RewriteSelectionCommand,
+  ContinueWritingCommand,
+} from '@/services/commands/generation';
 // Types imported from @/types as needed
 import { rewriteText } from '@/services/gemini/agent';
 
@@ -297,18 +307,44 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
     },
     
-    // UI Control
-    switchPanel: (panel: string) => {
-      // TODO: Connect to actual panel switching
-      console.log(`[AppBrain] Switch panel to: ${panel}`);
+    // UI Control (using Command Pattern)
+    switchPanel: async (panel: string) => {
+      const command = new SwitchPanelCommand();
+      return command.execute(panel, {
+        switchPanel: (p) => console.log(`[AppBrain] Switch panel to: ${p}`), // TODO: Connect to actual panel switching
+        toggleZenMode: editor.toggleZenMode,
+        highlightText: editor.handleNavigateToIssue,
+        setSelection: editor.handleNavigateToIssue,
+        isZenMode: editor.isZenMode,
+        activePanel: 'chat', // TODO: Connect to actual panel state
+      });
     },
     
-    toggleZenMode: () => {
-      editor.toggleZenMode();
+    toggleZenMode: async () => {
+      const command = new ToggleZenModeCommand();
+      return command.execute(undefined, {
+        switchPanel: (p) => console.log(`[AppBrain] Switch panel to: ${p}`),
+        toggleZenMode: editor.toggleZenMode,
+        highlightText: editor.handleNavigateToIssue,
+        setSelection: editor.handleNavigateToIssue,
+        isZenMode: editor.isZenMode,
+        activePanel: 'chat',
+      });
     },
     
-    highlightText: (start: number, end: number, _style?: string) => {
-      editor.handleNavigateToIssue(start, end);
+    highlightText: async (start: number, end: number, style?: string) => {
+      const command = new HighlightTextCommand();
+      return command.execute(
+        { start, end, style: (style as 'warning' | 'error' | 'info' | 'success') || 'info' },
+        {
+          switchPanel: (p) => console.log(`[AppBrain] Switch panel to: ${p}`),
+          toggleZenMode: editor.toggleZenMode,
+          highlightText: editor.handleNavigateToIssue,
+          setSelection: editor.handleNavigateToIssue,
+          isZenMode: editor.isZenMode,
+          activePanel: 'chat',
+        },
+      );
     },
     
     // Knowledge
@@ -359,33 +395,64 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return result;
     },
     
-    // Generation
+    // Generation (using Command Pattern)
     rewriteSelection: async (params: RewriteSelectionParams) => {
-      const selection = editor.selectionRange;
-      if (!selection) {
-        return 'No text selected for rewrite.';
-      }
-      
-      const modeMap: Record<string, string> = {
-        clarify: 'Simplify',
-        expand: 'Elaborate',
-        condense: 'Tighten',
-        tone_shift: 'Tone Tuner',
-      };
-      
-      const result = await rewriteText(
-        selection.text,
-        modeMap[params.mode] || params.mode,
-        params.targetTone,
-        projectStore.currentProject?.setting
+      const command = new RewriteSelectionCommand();
+      return command.execute(
+        { mode: params.mode as 'expand' | 'condense' | 'rephrase' | 'formalize' | 'casual', targetTone: params.targetTone },
+        {
+          selection: editor.selectionRange,
+          currentText: editor.currentText,
+          commitEdit: editor.commit,
+          runExclusiveEdit,
+          generateRewrite: async (text: string, mode: string, tone?: string) => {
+            const modeMap: Record<string, string> = {
+              clarify: 'Simplify',
+              expand: 'Elaborate',
+              condense: 'Tighten',
+              rephrase: 'Rephrase',
+              formalize: 'Formalize',
+              casual: 'Casual',
+              tone_shift: 'Tone Tuner',
+            };
+            const result = await rewriteText(
+              text,
+              modeMap[mode] || mode,
+              tone,
+              projectStore.currentProject?.setting
+            );
+            return result.result[0] || text;
+          },
+          generateContinuation: async (context: string) => {
+            // TODO: Implement continuation generation
+            return `[Continuation based on: "${context.slice(-50)}..."]`;
+          },
+        },
       );
-      
-      if (result.result.length === 0) {
-        return 'Could not generate rewrites.';
-      }
-      
-      return `Rewrite options for "${selection.text.slice(0, 30)}...":\n\n` +
-        result.result.map((r, i) => `${i + 1}. ${r}`).join('\n\n');
+    },
+    
+    // Continue writing (new action)
+    continueWriting: async () => {
+      const command = new ContinueWritingCommand();
+      return command.execute(undefined, {
+        selection: editor.selectionRange,
+        currentText: editor.currentText,
+        commitEdit: editor.commit,
+        runExclusiveEdit,
+        generateRewrite: async (text: string, mode: string, tone?: string) => {
+          const result = await rewriteText(
+            text,
+            mode,
+            tone,
+            projectStore.currentProject?.setting
+          );
+          return result.result[0] || text;
+        },
+        generateContinuation: async (context: string) => {
+          // TODO: Implement actual continuation via Gemini
+          return `[AI continuation based on context...]`;
+        },
+      });
     },
   }), [editor, analysisCtx, projectStore, intelligence]);
 

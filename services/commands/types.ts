@@ -43,3 +43,35 @@ export interface AnalysisDependencies {
 export interface KnowledgeDependencies {
   lore: Lore | undefined | null;
 }
+
+export interface UIDependencies {
+  switchPanel: (panel: string) => void;
+  toggleZenMode: () => void;
+  highlightText: (start: number, end: number, style: string) => void;
+  setSelection: (start: number, end: number) => void;
+  isZenMode: boolean;
+  activePanel: string | null;
+}
+
+export interface GenerationDependencies {
+  selection: { start: number; end: number; text: string } | null;
+  currentText: string;
+  commitEdit: (text: string, description: string, author: 'User' | 'Agent') => void;
+  runExclusiveEdit: ExclusiveEditRunner;
+  generateRewrite: (text: string, mode: string, tone?: string) => Promise<string>;
+  generateContinuation: (context: string) => Promise<string>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Command History Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ExecutedCommand {
+  id: string;
+  toolName: string;
+  params: Record<string, unknown>;
+  timestamp: number;
+  result: string;
+  success: boolean;
+  reversible: boolean;
+}
