@@ -6,6 +6,12 @@
  */
 
 import { ManuscriptIntelligence } from '@/types/intelligence';
+import { parseStructureCached, extractEntitiesCached, analyzeStyleCached } from './cache';
+import { buildTimeline } from './timelineTracker';
+import { analyzeVoices } from './voiceProfiler';
+import { buildHeatmap } from './heatmapBuilder';
+import { createEmptyDelta } from './deltaTracker';
+import { buildHUD } from './contextBuilder';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -63,6 +69,7 @@ export class IntelligenceWorkerPool {
   private callbacks: Map<string, JobCallback> = new Map();
   private isInitialized: boolean = false;
   private workerUrl: string;
+  private workersSupported: boolean = true;
   
   constructor(
     private poolSize: number = Math.max(2, navigator.hardwareConcurrency - 1 || 2),
@@ -80,6 +87,8 @@ export class IntelligenceWorkerPool {
     // Check if Workers are supported
     if (typeof Worker === 'undefined') {
       console.warn('[WorkerPool] Web Workers not supported, falling back to main thread');
+      this.workersSupported = false;
+      this.isInitialized = true;
       return;
     }
     
@@ -115,6 +124,8 @@ export class IntelligenceWorkerPool {
       console.log(`[WorkerPool] Initialized with ${this.poolSize} workers`);
     } catch (error) {
       console.error('[WorkerPool] Failed to initialize:', error);
+      this.workersSupported = false;
+      this.isInitialized = true;
     }
   }
   
@@ -155,6 +166,40 @@ export class IntelligenceWorkerPool {
   ): Promise<Map<string, ManuscriptIntelligence>> {
     if (!this.isInitialized) {
       await this.initialize();
+    }
+    
+    // Fallback: no workers available, process sequentially on main thread
+    if (!this.workersSupported || this.workers.length === 0) {
+      const results = new Map<string, ManuscriptIntelligence>();
+      for (const chapter of chapters) {
+        const structural = parseStructureCached(chapter.text);
+        const entities = extractEntitiesCached(
+          chapter.text,
+          structural.paragraphs,
+          structural.dialogueMap,
+          chapter.id,
+        );
+        const timeline = buildTimeline(chapter.text, structural.scenes, chapter.id);
+        const style = analyzeStyleCached(chapter.text);
+        const voice = analyzeVoices(structural.dialogueMap);
+        const heatmap = buildHeatmap(chapter.text, structural, entities, timeline, style);
+        const delta = createEmptyDelta(chapter.text);
+        const intelligence: ManuscriptIntelligence = {
+          chapterId: chapter.id,
+          structural,
+          entities,
+          timeline,
+          style,
+          voice,
+          heatmap,
+          delta,
+          hud: null as any,
+        };
+        const hud = buildHUD(intelligence, 0);
+        intelligence.hud = hud;
+        results.set(chapter.id, intelligence);
+      }
+      return results;
     }
     
     const results = new Map<string, ManuscriptIntelligence>();
@@ -242,6 +287,7 @@ export class IntelligenceWorkerPool {
     this.jobQueue = [];
     this.callbacks.clear();
     this.isInitialized = false;
+    this.workersSupported = true;
   }
   
   // ─────────────────────────────────────────────────────────────────────────

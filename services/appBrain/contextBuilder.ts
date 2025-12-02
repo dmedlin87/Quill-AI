@@ -8,8 +8,9 @@
 import { AppBrainState, AppBrainContext, AgentContextOptions } from './types';
 import { eventBus } from './eventBus';
 import {
-  getMemoriesForContext,
-  getActiveGoals,
+  getMemories,
+  getMemoriesCached,
+  getGoalsCached,
   formatMemoriesForPrompt,
   formatGoalsForPrompt,
 } from '../memory';
@@ -278,10 +279,16 @@ export const buildAgentContextWithMemory = async (
   // Replace the placeholder memory section with actual memory
   if (projectId) {
     try {
-      const [memories, goals] = await Promise.all([
-        getMemoriesForContext(projectId, { limit: 25 }),
-        getActiveGoals(projectId),
+      const [authorNotes, projectNotes, goals] = await Promise.all([
+        getMemories({ scope: 'author', limit: 25 }),
+        getMemoriesCached(projectId, { limit: 25 }),
+        getGoalsCached(projectId),
       ]);
+
+      const memories = {
+        author: authorNotes,
+        project: projectNotes,
+      };
 
       // Build memory section
       let memorySection = '[AGENT MEMORY]\n';

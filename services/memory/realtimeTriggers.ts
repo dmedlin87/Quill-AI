@@ -6,7 +6,7 @@
  */
 
 import { MemoryNote } from './types';
-import { getMemories, searchMemoriesByTags } from './index';
+import { getMemoriesCached, searchMemoriesByTags } from './index';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -143,12 +143,11 @@ const defaultTriggers: MemoryTrigger[] = [
     pattern: /\b(always|never|first time|only|unique|the one)\b/i,
     priority: 'immediate',
     memoryQuery: async (match, projectId) => {
-      return getMemories({
-        scope: 'project',
-        projectId,
-        type: 'issue',
-        limit: 5,
-      });
+      // Use cached project memories to avoid repeated Dexie queries
+      const allProjectMemories = await getMemoriesCached(projectId, { limit: 50 });
+      return allProjectMemories
+        .filter(m => m.type === 'issue')
+        .slice(0, 5);
     },
     formatSuggestion: (memories) => {
       const contradictions = memories.filter(m => 
