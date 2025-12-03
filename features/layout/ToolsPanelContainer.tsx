@@ -19,10 +19,10 @@ export const ToolsPanelContainer: React.FC<ToolsPanelContainerProps> = ({ isZenM
 
   // 2. Editor State
   const { currentText, selectionRange, history, editor } = useEditorState();
-  const { restore } = useEditorActions();
+  const { restore, handleNavigateToIssue } = useEditorActions();
 
   // 3. Engine State
-  const { state: engineState, actions: engineActions } = useEngine();
+  const { state: engineState, actions: engineActions, contradictions } = useEngine();
 
   // 4. Derived Context (Memoized)
   const editorContext = useMemo(() => ({
@@ -40,10 +40,13 @@ export const ToolsPanelContainer: React.FC<ToolsPanelContainerProps> = ({ isZenM
       lore={currentProject?.lore}
       chapters={chapters}
       analysis={activeChapter?.lastAnalysis}
+      contradictions={contradictions}
+      derivedLore={currentProject?.lore}
       history={history}
       isAnalyzing={engineState.isAnalyzing}
       analysisWarning={engineState.analysisWarning}
       onAgentAction={engineActions.handleAgentAction}
+      onNavigateToText={handleNavigateToIssue}
       onRestore={restore}
     />
   );

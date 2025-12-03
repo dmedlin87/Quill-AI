@@ -82,6 +82,7 @@ describe('AnalysisPanel', () => {
         currentText=""
         onNavigate={vi.fn()}
         warning="Text truncated"
+        contradictions={[]}
       />
     );
 
@@ -101,6 +102,7 @@ describe('AnalysisPanel', () => {
         currentText={'The hero hesitates too long.'}
         onNavigate={onNavigate}
         onFixRequest={onFixRequest}
+        contradictions={[]}
       />
     );
 
@@ -114,5 +116,40 @@ describe('AnalysisPanel', () => {
     const fixButtons = screen.getAllByText('✨ Fix with Agent');
     fireEvent.click(fixButtons[0]);
     expect(onFixRequest).toHaveBeenCalledWith('"The hero hesitates too long." (Chapter 1)', 'Tighten the opening scene.');
+  });
+
+  it('renders contradictions with navigation hooks and derived lore', () => {
+    const onNavigate = vi.fn();
+    const contradictions = [{
+      type: 'character_attribute' as const,
+      attribute: 'eye color',
+      characterName: 'Alex',
+      originalValue: 'blue eyes',
+      originalChapterId: 'c1',
+      newValue: 'green eyes',
+      newChapterId: 'c2',
+      position: 42,
+    }];
+
+    render(
+      <AnalysisPanel
+        analysis={baseAnalysis}
+        isLoading={false}
+        currentText={'Sample text'}
+        onNavigate={onNavigate}
+        contradictions={contradictions}
+        derivedLore={{
+          worldRules: ['Magic requires balance'],
+          characters: [{ name: 'Alex', bio: 'Adventurer', arc: '', arcStages: [], relationships: [], plotThreads: [], inconsistencies: [], developmentSuggestion: '' }],
+        }}
+      />
+    );
+
+    expect(screen.getByText('Intelligence HUD')).toBeInTheDocument();
+    expect(screen.getByText('character attribute')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Jump to text'));
+    expect(onNavigate).toHaveBeenCalledWith(42, 92);
+    expect(screen.getByText('Magic requires balance')).toBeInTheDocument();
+    expect(screen.getByText('Adventurer')).toBeInTheDocument();
   });
 });
