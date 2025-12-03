@@ -43,3 +43,4 @@ See:
 All project documentation lives in the [`docs/`](./docs/) folder:
 
 - **[TESTING.md](./docs/TESTING.md)** — Test coverage plan and progress tracking
+- **[APP_BRAIN_FLOW.md](./docs/APP_BRAIN_FLOW.md)** — Mermaid map of how the App Brain, memory, and intelligence layers interact
