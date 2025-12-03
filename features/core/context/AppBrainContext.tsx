@@ -6,7 +6,7 @@
  * Single source of truth for the agent layer.
  */
 
-import React, { createContext, useContext, useMemo, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useMemo, useEffect, useRef, useState } from 'react';
 import { useEditor } from './EditorContext';
 import { useAnalysis } from '@/features/analysis';
 import { useProjectStore } from '@/features/project';
@@ -17,6 +17,7 @@ import {
   AppBrainState,
   AppBrainActions,
   AppBrainContext as AppBrainContextType,
+  MicrophoneState,
   NavigateToTextParams,
   UpdateManuscriptParams,
   RewriteSelectionParams,
@@ -90,6 +91,13 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const { intelligence, hud } = useManuscriptIntelligence({
     chapterId: projectStore.activeChapterId || 'default',
     initialText: editor.currentText,
+  });
+
+  const [microphoneState, setMicrophoneState] = useState<MicrophoneState>({
+    status: 'idle',
+    mode: 'voice',
+    lastTranscript: null,
+    error: null,
   });
   
   // Track previous values for events
@@ -170,6 +178,7 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         activeView: activeView === MainView.STORYBOARD ? 'storyboard' : 'editor',
         isZenMode: editor.isZenMode,
         activeHighlight: editor.activeHighlight,
+        microphone: microphoneState,
       },
       session: {
         chatHistory: [],
@@ -187,6 +196,7 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     projectStore,
     intelligence,
     hud,
+    microphoneState,
   ]);
 
   const throttledState = useThrottledValue(state, 100);
@@ -358,7 +368,17 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         },
       );
     },
-    
+
+    setMicrophoneState: (state: Partial<MicrophoneState>) => {
+      setMicrophoneState(prev => ({
+        ...prev,
+        ...state,
+        mode: state.mode ?? prev.mode,
+        status: state.status ?? prev.status,
+        error: state.error ?? null,
+      }));
+    },
+
     // Knowledge
     queryLore: async (query: string) => {
       const command = new QueryLoreCommand();
@@ -473,6 +493,7 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     intelligence,
     activeTab,
     setActiveTab,
+    setMicrophoneState,
   ]);
 
   const stateRef = useRef<AppBrainState>(state);

@@ -147,6 +147,7 @@ export function useAgentOrchestrator(
       experience: experienceLevel,
       autonomy: autonomyMode,
       intelligenceHUD: intelligence.hud || undefined,
+      mode,
     });
 
     // Silent initialization – tolerate providers or mocks that don't return a Promise
@@ -162,7 +163,7 @@ export function useAgentOrchestrator(
     }
 
     dispatch({ type: 'SESSION_READY' });
-  }, [currentPersona, critiqueIntensity, experienceLevel, autonomyMode]);
+  }, [currentPersona, critiqueIntensity, experienceLevel, autonomyMode, mode]);
 
   // Initialize on mount
   useEffect(() => {
@@ -235,6 +236,7 @@ export function useAgentOrchestrator(
     try {
       // Build context-aware prompt using AppBrain
       const { ui } = latestStateRef.current;
+      const mic = ui.microphone;
       const recentEvents = orchestratorEventLogRef.current.length > 0
         ? orchestratorEventLogRef.current
             .slice(-5)
@@ -245,6 +247,9 @@ export function useAgentOrchestrator(
       const contextPrompt = `
 [CURRENT CONTEXT]
 ${brain.context.getCompressedContext()}
+
+[INPUT MODE]
+Agent mode: ${mode}. Microphone: ${mic.status}${mic.lastTranscript ? ` (last transcript: "${mic.lastTranscript}")` : ''}.
 
 [USER STATE]
 Cursor: ${ui.cursor.position}
@@ -322,7 +327,7 @@ ${messageText}
     } finally {
       // isProcessing is derived from reducer state; no manual reset here
     }
-  }, [brain.context, executeToolCall]);
+  }, [brain.context, executeToolCall, mode]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // CONTROL METHODS

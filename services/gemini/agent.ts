@@ -447,6 +447,8 @@ export interface CreateAgentSessionOptions {
   voiceFingerprint?: VoiceFingerprint;
   /** If true, include deep voice analytics in the system prompt */
   deepAnalysis?: boolean;
+  /** Switch to a voice-safe model/toolset */
+  mode?: 'text' | 'voice';
 }
 
 export const createAgentSession = (options: CreateAgentSessionOptions = {}) => {
@@ -463,6 +465,7 @@ export const createAgentSession = (options: CreateAgentSessionOptions = {}) => {
     memoryContext,
     voiceFingerprint,
     deepAnalysis,
+    mode = 'text',
   } = options;
 
   const intensityModifier = getIntensityModifier(intensity);
@@ -492,11 +495,14 @@ export const createAgentSession = (options: CreateAgentSessionOptions = {}) => {
     systemInstruction = buildPersonaInstruction(systemInstruction, persona);
   }
 
+  const toolset = mode === 'voice' ? VOICE_SAFE_TOOLS : ALL_AGENT_TOOLS;
+  const model = mode === 'voice' ? ModelConfig.liveAudio : ModelConfig.agent;
+
   return ai.chats.create({
-    model: ModelConfig.agent, 
+    model,
     config: {
       systemInstruction,
-      tools: [{ functionDeclarations: ALL_AGENT_TOOLS }]
+      tools: [{ functionDeclarations: toolset }]
     }
   });
 };

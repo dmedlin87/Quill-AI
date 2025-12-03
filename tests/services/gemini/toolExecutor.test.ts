@@ -103,6 +103,7 @@ const createMockActions = (): AppBrainActions => ({
   switchPanel: vi.fn(async () => 'switched'),
   toggleZenMode: vi.fn(async () => 'zen'),
   highlightText: vi.fn(async () => 'highlighted'),
+  setMicrophoneState: vi.fn(),
 
   // Knowledge
   queryLore: vi.fn(async () => 'lore'),

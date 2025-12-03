@@ -128,6 +128,12 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         activeView: activeView === MainView.STORYBOARD ? 'storyboard' : 'editor',
         isZenMode: editor.isZenMode,
         activeHighlight: editor.activeHighlight,
+        microphone: {
+          status: 'idle',
+          mode: 'voice',
+          lastTranscript: null,
+          error: null,
+        },
       },
       session: {
         chatHistory: [],
@@ -230,6 +236,12 @@ export const createEmptyAppBrainState = (): AppBrainState => ({
     activeView: 'editor',
     isZenMode: false,
     activeHighlight: null,
+    microphone: {
+      status: 'idle',
+      mode: 'text',
+      lastTranscript: null,
+      error: null,
+    },
   },
   session: {
     chatHistory: [],

@@ -65,6 +65,7 @@ export const buildAgentContext = (
   
   ctx += `Active Panel: ${ui.activePanel}\n`;
   ctx += `View Mode: ${ui.activeView}${ui.isZenMode ? ' (Zen Mode)' : ''}\n`;
+  ctx += `Mic: ${ui.microphone.status}${ui.microphone.lastTranscript ? ` (heard: "${ui.microphone.lastTranscript.slice(0, 60)}${ui.microphone.lastTranscript.length > 60 ? '...' : ''}")` : ''}\n`;
   ctx += '\n';
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -325,6 +326,7 @@ export const buildCompressedContext = (state: AppBrainState): string => {
   const activeChapter = manuscript.chapters.find(c => c.id === manuscript.activeChapterId);
   ctx += `ch:${activeChapter?.title || 'None'}|`;
   ctx += `pos:${ui.cursor.position}|`;
+  ctx += `mic:${ui.microphone.status}|`;
   
   if (ui.selection) {
     ctx += `sel:${ui.selection.text.slice(0, 30)}...|`;

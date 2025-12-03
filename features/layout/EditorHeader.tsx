@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { UsageBadge } from '@/features/shared';
 import { useLayoutStore } from './store/useLayoutStore';
+import { VoiceCommandButton } from '@/features/voice';
 
 interface EditorHeaderProps {
   isZenMode: boolean;
@@ -41,6 +42,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ isZenMode }) => {
     >
       <div className="flex items-center gap-4">
         <UsageBadge />
+        <VoiceCommandButton />
       </div>
     </motion.header>
   );

@@ -11,6 +11,7 @@ const mockActions = {
   setSelection: vi.fn(),
   highlightText: vi.fn(),
   toggleZenMode: vi.fn(),
+  setMicrophoneState: vi.fn(),
   rewriteSelection: vi.fn(async () => 'rewritten'),
   continueWriting: vi.fn(async () => 'continued'),
   runAnalysis: vi.fn(async () => 'analysis'),

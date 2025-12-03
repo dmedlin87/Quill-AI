@@ -53,6 +53,7 @@ const {
         activeView: 'editor',
         isZenMode: false,
         activeHighlight: null,
+        microphone: { status: 'idle', mode: 'voice', lastTranscript: null, error: null },
       },
       session: {
         chatHistory: [],
@@ -97,6 +98,10 @@ vi.mock('@/services/gemini/toolExecutor', () => ({
 
 vi.mock('@/services/appBrain', () => ({
   emitToolExecuted: vi.fn(),
+  eventBus: {
+    getChangeLog: vi.fn(() => []),
+    subscribeForOrchestrator: vi.fn(() => () => {}),
+  },
 }));
 
 vi.mock('@/features/settings', () => ({

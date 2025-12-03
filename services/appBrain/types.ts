@@ -74,6 +74,14 @@ export interface UIState {
   activeView: 'editor' | 'storyboard';
   isZenMode: boolean;
   activeHighlight: HighlightRange | null;
+  microphone: MicrophoneState;
+}
+
+export interface MicrophoneState {
+  status: 'idle' | 'listening' | 'error';
+  mode: 'text' | 'voice';
+  lastTranscript: string | null;
+  error: string | null;
 }
 
 export interface SessionState {
@@ -189,7 +197,8 @@ export interface AppBrainActions {
   switchPanel: (panel: string) => Promise<string>;
   toggleZenMode: () => Promise<string>;
   highlightText: (start: number, end: number, style?: string) => Promise<string>;
-  
+  setMicrophoneState: (state: Partial<MicrophoneState>) => void;
+
   // Knowledge
   queryLore: (query: string) => Promise<string>;
   getCharacterInfo: (name: string) => Promise<string>;

@@ -29,6 +29,7 @@ describe('adaptiveContext', () => {
     ui: {
       cursor: { position: 6 },
       selection: { text: 'Hello', start: 0, end: 5 },
+      microphone: { status: 'idle', mode: 'voice', lastTranscript: null, error: null },
     },
     intelligence: {
       hud: {
