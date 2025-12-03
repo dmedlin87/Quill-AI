@@ -120,10 +120,13 @@ export interface WatchedEntity {
   
   /** Priority level for surfacing suggestions */
   priority: 'low' | 'medium' | 'high';
-  
+
   /** Why this entity is being watched */
   reason?: string;
-  
+
+  /** Whether proactive monitoring is enabled for this entity */
+  monitoringEnabled?: boolean;
+
   /** Creation timestamp (epoch ms) */
   createdAt: number;
 }

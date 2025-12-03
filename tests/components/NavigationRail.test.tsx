@@ -187,6 +187,14 @@ describe('NavigationRail', () => {
       expect(mockOpenTabWithPanel).toHaveBeenCalledWith(SidebarTab.VOICE);
     });
 
+    it('calls openTabWithPanel with MEMORY when Memory is clicked', () => {
+      render(<NavigationRail {...defaultProps} />);
+
+      fireEvent.click(screen.getByLabelText('Memory'));
+
+      expect(mockOpenTabWithPanel).toHaveBeenCalledWith(SidebarTab.MEMORY);
+    });
+
     it('calls openTabWithPanel with GRAPH when Graph is clicked', () => {
       render(<NavigationRail {...defaultProps} />);
 
