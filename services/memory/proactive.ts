@@ -7,7 +7,8 @@
  */
 
 import { WatchedEntity, MemoryNote, AgentGoal } from './types';
-import { searchMemoriesByTags, getMemoriesCached, getGoalsCached, getWatchedCached } from './index';
+import { searchMemoriesByTags, getMemories, getActiveGoals } from './index';
+import { db } from '../db';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -91,8 +92,8 @@ export async function getWatchedEntitiesInChapter(
   projectId: string,
   chapterContext: ChapterContext
 ): Promise<WatchedEntity[]> {
-  // Use cached watched entities to avoid repeated IndexedDB scans
-  const watchedEntities = await getWatchedCached(projectId);
+  // Use a fresh read of watched entities to avoid stale cache data
+  const watchedEntities = await db.watchedEntities.where('projectId').equals(projectId).toArray();
   
   if (watchedEntities.length === 0) return [];
   
@@ -190,8 +191,8 @@ export async function generateSuggestionsForChapter(
     });
   }
   
-  // 3. Check for active goals related to this chapter (via goal cache)
-  const activeGoals = await getGoalsCached(projectId);
+  // 3. Check for active goals related to this chapter (always fetch fresh to avoid stale cache)
+  const activeGoals = await getActiveGoals(projectId);
   
   for (const goal of activeGoals) {
     // Check if goal mentions chapter or any entities in it
@@ -265,8 +266,8 @@ export async function getImportantReminders(
   const reminders: ProactiveSuggestion[] = [];
   const now = Date.now();
   
-  // Get high-importance unresolved issues using cached project memories
-  const projectMemories = await getMemoriesCached(projectId, { limit: 100 });
+  // Get high-importance unresolved issues from the latest project memories
+  const projectMemories = await getMemories({ scope: 'project', projectId, limit: 100 });
   const issues = projectMemories
     .filter(m => m.type === 'issue' && m.importance >= 0.7)
     .slice(0, 5);
@@ -287,8 +288,8 @@ export async function getImportantReminders(
     });
   }
   
-  // Get stalled goals (active but low progress for a while) via goal cache
-  const goals = await getGoalsCached(projectId);
+  // Get stalled goals (active but low progress for a while) from the latest records
+  const goals = await getActiveGoals(projectId);
   const oneDayAgo = now - (24 * 60 * 60 * 1000);
   
   for (const goal of goals) {
