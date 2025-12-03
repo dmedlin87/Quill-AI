@@ -63,6 +63,16 @@ vi.mock('@/features/editor/components/VisualDiff', () => ({
   VisualDiff: () => <div data-testid="visual-diff" />,
 }));
 
+const mockHandleFixRequest = vi.fn();
+vi.mock('@/features/layout/store/useLayoutStore', () => ({
+  useLayoutStore: vi.fn((selector) => {
+    const state = {
+      handleFixRequest: mockHandleFixRequest,
+    } as const;
+    return typeof selector === 'function' ? selector(state) : state;
+  }),
+}));
+
 const mockCommentCardProps = vi.fn();
 vi.mock('@/features/editor/components/CommentCard', () => ({
   CommentCard: (props: any) => {
@@ -320,6 +330,7 @@ describe('EditorWorkspace', () => {
       onFixWithAgent('Grammar', 'Fix it', 'bad text');
     });
     expect(screen.queryByTestId('comment-card')).not.toBeInTheDocument();
+    expect(mockHandleFixRequest).toHaveBeenCalledWith('Grammar — "bad text"', 'Fix it');
 
     // Re-open for next test
     React.act(() => {
