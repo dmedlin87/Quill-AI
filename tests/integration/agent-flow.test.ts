@@ -52,6 +52,7 @@ const { projects, chapters, dbMock } = vi.hoisted(() => {
       bulkPut: vi.fn(),
       bulkAdd: vi.fn(),
       delete: vi.fn(),
+      get: vi.fn(async (id: string) => chapters.find(c => c.id === id) || null),
     }
   };
 

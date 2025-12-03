@@ -31,6 +31,7 @@ vi.mock('@/services/db', () => ({
       delete: vi.fn(() => Promise.resolve()),
       bulkAdd: vi.fn(() => Promise.resolve()),
       bulkPut: vi.fn(() => Promise.resolve()),
+      get: vi.fn(() => Promise.resolve(null)),
     }
   }
 }));

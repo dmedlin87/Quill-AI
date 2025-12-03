@@ -20,6 +20,21 @@ vi.mock('@/features/analysis', () => ({
   AnalysisProvider: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="analysis-provider">{children}</div>
   ),
+  useAnalysis: vi.fn(() => ({
+    analysis: null,
+    analysisStatus: {
+      pacing: 'idle',
+      characters: 'idle',
+      plot: 'idle',
+      setting: 'idle',
+      summary: 'idle',
+    },
+    analyzePacing: vi.fn(),
+    analyzeCharacters: vi.fn(),
+    analyzePlot: vi.fn(),
+    analyzeSetting: vi.fn(),
+    runFullAnalysis: vi.fn(),
+  })),
 }));
 
 vi.mock('@/features/layout', () => ({

@@ -1,0 +1,5 @@
+# Bug Fixes
+
+- Always run code to verify fixes. Never claim something works based on reading alone.
+- For non-trivial bugs, write a failing test first, then fix, then confirm the test passes.
+- Keep reproduction tests as regression coverage unless redundant.

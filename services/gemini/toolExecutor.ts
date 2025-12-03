@@ -67,8 +67,8 @@ export async function executeAppBrainToolCall(
       // Editing
       case 'update_manuscript':
         result = await actions.updateManuscript({
-          searchText: args.searchText as string,
-          replacementText: args.replacementText as string,
+          searchText: (args.searchText ?? args.search_text) as string,
+          replacementText: (args.replacementText ?? args.replacement_text) as string,
           description: args.description as string,
         });
         break;
