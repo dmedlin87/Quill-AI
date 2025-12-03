@@ -456,8 +456,12 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             return result.result[0] || text;
           },
           generateContinuation: async (context: string) => {
-            // TODO: Implement continuation generation
-            return `[Continuation based on: "${context.slice(-50)}..."]`;
+            const continuation = await generateGeminiContinuation({
+              context,
+              selection: editor.selectionRange,
+            });
+
+            return continuation;
           },
         },
       );
