@@ -91,6 +91,12 @@ export const BookIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+export const MemoryIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 4c-3.866 0-7 2.91-7 6.5 0 1.908.94 3.61 2.45 4.78l-.45 3.22 2.84-1.58c.7.18 1.44.28 2.21.28 3.866 0 7-2.91 7-6.5S15.866 4 12 4z" />
+  </svg>
+);
+
 export const BoardIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7"/>
@@ -132,6 +138,7 @@ export const Icons = {
   Wand: WandIcon,
   Graph: GraphIcon,
   Book: BookIcon,
+  Memory: MemoryIcon,
   Board: BoardIcon,
   Sun: SunIcon,
   Moon: MoonIcon,

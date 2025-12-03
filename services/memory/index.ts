@@ -399,6 +399,7 @@ export async function addWatchedEntity(
     id: crypto.randomUUID(),
     createdAt: Date.now(),
     ...input,
+    monitoringEnabled: input.monitoringEnabled ?? true,
   };
 
   await db.watchedEntities.add(entity);
@@ -409,7 +410,30 @@ export async function addWatchedEntity(
  * Get all watched entities for a project.
  */
 export async function getWatchedEntities(projectId: string): Promise<WatchedEntity[]> {
-  return db.watchedEntities.where('projectId').equals(projectId).toArray();
+  const entities = await db.watchedEntities.where('projectId').equals(projectId).toArray();
+  return entities.map(entity => ({ ...entity, monitoringEnabled: entity.monitoringEnabled ?? true }));
+}
+
+/**
+ * Update a watched entity.
+ */
+export async function updateWatchedEntity(
+  id: string,
+  updates: Partial<Omit<WatchedEntity, 'id' | 'createdAt'>>
+): Promise<WatchedEntity> {
+  const existing = await db.watchedEntities.get(id);
+  if (!existing) {
+    throw new Error(`Watched entity not found: ${id}`);
+  }
+
+  const updated: WatchedEntity = {
+    ...existing,
+    ...updates,
+    monitoringEnabled: updates.monitoringEnabled ?? existing.monitoringEnabled ?? true,
+  };
+
+  await db.watchedEntities.put(updated);
+  return updated;
 }
 
 /**

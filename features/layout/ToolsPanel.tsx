@@ -5,6 +5,7 @@ import { ChatInterface, ActivityFeed } from '@/features/agent';
 import { Dashboard } from '@/features/analysis';
 import { VoiceMode } from '@/features/voice';
 import { KnowledgeGraph, LoreManager } from '@/features/lore';
+import { MemoryManager } from '@/features/memory';
 import { useLayoutStore } from './store/useLayoutStore';
 
 interface ToolsPanelProps {
@@ -125,6 +126,10 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
                 onRestore={onRestore}
                 onInspect={(item) => console.log('Inspect', item)}
               />
+            )}
+
+            {activeTab === SidebarTab.MEMORY && (
+              <MemoryManager projectId={projectId} />
             )}
 
             {activeTab === SidebarTab.VOICE && <VoiceMode />}

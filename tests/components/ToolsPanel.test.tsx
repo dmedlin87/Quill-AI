@@ -62,6 +62,10 @@ vi.mock('@/features/lore', () => ({
   LoreManager: () => <div data-testid="lore-manager">Lore Manager</div>,
 }));
 
+vi.mock('@/features/memory', () => ({
+  MemoryManager: () => <div data-testid="memory-manager">Memory Manager</div>,
+}));
+
 describe('ToolsPanel', () => {
   const defaultProps = {
     isZenMode: false,
@@ -172,6 +176,15 @@ describe('ToolsPanel', () => {
       render(<ToolsPanel {...defaultProps} />);
 
       expect(screen.getByTestId('voice-mode')).toBeInTheDocument();
+    });
+  });
+
+  describe('Tab Content: Memory', () => {
+    it('renders MemoryManager when activeTab is MEMORY', () => {
+      mockActiveTab = SidebarTab.MEMORY;
+      render(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.getByTestId('memory-manager')).toBeInTheDocument();
     });
   });
 

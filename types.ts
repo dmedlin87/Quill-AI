@@ -175,6 +175,7 @@ export enum SidebarTab {
   CHAT = 'CHAT',
   VOICE = 'VOICE',
   HISTORY = 'HISTORY',
+  MEMORY = 'MEMORY',
   GRAPH = 'GRAPH',
   LORE = 'LORE',
   BRANCHES = 'BRANCHES', // Quill AI 3.0

@@ -12,6 +12,7 @@ import {
   WandIcon,
   GraphIcon,
   BookIcon,
+  MemoryIcon,
   BoardIcon,
   SunIcon,
   MoonIcon,
@@ -28,6 +29,7 @@ const NAV_ITEMS: Array<{ tab: SidebarTab; Icon: React.FC<{ className?: string }>
   { tab: SidebarTab.ANALYSIS, Icon: AnalysisIcon, label: 'Analysis' },
   { tab: SidebarTab.HISTORY, Icon: HistoryIcon, label: 'History' },
   { tab: SidebarTab.VOICE, Icon: MicIcon, label: 'Voice' },
+  { tab: SidebarTab.MEMORY, Icon: MemoryIcon, label: 'Memory' },
   { tab: SidebarTab.GRAPH, Icon: GraphIcon, label: 'Graph' },
   { tab: SidebarTab.LORE, Icon: BookIcon, label: 'Lore Bible' },
 ];
