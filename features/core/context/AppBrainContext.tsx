@@ -11,6 +11,8 @@ import { useEditor } from './EditorContext';
 import { useAnalysis } from '@/features/analysis';
 import { useProjectStore } from '@/features/project';
 import { useManuscriptIntelligence } from '@/features/shared/hooks/useManuscriptIntelligence';
+import { useThrottledValue } from '@/features/shared/hooks/useThrottledValue';
+import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
 import {
   AppBrainState,
   AppBrainActions,
@@ -24,6 +26,7 @@ import {
   emitChapterSwitched,
   createContextBuilder,
 } from '@/services/appBrain';
+import { MainView, SidebarTab } from '@/types';
 import {
   NavigateToTextCommand,
   JumpToChapterCommand,
@@ -77,6 +80,11 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const editor = useEditor();
   const analysisCtx = useAnalysis();
   const projectStore = useProjectStore();
+  const { activeTab, activeView, setActiveTab } = useLayoutStore((state) => ({
+    activeTab: state.activeTab,
+    activeView: state.activeView,
+    setActiveTab: state.setActiveTab,
+  }));
   
   // Get intelligence data (this hook processes the manuscript)
   const { intelligence, hud } = useManuscriptIntelligence({
@@ -158,8 +166,8 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           paragraph: hud?.situational.currentParagraph?.type || null,
         },
         selection: editor.selectionRange,
-        activePanel: 'chat', // TODO: Connect to actual sidebar state
-        activeView: 'editor' as const, // TODO: Connect to actual view state
+        activePanel: activeTab ?? SidebarTab.ANALYSIS,
+        activeView: activeView === MainView.STORYBOARD ? 'storyboard' : 'editor',
         isZenMode: editor.isZenMode,
         activeHighlight: editor.activeHighlight,
       },
@@ -172,12 +180,16 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       },
     };
   }, [
+    activeTab,
+    activeView,
     editor,
     analysisCtx,
     projectStore,
     intelligence,
     hud,
   ]);
+
+  const throttledState = useThrottledValue(state, 100);
 
   const editMutexRef = useRef<Promise<unknown> | null>(null);
 
@@ -311,24 +323,24 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     switchPanel: async (panel: string) => {
       const command = new SwitchPanelCommand();
       return command.execute(panel, {
-        switchPanel: (p) => console.log(`[AppBrain] Switch panel to: ${p}`), // TODO: Connect to actual panel switching
+        switchPanel: (p) => setActiveTab((p as SidebarTab) ?? activeTab),
         toggleZenMode: editor.toggleZenMode,
         highlightText: editor.handleNavigateToIssue,
         setSelection: editor.handleNavigateToIssue,
         isZenMode: editor.isZenMode,
-        activePanel: 'chat', // TODO: Connect to actual panel state
+        activePanel: activeTab,
       });
     },
     
     toggleZenMode: async () => {
       const command = new ToggleZenModeCommand();
       return command.execute(undefined, {
-        switchPanel: (p) => console.log(`[AppBrain] Switch panel to: ${p}`),
+        switchPanel: (p) => setActiveTab((p as SidebarTab) ?? activeTab),
         toggleZenMode: editor.toggleZenMode,
         highlightText: editor.handleNavigateToIssue,
         setSelection: editor.handleNavigateToIssue,
         isZenMode: editor.isZenMode,
-        activePanel: 'chat',
+        activePanel: activeTab,
       });
     },
     
@@ -337,12 +349,12 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return command.execute(
         { start, end, style: (style as 'warning' | 'error' | 'info' | 'success') || 'info' },
         {
-          switchPanel: (p) => console.log(`[AppBrain] Switch panel to: ${p}`),
+          switchPanel: (p) => setActiveTab((p as SidebarTab) ?? activeTab),
           toggleZenMode: editor.toggleZenMode,
           highlightText: editor.handleNavigateToIssue,
           setSelection: editor.handleNavigateToIssue,
           isZenMode: editor.isZenMode,
-          activePanel: 'chat',
+          activePanel: activeTab,
         },
       );
     },
@@ -454,7 +466,14 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         },
       });
     },
-  }), [editor, analysisCtx, projectStore, intelligence]);
+  }), [
+    editor,
+    analysisCtx,
+    projectStore,
+    intelligence,
+    activeTab,
+    setActiveTab,
+  ]);
 
   const stateRef = useRef<AppBrainState>(state);
 
@@ -469,12 +488,12 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 
   const value = useMemo<AppBrainValue>(() => ({
-    state,
+    state: throttledState,
     actions,
     context: contextBuilders,
     subscribe: eventBus.subscribe.bind(eventBus),
     subscribeAll: eventBus.subscribeAll.bind(eventBus),
-  }), [state, actions, contextBuilders]);
+  }), [throttledState, actions, contextBuilders]);
 
   return (
     <AppBrainContext.Provider value={value}>

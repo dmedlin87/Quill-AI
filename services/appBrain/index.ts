@@ -3,6 +3,9 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { useEditor } from '@/features/core/context/EditorContext';
 import { useEngine } from '@/features/core/context/EngineContext';
 import { useProjectStore } from '@/features/project';
+import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
+import { useThrottledValue } from '@/features/shared/hooks/useThrottledValue';
+import { MainView, SidebarTab } from '@/types';
 
 import { buildCompressedContext, buildNavigationContext, buildEditingContext, createContextBuilder } from './contextBuilder';
 import type { AppBrainContext, AppBrainState } from './types';
@@ -69,6 +72,10 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const projectStore = useProjectStore();
   const editor = useEditor();
   const engine = useEngine();
+  const { activeTab, activeView } = useLayoutStore((state) => ({
+    activeTab: state.activeTab,
+    activeView: state.activeView,
+  }));
 
   const brainState = useMemo<AppBrainState>(() => {
     const activeChapter = projectStore.chapters.find(
@@ -117,8 +124,8 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           paragraph: null,
         },
         selection: editor.selectionRange,
-        activePanel: 'chat',
-        activeView: 'editor',
+        activePanel: activeTab ?? SidebarTab.ANALYSIS,
+        activeView: activeView === MainView.STORYBOARD ? 'storyboard' : 'editor',
         isZenMode: editor.isZenMode,
         activeHighlight: editor.activeHighlight,
       },
@@ -130,7 +137,15 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isProcessing: engine.state.isAnalyzing,
       },
     };
-  }, [editor, engine.state.isAnalyzing, projectStore]);
+  }, [
+    activeTab,
+    activeView,
+    editor,
+    engine.state.isAnalyzing,
+    projectStore,
+  ]);
+
+  const throttledState = useThrottledValue(brainState, 100);
 
   const contextBuilders = useMemo(() => createContextBuilder(() => brainState), [brainState]);
 
@@ -148,10 +163,10 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const value = useMemo<AppBrainValue>(
     () => ({
-      state: brainState,
+      state: throttledState,
       context,
     }),
-    [brainState, context],
+    [throttledState, context],
   );
 
     return React.createElement(
