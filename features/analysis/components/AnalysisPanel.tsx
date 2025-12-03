@@ -4,6 +4,7 @@ import { AnalysisResult } from '@/types';
 import { findQuoteRange } from '@/features/shared';
 import { ScoreCard } from './ScoreCard';
 import { IssueCard } from './IssueCard';
+import { Contradiction, Lore } from '@/types/schema';
 
 interface AnalysisPanelProps {
   analysis: AnalysisResult | null;
@@ -12,9 +13,11 @@ interface AnalysisPanelProps {
   onNavigate: (start: number, end: number) => void;
   onFixRequest?: (issueContext: string, suggestion: string) => void;
   warning?: string | null;
+  contradictions?: Contradiction[];
+  derivedLore?: Lore | null;
 }
 
-export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoading, currentText, onNavigate, onFixRequest, warning }) => {
+export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoading, currentText, onNavigate, onFixRequest, warning, contradictions = [], derivedLore }) => {
   
   const handleQuoteClick = (quote?: string) => {
     if (!quote) return;
@@ -73,6 +76,11 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoadin
     ...(analysis.settingAnalysis?.issues || []).map(issue => ({ ...issue, type: 'setting' as const })),
   ];
 
+  const handleContradictionNavigate = (position: number) => {
+    const end = position + 50;
+    onNavigate(position, end);
+  };
+
   return (
     <div className="h-full overflow-y-auto p-5 space-y-6 animate-fade-in">
       {/* Warning Banner */}
@@ -122,6 +130,89 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoadin
                 />
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h4 className="text-[var(--text-sm)] font-semibold text-[var(--text-primary)] mb-3">
+          Intelligence HUD
+        </h4>
+        {contradictions.length === 0 && !derivedLore ? (
+          <p className="text-[var(--text-xs)] text-[var(--text-tertiary)] italic">
+            Run the intelligence pass to surface contradictions and derived lore.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {contradictions.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[var(--text-xs)] text-[var(--text-secondary)] uppercase tracking-wide font-semibold">Contradictions</p>
+                {contradictions.map((contradiction, idx) => (
+                  <div
+                    key={`${contradiction.type}-${contradiction.position}-${idx}`}
+                    className="p-3 rounded-lg border border-[var(--ink-100)] bg-[var(--parchment-50)] shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[var(--text-sm)] font-semibold text-[var(--text-primary)]">
+                          {contradiction.type.replace('_', ' ')}
+                        </p>
+                        <p className="text-[var(--text-xs)] text-[var(--text-secondary)]">
+                          {contradiction.characterName ? `${contradiction.characterName} • ` : ''}{contradiction.attribute || 'detail'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleContradictionNavigate(contradiction.position)}
+                        className="text-[var(--text-xs)] px-3 py-1 rounded-full bg-[var(--magic-100)] text-[var(--magic-700)] hover:bg-[var(--magic-200)]"
+                      >
+                        Jump to text
+                      </button>
+                    </div>
+                    <p className="text-[var(--text-xs)] text-[var(--text-secondary)] mt-2">
+                      {contradiction.originalValue} → {contradiction.newValue}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {derivedLore && (
+              <div className="space-y-3">
+                <p className="text-[var(--text-xs)] text-[var(--text-secondary)] uppercase tracking-wide font-semibold">Derived Lore</p>
+                {derivedLore.worldRules?.length > 0 && (
+                  <div>
+                    <p className="text-[var(--text-xs)] text-[var(--text-tertiary)] mb-1">World Rules</p>
+                    <div className="flex flex-wrap gap-2">
+                      {derivedLore.worldRules.map((rule, idx) => (
+                        <span
+                          key={`${rule}-${idx}`}
+                          className="px-2 py-1 rounded-full bg-[var(--ink-900)] text-[var(--parchment-50)] text-[var(--text-xs)]"
+                        >
+                          {rule}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {derivedLore.characters?.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[var(--text-xs)] text-[var(--text-tertiary)]">Characters</p>
+                    <div className="space-y-2">
+                      {derivedLore.characters.map((character) => (
+                        <div
+                          key={character.name}
+                          className="p-2 rounded-lg border border-[var(--ink-100)] bg-white"
+                        >
+                          <p className="text-[var(--text-sm)] font-semibold text-[var(--text-primary)]">{character.name}</p>
+                          <p className="text-[var(--text-xs)] text-[var(--text-secondary)] line-clamp-2">{character.bio}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>

@@ -6,6 +6,7 @@ import { Dashboard } from '@/features/analysis';
 import { VoiceMode } from '@/features/voice';
 import { KnowledgeGraph, LoreManager } from '@/features/lore';
 import { MemoryManager } from '@/features/memory';
+import { Contradiction, Lore } from '@/types/schema';
 import { useLayoutStore } from './store/useLayoutStore';
 
 interface ToolsPanelProps {
@@ -22,12 +23,15 @@ interface ToolsPanelProps {
   lore?: any;
   chapters?: any[];
   analysis?: any;
+  contradictions?: Contradiction[];
+  derivedLore?: Lore | null;
   history: any[];
   // Engine state
   isAnalyzing: boolean;
   analysisWarning?: string;
   // Callbacks
   onAgentAction: (action: string, params: any) => Promise<string>;
+  onNavigateToText?: (start: number, end: number) => void;
   onRestore: (item: any) => void;
 }
 
@@ -43,10 +47,13 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
   lore,
   chapters,
   analysis,
+  contradictions,
+  derivedLore,
   history,
   isAnalyzing,
   analysisWarning,
   onAgentAction,
+  onNavigateToText,
   onRestore,
 }) => {
   const {
@@ -101,6 +108,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
                 currentText={currentText}
                 onFixRequest={handleFixRequest}
                 warning={analysisWarning}
+                contradictions={contradictions}
+                derivedLore={derivedLore}
+                onNavigateToText={onNavigateToText}
               />
             )}
 
