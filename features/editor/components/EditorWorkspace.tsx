@@ -10,6 +10,7 @@ import { VisualDiff } from './VisualDiff';
 import { AnalysisResult } from '@/types';
 import { CommentCard } from './CommentCard';
 import { InlineComment } from '@/types/schema';
+import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
 
 /**
  * EditorWorkspace
@@ -166,6 +167,7 @@ export const EditorWorkspace: React.FC = () => {
     currentProject: state.currentProject,
   }));
   const { state: engineState, actions: engineActions } = useEngine();
+  const handleFixRequest = useLayoutStore((state) => state.handleFixRequest);
 
   const activeChapter = getActiveChapter();
 
@@ -288,21 +290,14 @@ export const EditorWorkspace: React.FC = () => {
     setActiveComment(null);
   };
 
-  const handleFixWithAgent = (
-    issue: string,
-    suggestion: string,
-    quote?: string
-  ) => {
-    setActiveComment(null);
-    // TODO: Implement fix with agent logic if needed at this level, or pass it down/up
-    // For now, we just close the card as the actual fix logic might be handled elsewhere or we need to wire it up
-    // The original RichTextEditor had onFixWithAgent prop, we might need to expose that from useEditor or similar if it's not already
-    // Looking at the original code, onFixWithAgent was a prop to RichTextEditor.
-    // We should probably check if we need to pass this handler to CommentCard.
-    // The original RichTextEditor passed onFixWithAgent to CommentCard.
-    // We need to make sure we have access to that functionality here.
-    // For now, I will just close the card.
-  };
+  const handleFixWithAgent = useCallback(
+    (issue: string, suggestion: string, quote?: string) => {
+      setActiveComment(null);
+      const context = quote ? `${issue} — "${quote}"` : issue;
+      handleFixRequest(context, suggestion);
+    },
+    [handleFixRequest]
+  );
 
   const handleDismissComment = (commentId: string) => {
     setActiveComment(null);
