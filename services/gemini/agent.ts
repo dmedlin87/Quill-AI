@@ -174,6 +174,35 @@ ${mode === 'Tone Tuner' ? `Target Tone: ${tone}` : ''}`;
   }
 };
 
+export interface ContinuationRequest {
+  context: string;
+  selection?: { text: string; start: number; end: number } | null;
+}
+
+export const generateContinuation = async (
+  { context, selection }: ContinuationRequest,
+): Promise<string> => {
+  const model = ModelConfig.agent;
+
+  const selectionBlock = selection?.text
+    ? `Selected passage to align with (range ${selection.start}-${selection.end}):\n${selection.text}\n\n`
+    : 'No active selection provided.\n\n';
+
+  const prompt = `You are a collaborative author. Continue the manuscript seamlessly from the provided context.\n\nContext (most recent first):\n${context}\n\n${selectionBlock}Continue in the established narrative voice, matching tense and perspective. Avoid meta commentary.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
+
+    return response.text?.trim() || '...';
+  } catch (error) {
+    console.error('Continuation generation failed', error);
+    return '...';
+  }
+};
+
 export const getContextualHelp = async (text: string, type: 'Explain' | 'Thesaurus', _signal?: AbortSignal): Promise<{ result: string; usage?: UsageMetadata }> => {
   const model = ModelConfig.tools; 
   

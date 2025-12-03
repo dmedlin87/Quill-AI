@@ -47,7 +47,7 @@ import {
   ContinueWritingCommand,
 } from '@/services/commands/generation';
 // Types imported from @/types as needed
-import { rewriteText } from '@/services/gemini/agent';
+import { generateContinuation as generateGeminiContinuation, rewriteText } from '@/services/gemini/agent';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTEXT TYPES
@@ -481,8 +481,12 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return result.result[0] || text;
         },
         generateContinuation: async (context: string) => {
-          // TODO: Implement actual continuation via Gemini
-          return `[AI continuation based on context...]`;
+          const continuation = await generateGeminiContinuation({
+            context,
+            selection: editor.selectionRange,
+          });
+
+          return continuation;
         },
       });
     },

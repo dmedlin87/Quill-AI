@@ -76,6 +76,8 @@ vi.mock('@/services/commands/knowledge', () => ({
   GetCharacterInfoCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('character') })),
 }));
 
+const continueExecuteMock = vi.fn();
+
 vi.mock('@/services/commands/ui', () => ({
   SwitchPanelCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('panel') })),
   ToggleZenModeCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('zen') })),
@@ -85,10 +87,15 @@ vi.mock('@/services/commands/ui', () => ({
 
 vi.mock('@/services/commands/generation', () => ({
   RewriteSelectionCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('rewrite') })),
-  ContinueWritingCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('continue') })),
+  ContinueWritingCommand: vi.fn().mockImplementation(() => ({ execute: continueExecuteMock })),
 }));
 
-vi.mock('@/services/gemini/agent', () => ({ rewriteText: vi.fn() }));
+const generateContinuationMock = vi.fn();
+
+vi.mock('@/services/gemini/agent', () => ({
+  rewriteText: vi.fn(),
+  generateContinuation: (...args: any[]) => generateContinuationMock(...args),
+}));
 
 const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <AppBrainProvider>{children}</AppBrainProvider>
@@ -97,6 +104,9 @@ const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 describe('AppBrainContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    continueExecuteMock.mockReset();
+    continueExecuteMock.mockResolvedValue('continue');
+    generateContinuationMock.mockReset();
   });
 
   it('exposes state and actions from provider', async () => {
@@ -114,5 +124,25 @@ describe('AppBrainContext', () => {
       expect.objectContaining({ currentText: 'Hello world' }),
     );
     expect(result.current.subscribe).toBeTypeOf('function');
+  });
+
+  it('invokes gemini continuation when continuing writing', async () => {
+    continueExecuteMock.mockImplementation(async (_params, deps) => {
+      return deps.generateContinuation('recent-context');
+    });
+    generateContinuationMock.mockResolvedValue('Continuation content');
+
+    const { result } = renderHook(() => useAppBrain(), { wrapper });
+
+    await act(async () => {
+      await result.current.actions.continueWriting();
+    });
+
+    expect(generateContinuationMock).toHaveBeenCalledTimes(1);
+    const [args] = generateContinuationMock.mock.calls[0];
+    expect(args.context).toBe('recent-context');
+    expect(args.selection).toEqual(
+      expect.objectContaining({ text: 'Hello', start: 0, end: 5 })
+    );
   });
 });
