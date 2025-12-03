@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Branch, Chapter } from '@/types/schema';
+import { useProjectStore } from '@/features/project';
 
 interface UseEditorBranchingResult {
   branches: Branch[];
@@ -17,11 +18,34 @@ export const useEditorBranching = (
   currentText: string,
   updateText: (text: string) => void,
 ): UseEditorBranchingResult => {
+  const { updateChapterBranchState } = useProjectStore(state => ({
+    updateChapterBranchState: state.updateChapterBranchState,
+  }));
+
+  const activeChapterId = activeChapter?.id;
+
   const [branches, setBranches] = useState<Branch[]>(activeChapter?.branches || []);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(
     activeChapter?.activeBranchId ?? null,
   );
   const [mainContent, setMainContent] = useState<string>(activeChapter?.content || '');
+
+  const persistBranchState = useCallback(
+    (
+      nextBranches: Branch[],
+      nextActiveBranchId: string | null,
+      nextContent?: string,
+    ): Promise<void> => {
+      if (!activeChapterId) return Promise.resolve();
+
+      return updateChapterBranchState(activeChapterId, {
+        branches: nextBranches,
+        activeBranchId: nextActiveBranchId,
+        ...(nextContent !== undefined ? { content: nextContent } : {}),
+      });
+    },
+    [activeChapterId, updateChapterBranchState],
+  );
 
   useEffect(() => {
     if (activeChapter) {
@@ -45,10 +69,13 @@ export const useEditorBranching = (
         createdAt: Date.now(),
       };
 
-      setBranches(prev => [...prev, newBranch]);
-      // Persistence handled elsewhere (TODO in original context)
+      setBranches(prev => {
+        const nextBranches = [...prev, newBranch];
+        persistBranchState(nextBranches, activeBranchId);
+        return nextBranches;
+      });
     },
-    [currentText],
+    [activeBranchId, currentText, persistBranchState],
   );
 
   const switchBranch = useCallback(
@@ -57,6 +84,7 @@ export const useEditorBranching = (
         // Switch to main
         setActiveBranchId(null);
         updateText(mainContent);
+        persistBranchState(branches, null);
         return;
       }
 
@@ -64,9 +92,10 @@ export const useEditorBranching = (
       if (branch) {
         setActiveBranchId(branchId);
         updateText(branch.content);
+        persistBranchState(branches, branchId);
       }
     },
-    [branches, mainContent, updateText],
+    [branches, mainContent, persistBranchState, updateText],
   );
 
   const mergeBranch = useCallback(
@@ -76,9 +105,10 @@ export const useEditorBranching = (
         setMainContent(branch.content);
         updateText(branch.content);
         setActiveBranchId(null);
+        persistBranchState(branches, null, branch.content);
       }
     },
-    [branches, updateText],
+    [branches, persistBranchState, updateText],
   );
 
   const deleteBranch = useCallback(
@@ -88,16 +118,22 @@ export const useEditorBranching = (
         updateText(mainContent);
       }
 
-      setBranches(prev => prev.filter(b => b.id !== branchId));
+      setBranches(prev => {
+        const nextBranches = prev.filter(b => b.id !== branchId);
+        persistBranchState(nextBranches, activeBranchId === branchId ? null : activeBranchId);
+        return nextBranches;
+      });
     },
-    [activeBranchId, mainContent, updateText],
+    [activeBranchId, mainContent, persistBranchState, updateText],
   );
 
   const renameBranch = useCallback((branchId: string, newName: string) => {
-    setBranches(prev =>
-      prev.map(b => (b.id === branchId ? { ...b, name: newName } : b)),
-    );
-  }, []);
+    setBranches(prev => {
+      const nextBranches = prev.map(b => (b.id === branchId ? { ...b, name: newName } : b));
+      persistBranchState(nextBranches, activeBranchId);
+      return nextBranches;
+    });
+  }, [activeBranchId, persistBranchState]);
 
   useEffect(() => {
     if (activeBranchId === null) {
@@ -105,14 +141,24 @@ export const useEditorBranching = (
       return;
     }
 
-    setBranches(prev =>
-      prev.map(branch =>
-        branch.id === activeBranchId && branch.content !== currentText
-          ? { ...branch, content: currentText }
-          : branch,
-      ),
-    );
-  }, [activeBranchId, currentText]);
+    setBranches(prev => {
+      let hasChanges = false;
+
+      const nextBranches = prev.map(branch => {
+        if (branch.id === activeBranchId && branch.content !== currentText) {
+          hasChanges = true;
+          return { ...branch, content: currentText };
+        }
+        return branch;
+      });
+
+      if (hasChanges) {
+        persistBranchState(nextBranches, activeBranchId);
+      }
+
+      return hasChanges ? nextBranches : prev;
+    });
+  }, [activeBranchId, currentText, persistBranchState]);
 
   const isOnMain = !activeBranchId;
 

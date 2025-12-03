@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db } from '@/services/db';
-import { Project, Chapter, Lore, ManuscriptIndex } from '@/types/schema';
+import { Project, Chapter, Lore, ManuscriptIndex, Branch } from '@/types/schema';
 import { AnalysisResult } from '@/types';
 import { ParsedChapter } from '@/services/manuscriptParser';
 import { createEmptyIndex } from '@/services/manuscriptIndexer';
@@ -25,6 +25,10 @@ interface ProjectState {
   updateChapterContent: (chapterId: string, content: string) => Promise<void>;
   updateChapterTitle: (chapterId: string, title: string) => Promise<void>;
   updateChapterAnalysis: (chapterId: string, analysis: AnalysisResult) => Promise<void>;
+  updateChapterBranchState: (
+    chapterId: string,
+    updates: { branches?: Branch[]; activeBranchId?: string | null; content?: string }
+  ) => Promise<void>;
   updateProjectLore: (projectId: string, lore: Lore) => Promise<void>;
   updateManuscriptIndex: (projectId: string, index: ManuscriptIndex) => Promise<void>;
   deleteChapter: (chapterId: string) => Promise<void>;
@@ -355,20 +359,51 @@ export const useProjectStore = create<ProjectState>((set, get) => {
 
   updateChapterTitle: async (chapterId, title) => {
     set(state => ({
-        chapters: state.chapters.map(c => 
+        chapters: state.chapters.map(c =>
             c.id === chapterId ? { ...c, title, updatedAt: Date.now() } : c
         )
     }));
     await db.chapters.update(chapterId, { title, updatedAt: Date.now() });
   },
-  
+
   updateChapterAnalysis: async (chapterId, analysis) => {
     set(state => ({
-        chapters: state.chapters.map(c => 
+        chapters: state.chapters.map(c =>
             c.id === chapterId ? { ...c, lastAnalysis: analysis } : c
         )
     }));
     await db.chapters.update(chapterId, { lastAnalysis: analysis });
+  },
+
+  updateChapterBranchState: async (chapterId, updates) => {
+    const updatedAt = Date.now();
+
+    set(state => ({
+      chapters: state.chapters.map(c =>
+        c.id === chapterId
+          ? {
+              ...c,
+              ...(updates.branches !== undefined ? { branches: updates.branches } : {}),
+              ...(updates.activeBranchId !== undefined
+                ? { activeBranchId: updates.activeBranchId }
+                : {}),
+              ...(updates.content !== undefined ? { content: updates.content } : {}),
+              updatedAt,
+            }
+          : c,
+      ),
+    }));
+
+    const chapter = get().chapters.find(c => c.id === chapterId) || (await db.chapters.get(chapterId));
+    const projectId = chapter?.projectId;
+
+    await runProjectChapterTransaction(async () => {
+      await db.chapters.update(chapterId, { ...updates, updatedAt });
+
+      if (projectId) {
+        await db.projects.update(projectId, { updatedAt });
+      }
+    });
   },
 
   updateProjectLore: async (projectId, lore) => {

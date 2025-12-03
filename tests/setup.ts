@@ -305,6 +305,7 @@ const createDefaultProjectState = () => ({
   updateChapterContent: vi.fn(),
   updateChapterTitle: vi.fn(),
   updateChapterAnalysis: vi.fn(),
+  updateChapterBranchState: vi.fn(),
   updateManuscriptIndex: vi.fn(),
 });
 

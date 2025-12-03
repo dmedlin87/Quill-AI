@@ -24,6 +24,7 @@ vi.mock('@/features/project', () => ({
   useProjectStore: () => ({
     activeChapterId: 'chapter-1',
     updateChapterContent: vi.fn(),
+    updateChapterBranchState: vi.fn(),
     getActiveChapter: mockGetActiveChapter,
   }),
 }));
