@@ -119,6 +119,7 @@ const baseEngineState = () => ({
     acceptDiff: vi.fn(),
     rejectDiff: vi.fn(),
     handleAgentAction: vi.fn(),
+    handleFixWithAgent: vi.fn(),
   },
 });
 

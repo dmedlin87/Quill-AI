@@ -122,7 +122,7 @@ describe('MainLayout', () => {
 
     mockUseEngine.mockReturnValue({
       state: { isAnalyzing: false, isMagicLoading: false, analysisWarning: null },
-      actions: { handleAgentAction: vi.fn() },
+      actions: { handleAgentAction: vi.fn(), handleFixWithAgent: vi.fn() },
     });
   };
 

@@ -38,6 +38,7 @@ export interface EngineActions {
   applyVariation: (text: string) => void;
   closeMagicBar: () => void;
   handleAgentAction: (action: string, params: any) => Promise<string>;
+  handleFixWithAgent: (issue: string, suggestion: string, quote?: string) => Promise<string>;
   acceptDiff: () => void;
   rejectDiff: () => void;
 }

@@ -128,6 +128,7 @@ describe('EditorLayout', () => {
         acceptDiff: vi.fn(),
         rejectDiff: vi.fn(),
         handleAgentAction: vi.fn(),
+        handleFixWithAgent: vi.fn(),
       },
     });
   };

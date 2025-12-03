@@ -101,7 +101,10 @@ describe('features/layout/MainLayout', () => {
       theme: 'light',
     }));
     setupProjectStore(true);
-    mockUseEngine.mockReturnValue({ state: { isAnalyzing: false, isMagicLoading: false } });
+    mockUseEngine.mockReturnValue({
+      state: { isAnalyzing: false, isMagicLoading: false },
+      actions: { handleFixWithAgent: vi.fn(), handleAgentAction: vi.fn() },
+    });
     mockUseEditorState.mockReturnValue({ isZenMode: false });
     mockUseEditorActions.mockReturnValue({ toggleZenMode });
   });

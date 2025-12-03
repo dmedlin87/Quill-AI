@@ -86,6 +86,7 @@ describe('EditorWorkspace', () => {
 
   const setupMocks = (overridesEditor: Record<string, any> = {}, overridesEngine: Record<string, any> = {}) => {
     const { dismissComment: overrideDismissComment, ...editorStateOverrides } = overridesEditor;
+    const { handleFixWithAgent: overrideFixWithAgent, ...engineOverrides } = overridesEngine;
 
     mockUseProjectStore.mockReturnValue({
       currentProject: { id: 'p1', title: 'Test Project', setting: { timePeriod: 'Modern', location: 'City' } },
@@ -156,8 +157,10 @@ describe('EditorWorkspace', () => {
         closeMagicBar: vi.fn(),
         acceptDiff: vi.fn(),
         rejectDiff: vi.fn(),
+        handleAgentAction: vi.fn(),
+        handleFixWithAgent: overrideFixWithAgent || vi.fn(),
       },
-      ...overridesEngine,
+      ...engineOverrides,
     });
   };
 
@@ -320,6 +323,8 @@ describe('EditorWorkspace', () => {
       onFixWithAgent('Grammar', 'Fix it', 'bad text');
     });
     expect(screen.queryByTestId('comment-card')).not.toBeInTheDocument();
+    const engineActions = mockUseEngine.mock.results[0].value.actions;
+    expect(engineActions.handleFixWithAgent).toHaveBeenCalledWith('Grammar', 'Fix it', 'bad text');
 
     // Re-open for next test
     React.act(() => {

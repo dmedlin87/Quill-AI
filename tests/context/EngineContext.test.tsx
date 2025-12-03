@@ -73,6 +73,7 @@ beforeEach(() => {
     applyVariation: vi.fn(),
     closeMagicBar: vi.fn(),
     handleAgentAction: vi.fn(),
+    handleFixWithAgent: vi.fn(),
     acceptDiff: vi.fn(),
     rejectDiff: vi.fn()
   };

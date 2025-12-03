@@ -199,7 +199,7 @@ export function useQuillAIEngine({
   }, []);
 
   const handleAgentAction = useCallback(async (
-    action: AgentAction['action'] | string, 
+    action: AgentAction['action'] | string,
     params: AgentAction['params'] | Record<string, unknown>
   ): Promise<string> => {
     // Check if this is a memory tool first
@@ -268,6 +268,20 @@ export function useQuillAIEngine({
     return "Unknown action.";
   }, [getCurrentText, projectId]);
 
+  const handleFixWithAgent = useCallback(
+    (issue: string, suggestion: string, quote?: string) => {
+      const search_text = quote || issue;
+      const description = `Agent Fix: ${issue}`;
+
+      return handleAgentAction('update_manuscript', {
+        search_text,
+        replacement_text: suggestion,
+        description,
+      });
+    },
+    [handleAgentAction]
+  );
+
   return {
     state: {
       isAnalyzing,
@@ -282,6 +296,7 @@ export function useQuillAIEngine({
       cancelAnalysis,
       ...magicActions,
       handleAgentAction,
+      handleFixWithAgent,
       acceptDiff,
       rejectDiff
     }
