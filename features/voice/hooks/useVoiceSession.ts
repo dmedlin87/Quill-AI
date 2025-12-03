@@ -32,7 +32,7 @@ export interface UseVoiceSessionResult {
   error: string | null;
   
   // Actions
-  startSession: () => Promise<void>;
+  startSession: (options?: { restart?: boolean }) => Promise<void>;
   stopSession: () => void;
   
   // Refs for visualizer
@@ -168,7 +168,15 @@ export function useVoiceSession(): UseVoiceSessionResult {
   /**
    * Start a new voice session using AudioWorklet for main-thread performance
    */
-  const startSession = useCallback(async () => {
+  const startSession = useCallback(async (options?: { restart?: boolean }) => {
+    if (isConnectedRef.current) {
+      if (!options?.restart) {
+        return;
+      }
+
+      stopSession();
+    }
+
     try {
       setError(null);
 
