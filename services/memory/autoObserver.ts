@@ -37,6 +37,8 @@ export interface AutoObserverOptions {
   deduplicateEnabled?: boolean;
   /** Optional pre-fetched project memories used for duplicate detection */
   existingMemories?: MemoryNote[];
+  /** Optional override for duplicate detection (useful for testing) */
+  duplicateChecker?: typeof isDuplicate;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -46,7 +48,7 @@ export interface AutoObserverOptions {
 /**
  * Check if a similar observation already exists
  */
-async function isDuplicate(
+export async function isDuplicate(
   text: string,
   tags: string[],
   existing: MemoryNote[]
@@ -88,6 +90,7 @@ async function observeCharacters(
   characters: CharacterProfile[],
   options: AutoObserverOptions
 ): Promise<ObservationResult> {
+  const duplicateChecker = options.duplicateChecker ?? isDuplicate;
   const { projectId, minImportance = 0.4, deduplicateEnabled = true, existingMemories } = options;
   const result: ObservationResult = { created: [], skipped: 0, errors: [] };
   
@@ -99,7 +102,7 @@ async function observeCharacters(
       const arcText = `${char.name}'s arc: ${char.arc}`;
       const tags = [charTag, 'arc'];
       
-      if (deduplicateEnabled && existingMemories && await isDuplicate(arcText, tags, existingMemories)) {
+      if (deduplicateEnabled && existingMemories && await duplicateChecker(arcText, tags, existingMemories)) {
         result.skipped++;
       } else {
         try {
@@ -126,7 +129,7 @@ async function observeCharacters(
         const relText = `${char.name} has relationship with ${relName}${relType}`;
         const tags = [charTag, `character:${relName.toLowerCase()}`, 'relationship'];
         
-        if (deduplicateEnabled && existingMemories && await isDuplicate(relText, tags, existingMemories)) {
+        if (deduplicateEnabled && existingMemories && await duplicateChecker(relText, tags, existingMemories)) {
           result.skipped++;
         } else {
           try {
@@ -152,7 +155,7 @@ async function observeCharacters(
         const issueText = `Inconsistency in ${char.name}: ${issue.issue}`;
         const tags = [charTag, 'inconsistency', 'issue'];
         
-        if (deduplicateEnabled && existingMemories && await isDuplicate(issueText, tags, existingMemories)) {
+        if (deduplicateEnabled && existingMemories && await duplicateChecker(issueText, tags, existingMemories)) {
           result.skipped++;
         } else {
           try {
@@ -177,7 +180,7 @@ async function observeCharacters(
       const devText = `Suggestion for ${char.name}: ${char.developmentSuggestion}`;
       const tags = [charTag, 'development', 'suggestion'];
       
-      if (deduplicateEnabled && existingMemories && await isDuplicate(devText, tags, existingMemories)) {
+      if (deduplicateEnabled && existingMemories && await duplicateChecker(devText, tags, existingMemories)) {
         result.skipped++;
       } else {
         try {
@@ -218,6 +221,7 @@ async function observePlotIssues(
   plotIssues: PlotIssue[],
   options: AutoObserverOptions
 ): Promise<ObservationResult> {
+  const duplicateChecker = options.duplicateChecker ?? isDuplicate;
   const { projectId, deduplicateEnabled = true, existingMemories } = options;
   const result: ObservationResult = { created: [], skipped: 0, errors: [] };
   
@@ -229,7 +233,7 @@ async function observePlotIssues(
     const tags = ['plot', 'issue'];
     if (issue.location) tags.push(`location:${issue.location.toLowerCase()}`);
     
-    if (deduplicateEnabled && existingMemories && await isDuplicate(issueText, tags, existingMemories)) {
+    if (deduplicateEnabled && existingMemories && await duplicateChecker(issueText, tags, existingMemories)) {
       result.skipped++;
     } else {
       try {
@@ -274,6 +278,7 @@ async function observePacingFromAnalysis(
   pacing: PacingData,
   options: AutoObserverOptions
 ): Promise<ObservationResult> {
+  const duplicateChecker = options.duplicateChecker ?? isDuplicate;
   const { projectId, deduplicateEnabled = true, existingMemories } = options;
   const result: ObservationResult = { created: [], skipped: 0, errors: [] };
   
@@ -284,7 +289,7 @@ async function observePacingFromAnalysis(
     const issueText = `Pacing (slow): ${description}`;
     const tags = ['pacing', 'slow'];
     
-    if (deduplicateEnabled && existingMemories && await isDuplicate(issueText, tags, existingMemories)) {
+    if (deduplicateEnabled && existingMemories && await duplicateChecker(issueText, tags, existingMemories)) {
       result.skipped++;
     } else {
       try {
@@ -310,7 +315,7 @@ async function observePacingFromAnalysis(
     const issueText = `Pacing (rushed): ${description}`;
     const tags = ['pacing', 'fast'];
     
-    if (deduplicateEnabled && existingMemories && await isDuplicate(issueText, tags, existingMemories)) {
+    if (deduplicateEnabled && existingMemories && await duplicateChecker(issueText, tags, existingMemories)) {
       result.skipped++;
     } else {
       try {
@@ -343,6 +348,7 @@ export async function observeAnalysisResults(
   analysis: AnalysisResult,
   options: AutoObserverOptions
 ): Promise<ObservationResult> {
+  const duplicateChecker = options.duplicateChecker ?? isDuplicate;
   const { projectId, maxObservations = 20, deduplicateEnabled = true } = options;
   const combined: ObservationResult = { created: [], skipped: 0, errors: [] };
   
@@ -358,6 +364,7 @@ export async function observeAnalysisResults(
   const dedupeOptions: AutoObserverOptions = {
     ...options,
     existingMemories,
+    duplicateChecker,
   };
   
   // 1. Character observations
@@ -407,6 +414,7 @@ export async function observeIntelligenceResults(
   intelligence: ManuscriptIntelligence,
   options: AutoObserverOptions
 ): Promise<ObservationResult> {
+  const duplicateChecker = options.duplicateChecker ?? isDuplicate;
   const { projectId, deduplicateEnabled = true } = options;
   const result: ObservationResult = { created: [], skipped: 0, errors: [] };
   
@@ -434,7 +442,7 @@ export async function observeIntelligenceResults(
           'relationship',
         ];
         
-        if (deduplicateEnabled && existingMemories && await isDuplicate(relText, tags, existingMemories)) {
+        if (deduplicateEnabled && existingMemories && await duplicateChecker(relText, tags, existingMemories)) {
           result.skipped++;
         } else {
           try {
@@ -462,7 +470,7 @@ export async function observeIntelligenceResults(
       const promiseText = `Open plot thread (${promise.type}): ${promise.description}`;
       const tags = ['plot-thread', 'open', promise.type];
       
-      if (deduplicateEnabled && existingMemories && await isDuplicate(promiseText, tags, existingMemories)) {
+      if (deduplicateEnabled && existingMemories && await duplicateChecker(promiseText, tags, existingMemories)) {
         result.skipped++;
       } else {
         try {

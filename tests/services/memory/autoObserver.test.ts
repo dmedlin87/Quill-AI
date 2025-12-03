@@ -15,9 +15,11 @@ describe('AutoObserver Service', () => {
   const projectId = 'test-project';
   const mockCreateMemory = memoryService.createMemory as Mock;
   const mockGetMemories = memoryService.getMemories as Mock;
+  const mockIsDuplicate = vi.spyOn(autoObserver as any, 'isDuplicate');
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsDuplicate.mockReset();
     mockCreateMemory.mockResolvedValue({ id: 'new-memory-id', text: 'test' });
     mockGetMemories.mockResolvedValue([]);
   });
@@ -96,6 +98,139 @@ describe('AutoObserver Service', () => {
       expect(result.skipped).toBe(1);
       expect(result.created).toHaveLength(0);
       expect(mockCreateMemory).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('observeAnalysisResults', () => {
+    it('skips duplicates when deduplication is enabled', async () => {
+      const analysis: AnalysisResult = {
+        characters: [{
+          name: 'Hero',
+          arc: 'Starts weak, becomes strong and learns from mistakes.',
+          relationships: [],
+          inconsistencies: [],
+          developmentSuggestion: ''
+        }],
+        plotIssues: [{ issue: 'Plot hole here', location: 'Chapter 1' }],
+        pacing: {
+          score: 0.5,
+          analysis: 'Okay',
+          slowSections: [{ description: 'Chapter 2 is slow' }],
+          fastSections: []
+        },
+        timestamp: Date.now()
+      } as any;
+
+      mockIsDuplicate.mockResolvedValue(true);
+
+      const result = await autoObserver.observeAnalysisResults(analysis, {
+        projectId,
+        deduplicateEnabled: true,
+        existingMemories: [],
+        duplicateChecker: mockIsDuplicate as any,
+      });
+
+      expect(mockIsDuplicate).toHaveBeenCalled();
+      expect(result.skipped).toBeGreaterThan(0);
+      expect(result.created).toHaveLength(0);
+      expect(mockCreateMemory).not.toHaveBeenCalled();
+      expect(mockGetMemories).not.toHaveBeenCalled();
+    });
+
+    it('creates observations for characters, plot issues, and pacing data', async () => {
+      const analysis: AnalysisResult = {
+        characters: [{
+          name: 'Hero',
+          arc: 'Starts weak, becomes strong and learns from mistakes.',
+          relationships: [{ name: 'Sidekick', type: 'friend', description: 'Supports the hero' }],
+          inconsistencies: [{ issue: 'Sometimes forgets the plan' }],
+          developmentSuggestion: 'Give Hero more moments of doubt to deepen the arc.'
+        }],
+        plotIssues: [{
+          issue: 'Plot hole here',
+          location: 'Chapter 1',
+          suggestion: 'Clarify the motivation'
+        }],
+        pacing: {
+          score: 0.5,
+          analysis: 'Okay',
+          slowSections: [{ description: 'Chapter 2 is slow' }],
+          fastSections: ['Chapter 5 is rushed']
+        },
+        timestamp: Date.now()
+      } as any;
+
+      await autoObserver.observeAnalysisResults(analysis, { projectId, deduplicateEnabled: false });
+
+      expect(mockCreateMemory).toHaveBeenCalledWith(expect.objectContaining({
+        text: expect.stringContaining("Hero's arc: Starts weak"),
+        topicTags: expect.arrayContaining(['character:hero', 'arc'])
+      }));
+      expect(mockCreateMemory).toHaveBeenCalledWith(expect.objectContaining({
+        text: expect.stringContaining('Plot issue: Plot hole here'),
+        topicTags: expect.arrayContaining(['plot', 'issue'])
+      }));
+      expect(mockCreateMemory).toHaveBeenCalledWith(expect.objectContaining({
+        text: expect.stringContaining('Pacing (slow): Chapter 2 is slow'),
+        topicTags: expect.arrayContaining(['pacing', 'slow'])
+      }));
+      expect(mockCreateMemory).toHaveBeenCalledWith(expect.objectContaining({
+        text: expect.stringContaining('Pacing (rushed): Chapter 5 is rushed'),
+        topicTags: expect.arrayContaining(['pacing', 'fast'])
+      }));
+    });
+
+    it('truncates observations to maxObservations using highest importance values', async () => {
+      const analysis: AnalysisResult = {
+        characters: [{
+          name: 'Hero',
+          arc: 'Starts weak, becomes strong and learns from mistakes.',
+          relationships: [{ name: 'Sidekick', type: 'friend', description: 'Supports the hero' }],
+          inconsistencies: [{ issue: 'Sometimes forgets the plan' }],
+          developmentSuggestion: 'Give Hero more moments of doubt to deepen the arc.'
+        }],
+        plotIssues: [],
+        timestamp: Date.now()
+      } as any;
+
+      mockCreateMemory.mockImplementation(async payload => ({
+        id: payload.text,
+        text: payload.text,
+        importance: payload.importance,
+      }));
+
+      const result = await autoObserver.observeAnalysisResults(analysis, {
+        projectId,
+        maxObservations: 2,
+        deduplicateEnabled: false
+      });
+
+      expect(result.created).toHaveLength(2);
+      expect(result.created.map(item => item.importance)).toEqual([0.9, 0.7]);
+    });
+
+    it('collects creation errors while continuing other observations', async () => {
+      const analysis: AnalysisResult = {
+        characters: [{
+          name: 'Hero',
+          arc: 'Starts weak, becomes strong and learns from mistakes.',
+          relationships: [],
+          inconsistencies: [],
+          developmentSuggestion: ''
+        }],
+        plotIssues: [{ issue: 'Plot hole here', location: 'Chapter 1' }],
+        timestamp: Date.now()
+      } as any;
+
+      mockCreateMemory
+        .mockImplementationOnce(async () => { throw new Error('arc failure'); })
+        .mockResolvedValueOnce({ id: 'plot', text: 'plot', importance: 0.8 });
+
+      const result = await autoObserver.observeAnalysisResults(analysis, { projectId, deduplicateEnabled: false });
+
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('arc failure');
+      expect(result.created).toHaveLength(1);
     });
   });
 
@@ -192,6 +327,27 @@ describe('AutoObserver Service', () => {
         text: expect.stringContaining('Open plot thread (foreshadowing): Something bad'),
         topicTags: expect.arrayContaining(['plot-thread', 'open', 'foreshadowing'])
       }));
+    });
+
+    it('prefetches existing memories only when deduplication requires it', async () => {
+      const intelligence: ManuscriptIntelligence = {
+        entities: { nodes: [], edges: [] },
+        timeline: { promises: [], events: [], causalChains: [] }
+      } as any;
+
+      await autoObserver.observeIntelligenceResults(intelligence, {
+        projectId,
+        deduplicateEnabled: false
+      });
+
+      expect(mockGetMemories).not.toHaveBeenCalled();
+
+      await autoObserver.observeIntelligenceResults(intelligence, {
+        projectId,
+        deduplicateEnabled: true
+      });
+
+      expect(mockGetMemories).toHaveBeenCalledTimes(1);
     });
   });
 
