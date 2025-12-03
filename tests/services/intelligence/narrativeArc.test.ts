@@ -15,7 +15,7 @@ describe('Narrative Arc Analyzer', () => {
       entities: [],
       summary: `Summary ${index}`,
       timestamp: Date.now(),
-      type: 'scene',
+      type: 'action',
       pov: '3rd person',
       location: 'Location',
       timeMarker: 'Day 1',
