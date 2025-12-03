@@ -151,4 +151,46 @@ describe('useVoiceSession', () => {
     const contexts: MockAudioContext[] = (globalThis as any).__createdContexts;
     expect(contexts.every(ctx => ctx.state === 'closed')).toBe(true);
   });
+
+  it('short-circuits startSession when already connected', async () => {
+    const disconnect = vi.fn();
+    (connectLiveSession as MockedFunction<typeof connectLiveSession>).mockResolvedValue({ sendAudio: vi.fn(), disconnect } as any);
+
+    const { result } = renderHook(() => useVoiceSession());
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    const initialContexts = (globalThis as any).__createdContexts.length;
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    expect((navigator as any).mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+    expect((globalThis as any).__createdContexts).toHaveLength(initialContexts);
+    expect(stopTrack).not.toHaveBeenCalled();
+    expect(disconnect).not.toHaveBeenCalled();
+  });
+
+  it('restarts session when requested', async () => {
+    const disconnect = vi.fn();
+    (connectLiveSession as MockedFunction<typeof connectLiveSession>).mockResolvedValue({ sendAudio: vi.fn(), disconnect } as any);
+
+    const { result } = renderHook(() => useVoiceSession());
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    await act(async () => {
+      await result.current.startSession({ restart: true });
+    });
+
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect((navigator as any).mediaDevices.getUserMedia).toHaveBeenCalledTimes(2);
+    expect((globalThis as any).__createdContexts).toHaveLength(4);
+  });
 });
