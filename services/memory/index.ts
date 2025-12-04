@@ -406,6 +406,7 @@ export async function addGoal(input: CreateGoalInput): Promise<AgentGoal> {
   };
 
   await db.goals.add(goal);
+  await syncGoalLifecycleUpdate(goal.projectId, `Goal added: ${goal.title}`);
   return goal;
 }
 
@@ -467,6 +468,28 @@ export async function getGoals(
   return collection.toArray();
 }
 
+async function syncGoalLifecycleUpdate(
+  projectId: string,
+  planText: string
+): Promise<void> {
+  const chains = await import('./chains');
+  const [goals] = await Promise.all([
+    getGoals(projectId),
+    chains.getOrCreateBedsideNote(projectId),
+  ]);
+
+  const activeCount = goals.filter(goal => goal.status === 'active').length;
+  const totalCount = goals.length;
+  const annotatedPlanText =
+    totalCount > 0
+      ? `${planText} Active goals: ${activeCount}/${totalCount}.`
+      : `${planText} No remaining goals.`;
+
+  await chains.evolveBedsideNote(projectId, annotatedPlanText, {
+    changeReason: 'goal_lifecycle',
+  });
+}
+
 /**
  * Get a single goal by ID.
  */
@@ -485,14 +508,24 @@ export async function deleteGoal(id: string): Promise<void> {
  * Mark a goal as completed.
  */
 export async function completeGoal(id: string): Promise<AgentGoal> {
-  return updateGoal(id, { status: 'completed', progress: 100 });
+  const updated = await updateGoal(id, { status: 'completed', progress: 100 });
+  await syncGoalLifecycleUpdate(
+    updated.projectId,
+    `Goal completed: ${updated.title} — consider next steps.`
+  );
+  return updated;
 }
 
 /**
  * Abandon a goal.
  */
 export async function abandonGoal(id: string): Promise<AgentGoal> {
-  return updateGoal(id, { status: 'abandoned' });
+  const updated = await updateGoal(id, { status: 'abandoned' });
+  await syncGoalLifecycleUpdate(
+    updated.projectId,
+    `Goal abandoned: ${updated.title} — revisit priorities.`
+  );
+  return updated;
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
