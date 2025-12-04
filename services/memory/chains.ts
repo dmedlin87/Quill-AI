@@ -15,6 +15,7 @@ import {
   BedsideNoteConflict,
 } from './types';
 import { createMemory, getMemory, updateMemory, getMemories } from './index';
+import { embedBedsideNoteText } from './bedsideEmbeddings';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -260,12 +261,14 @@ export const evolveMemory = async (
     changeReason?: string;
     keepOriginal?: boolean;
     structuredContent?: Record<string, unknown>;
+    embedding?: number[];
   } = {}
 ): Promise<MemoryNote> => {
   const {
     changeType = 'update',
     changeReason,
     keepOriginal = true,
+    embedding,
   } = options;
   
   const existing = await getMemory(memoryId);
@@ -313,6 +316,7 @@ export const evolveMemory = async (
     ],
     importance: existing.importance,
     structuredContent: options.structuredContent ?? existing.structuredContent,
+    embedding: embedding ?? existing.embedding,
   });
   
   // Mark original as superseded
@@ -354,14 +358,19 @@ export const getOrCreateBedsideNote = async (
   const baseTags = new Set(BEDSIDE_NOTE_DEFAULT_TAGS);
   scopedTags.forEach(tag => baseTags.add(tag));
 
+  const text =
+    'Project planning notes for this manuscript. This note will be updated over time with key goals, concerns, and constraints.';
+
+  const embedding = await embedBedsideNoteText(text);
+
   return createMemory({
     scope: 'project',
     projectId,
     type: 'plan',
-    text:
-      'Project planning notes for this manuscript. This note will be updated over time with key goals, concerns, and constraints.',
+    text,
     topicTags: Array.from(baseTags),
     importance: 0.85,
+    embedding,
   });
 };
 
@@ -402,11 +411,14 @@ export const evolveBedsideNote = async (
     ];
   }
 
+  const embedding = await embedBedsideNoteText(newText);
+
   let evolved = await evolveMemory(base.id, newText, {
     changeType: 'update',
     changeReason: options.changeReason,
     keepOriginal: true,
     structuredContent,
+    embedding,
   });
 
   if (conflicts.length > 0) {

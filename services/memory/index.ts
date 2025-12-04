@@ -21,6 +21,8 @@ import type {
 // Re-export types for convenience
 export * from './types';
 export * from './bedsideNoteMutations';
+export * from './bedsideHistorySearch';
+export * from './bedsideEmbeddings';
 
 // ────────────────────────────────────────────────────────────────────────────────
 // MEMORY NOTES
