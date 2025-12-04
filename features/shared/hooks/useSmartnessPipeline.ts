@@ -22,9 +22,11 @@ import {
   getProactiveThinker,
   startProactiveThinker,
   stopProactiveThinker,
+  startSignificantEditMonitor,
+  stopSignificantEditMonitor,
   type ThinkingResult,
   type ThinkerState,
-} from '@/services/appBrain/proactiveThinker';
+} from '@/services/appBrain';
 import type { ProactiveSuggestion } from '@/services/memory/proactive';
 import type { AppBrainState } from '@/services/appBrain/types';
 
@@ -162,6 +164,17 @@ export function useSmartnessPipeline(
       stopProactiveThinker();
     };
   }, [projectId, enableProactiveThinker, thinkerDebounceMs, getState, handleSuggestion]);
+
+  // Significant edit monitoring
+  useEffect(() => {
+    if (!projectId) return;
+
+    startSignificantEditMonitor(projectId);
+
+    return () => {
+      stopSignificantEditMonitor();
+    };
+  }, [projectId]);
   
   const thinkNow = useCallback(async () => {
     const thinker = getProactiveThinker();
