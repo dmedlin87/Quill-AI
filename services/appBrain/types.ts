@@ -26,10 +26,12 @@ export interface ManuscriptState {
   projectTitle: string;
   chapters: Chapter[];
   activeChapterId: string | null;
+  activeArcId?: string | null;
   currentText: string;
   branches: Branch[];
   activeBranchId: string | null;
   setting?: { timePeriod: string; location: string };
+  arcs?: { id: string; title: string }[];
 }
 
 export interface IntelligenceState {

@@ -4,6 +4,7 @@
 // ────────────────────────────────────────────────────────────────────────────────
 
 import { db } from '../db';
+import { BEDSIDE_NOTE_TAG } from './types';
 import type {
   MemoryNote,
   MemoryScope,
@@ -607,10 +608,39 @@ export async function isEntityWatched(
  */
 export function formatMemoriesForPrompt(
   memories: { author: MemoryNote[]; project: MemoryNote[] },
-  options: { maxLength?: number } = {}
+  options: {
+    maxLength?: number;
+    chapterNames?: Record<string, string>;
+    arcNames?: Record<string, string>;
+    activeChapterId?: string | null;
+    activeArcId?: string | null;
+  } = {}
 ): string {
-  const { maxLength = 2000 } = options;
+  const { maxLength = 2000, chapterNames = {}, arcNames = {}, activeChapterId, activeArcId } = options;
   const lines: string[] = [];
+
+  const bedsideNotes = memories.project.filter(note => note.topicTags.includes(BEDSIDE_NOTE_TAG));
+  const otherProjectNotes = memories.project.filter(note => !note.topicTags.includes(BEDSIDE_NOTE_TAG));
+
+  const chapterNote = bedsideNotes.find(note =>
+    note.topicTags.some(tag => tag.startsWith('chapter:') && tag.replace('chapter:', '') === activeChapterId)
+  );
+
+  const arcNote = bedsideNotes.find(note =>
+    note.topicTags.some(tag => tag.startsWith('arc:') && tag.replace('arc:', '') === activeArcId)
+  );
+
+  const projectNote = bedsideNotes.find(note =>
+    !note.topicTags.some(tag => tag.startsWith('chapter:') || (tag.startsWith('arc:') && tag !== 'arc:story'))
+  ) || bedsideNotes[0];
+
+  const scopedBedsideNotes = [
+    { label: 'Project plan', note: projectNote },
+    activeArcId ? { label: `Arc plan (${arcNames[activeArcId] || activeArcId})`, note: arcNote } : null,
+    activeChapterId
+      ? { label: `Chapter plan (${chapterNames[activeChapterId] || activeChapterId})`, note: chapterNote }
+      : null,
+  ].filter(Boolean) as { label: string; note?: MemoryNote }[];
 
   // Author preferences
   if (memories.author.length > 0) {
@@ -625,9 +655,24 @@ export function formatMemoriesForPrompt(
   // Project notes
   if (memories.project.length > 0) {
     lines.push('## Project Memory');
-    for (const note of memories.project) {
-      const tags = note.topicTags.length > 0 ? ` [${note.topicTags.join(', ')}]` : '';
-      lines.push(`- (${note.type})${tags}: ${note.text}`);
+
+    if (scopedBedsideNotes.length > 0) {
+      lines.push('### Bedside Notes');
+      for (const entry of scopedBedsideNotes) {
+        if (entry.note) {
+          const tags = entry.note.topicTags.length > 0 ? ` [${entry.note.topicTags.join(', ')}]` : '';
+          lines.push(`- ${entry.label}${tags}: ${entry.note.text}`);
+        }
+      }
+      lines.push('');
+    }
+
+    if (otherProjectNotes.length > 0) {
+      lines.push('### Other Project Notes');
+      for (const note of otherProjectNotes) {
+        const tags = note.topicTags.length > 0 ? ` [${note.topicTags.join(', ')}]` : '';
+        lines.push(`- (${note.type})${tags}: ${note.text}`);
+      }
     }
   }
 

@@ -371,6 +371,84 @@ describe('adaptiveContext', () => {
 
       expect(evolveSpy).not.toHaveBeenCalled();
     });
+
+    it('merges project, arc, and chapter bedside notes hierarchically', async () => {
+      const stateWithArc = {
+        ...baseState,
+        manuscript: {
+          ...baseState.manuscript,
+          activeArcId: 'arc-1',
+          arcs: [{ id: 'arc-1', title: 'The Descent' }],
+        },
+      } as any;
+
+      const projectNote = {
+        id: 'bed-project',
+        scope: 'project',
+        projectId: 'p1',
+        type: 'plan',
+        text: 'Project bedside plan',
+        topicTags: ['meta:bedside-note'],
+        importance: 0.9,
+        createdAt: Date.now(),
+      };
+
+      const arcNote = {
+        ...projectNote,
+        id: 'bed-arc',
+        text: 'Arc bedside plan',
+        topicTags: ['meta:bedside-note', 'arc:arc-1'],
+      };
+
+      const chapterNote = {
+        ...projectNote,
+        id: 'bed-chapter',
+        text: 'Chapter bedside plan',
+        topicTags: ['meta:bedside-note', 'chapter:c1'],
+      };
+
+      vi.spyOn(memoryService, 'getMemories').mockResolvedValue([projectNote] as any);
+      vi
+        .spyOn(memoryService, 'getMemoriesForContext')
+        .mockResolvedValueOnce({
+          author: [],
+          project: [projectNote, arcNote, chapterNote],
+        } as any);
+
+      const manualFormatted = [
+        '## Project Memory',
+        '### Bedside Notes',
+        '- Project plan: Project bedside plan',
+        '- Arc plan (The Descent): Arc bedside plan',
+        '- Chapter plan (One): Chapter bedside plan',
+      ].join('\n');
+
+      const formatSpy = vi
+        .spyOn(memoryService, 'formatMemoriesForPrompt')
+        .mockReturnValue(manualFormatted);
+
+      vi.spyOn(memoryService, 'getActiveGoals').mockResolvedValue([] as any);
+      vi.spyOn(memoryService, 'formatGoalsForPrompt').mockReturnValue('');
+
+      await buildAdaptiveContext(stateWithArc, 'p1', {
+        budget: DEFAULT_BUDGET,
+        relevance: {},
+        sceneAwareMemory: false,
+      });
+
+      expect(formatSpy).toHaveBeenCalled();
+      const [passedMemories, formatOptions] = formatSpy.mock.calls[0];
+      expect((passedMemories as any).project.map((m: any) => m.id)).toEqual([
+        'bed-chapter',
+        'bed-arc',
+        'bed-project',
+      ]);
+      expect(formatOptions).toEqual(
+        expect.objectContaining({ activeArcId: 'arc-1', activeChapterId: 'c1' })
+      );
+      expect(formatSpy.mock.results[0]?.value as string).toContain('Arc plan (The Descent)');
+      expect(formatSpy.mock.results[0]?.value as string).toContain('Chapter plan (One)');
+    });
   });
 
   describe('estimateTokens', () => {

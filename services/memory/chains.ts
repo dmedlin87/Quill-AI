@@ -157,12 +157,19 @@ export const evolveMemory = async (
 
 export const getOrCreateBedsideNote = async (
   projectId: string,
+  options: { arcId?: string; chapterId?: string } = {},
 ): Promise<MemoryNote> => {
+  const { arcId, chapterId } = options;
+
+  const scopedTags = [BEDSIDE_NOTE_TAG];
+  if (chapterId) scopedTags.push(`chapter:${chapterId}`);
+  if (arcId) scopedTags.push(`arc:${arcId}`);
+
   const existing = await getMemories({
     scope: 'project',
     projectId,
     type: 'plan',
-    topicTags: [BEDSIDE_NOTE_TAG],
+    topicTags: scopedTags,
     limit: 1,
   });
 
@@ -170,13 +177,16 @@ export const getOrCreateBedsideNote = async (
     return existing[0];
   }
 
+  const baseTags = new Set(BEDSIDE_NOTE_DEFAULT_TAGS);
+  scopedTags.forEach(tag => baseTags.add(tag));
+
   return createMemory({
     scope: 'project',
     projectId,
     type: 'plan',
     text:
       'Project planning notes for this manuscript. This note will be updated over time with key goals, concerns, and constraints.',
-    topicTags: BEDSIDE_NOTE_DEFAULT_TAGS,
+    topicTags: Array.from(baseTags),
     importance: 0.85,
   });
 };
@@ -184,15 +194,63 @@ export const getOrCreateBedsideNote = async (
 export const evolveBedsideNote = async (
   projectId: string,
   newText: string,
-  options: { changeReason?: string; structuredContent?: BedsideNoteContent } = {},
+  options: {
+    changeReason?: string;
+    structuredContent?: BedsideNoteContent;
+    arcId?: string;
+    chapterId?: string;
+  } = {},
 ): Promise<MemoryNote> => {
-  const base = await getOrCreateBedsideNote(projectId);
-  return evolveMemory(base.id, newText, {
+  const base = await getOrCreateBedsideNote(projectId, {
+    arcId: options.arcId,
+    chapterId: options.chapterId,
+  });
+
+  const evolved = await evolveMemory(base.id, newText, {
     changeType: 'update',
     changeReason: options.changeReason,
     keepOriginal: true,
     structuredContent: options.structuredContent,
   });
+
+  // Roll up chapter-specific changes to parent scopes for broader visibility
+  if (options.changeReason !== 'roll_up') {
+    const rollupText = options.chapterId
+      ? `Chapter ${options.chapterId} update → ${newText}`
+      : options.arcId
+        ? `Arc ${options.arcId} update → ${newText}`
+        : null;
+
+    if (rollupText && options.chapterId) {
+      if (options.arcId) {
+        const arcBase = await getOrCreateBedsideNote(projectId, { arcId: options.arcId });
+        await evolveMemory(arcBase.id, rollupText, {
+          changeType: 'update',
+          changeReason: 'roll_up',
+          keepOriginal: true,
+          structuredContent: options.structuredContent,
+        });
+      }
+
+      const projectBase = await getOrCreateBedsideNote(projectId);
+      await evolveMemory(projectBase.id, rollupText, {
+        changeType: 'update',
+        changeReason: 'roll_up',
+        keepOriginal: true,
+        structuredContent: options.structuredContent,
+      });
+    } else if (rollupText && options.arcId) {
+      const projectBase = await getOrCreateBedsideNote(projectId);
+      await evolveMemory(projectBase.id, rollupText, {
+        changeType: 'update',
+        changeReason: 'roll_up',
+        keepOriginal: true,
+        structuredContent: options.structuredContent,
+      });
+    }
+  }
+
+  return evolved;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -127,4 +127,63 @@ describe('memory chains bedside-note helpers', () => {
     expect(createInput.structuredContent).toBe(structuredContent);
     expect(result.id).toBe('bed-evolved');
   });
+
+  it('rolls chapter bedside updates up to arc and project scopes', async () => {
+    const chapterNote: MemoryNote = {
+      id: 'bed-chapter',
+      scope: 'project',
+      projectId,
+      type: 'plan',
+      text: 'Chapter bedside',
+      topicTags: [BEDSIDE_NOTE_TAG, 'chapter:ch-1'],
+      importance: 0.8,
+      createdAt: Date.now(),
+    };
+
+    const arcNote: MemoryNote = {
+      ...chapterNote,
+      id: 'bed-arc',
+      topicTags: [BEDSIDE_NOTE_TAG, 'arc:arc-1'],
+    };
+
+    const projectNote: MemoryNote = {
+      ...chapterNote,
+      id: 'bed-project',
+      topicTags: [BEDSIDE_NOTE_TAG],
+    };
+
+    memoryMocks.getMemories
+      .mockResolvedValueOnce([chapterNote])
+      .mockResolvedValueOnce([arcNote])
+      .mockResolvedValueOnce([projectNote]);
+
+    memoryMocks.getMemory.mockImplementation(async (id: string) => {
+      if (id === chapterNote.id) return chapterNote;
+      if (id === arcNote.id) return arcNote;
+      if (id === projectNote.id) return projectNote;
+      return undefined;
+    });
+
+    memoryMocks.createMemory.mockImplementation(async (input: any) => ({
+      ...chapterNote,
+      ...input,
+      id: input.id || `${(input.topicTags || []).join('-')}-next`,
+      createdAt: Date.now(),
+    }));
+
+    memoryMocks.updateMemory.mockImplementation(async (_id: string, updates: any) => ({
+      ...chapterNote,
+      ...updates,
+    } as MemoryNote));
+
+    await chains.evolveBedsideNote(projectId, 'Fresh insight', {
+      chapterId: 'ch-1',
+      arcId: 'arc-1',
+    });
+
+    const rollupCalls = memoryMocks.createMemory.mock.calls.filter(([input]) =>
+      (input.topicTags || []).includes('change_reason:roll_up')
+    );
+    expect(rollupCalls.length).toBeGreaterThanOrEqual(2);
+  });
 });

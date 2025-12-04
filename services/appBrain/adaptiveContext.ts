@@ -631,13 +631,42 @@ const buildMemorySection = async (
       !note.topicTags.includes(BEDSIDE_NOTE_TAG)
     );
 
+    const activeChapterId = state.manuscript.activeChapterId || undefined;
+    const activeArcId = state.manuscript.activeArcId || undefined;
+    const chapterNames = Object.fromEntries(
+      (state.manuscript.chapters || []).map(ch => [ch.id, ch.title])
+    );
+    const arcNames = Object.fromEntries(
+      ((state.manuscript as any).arcs || []).map((arc: any) => [arc.id, arc.title])
+    );
+
+    const orderedBedsideNotes = [...refreshedBedsideNotes].sort((a, b) => {
+      const tagPriority = (note: typeof a) => {
+        const hasChapter = activeChapterId
+          ? note.topicTags.some(tag => tag === `chapter:${activeChapterId}`)
+          : false;
+        const hasArc = activeArcId
+          ? note.topicTags.some(tag => tag === `arc:${activeArcId}`)
+          : false;
+        if (hasChapter) return 0;
+        if (hasArc) return 1;
+        return 2;
+      };
+
+      return tagPriority(a) - tagPriority(b);
+    });
+
     const prioritizedMemories = {
       author: memories.author,
-      project: [...refreshedBedsideNotes, ...otherProjectNotes],
+      project: [...orderedBedsideNotes, ...otherProjectNotes],
     };
 
-    const formattedMemories = formatMemoriesForPrompt(prioritizedMemories, { 
-      maxLength: Math.floor(maxChars * 0.7) 
+    const formattedMemories = formatMemoriesForPrompt(prioritizedMemories, {
+      maxLength: Math.floor(maxChars * 0.7),
+      chapterNames,
+      arcNames,
+      activeChapterId,
+      activeArcId,
     });
     if (formattedMemories) {
       content += formattedMemories + '\n';
