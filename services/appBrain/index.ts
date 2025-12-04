@@ -96,6 +96,13 @@ export {
   type ThinkerState,
 } from './proactiveThinker';
 
+// Smartness Upgrade: Significant Edit Monitor
+export {
+  getSignificantEditMonitor,
+  startSignificantEditMonitor,
+  stopSignificantEditMonitor,
+} from './significantEditMonitor';
+
 export interface AppBrainValue {
   state: AppBrainState;
   context: AppBrainContext;
