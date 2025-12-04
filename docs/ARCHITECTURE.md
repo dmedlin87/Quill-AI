@@ -1,5 +1,18 @@
 # Quill AI Architecture
 
+## Overview
+
+- **Persistence layer:** Dexie-backed project and chapter store that holds long-lived manuscript data.
+- **Editor session layer:** React editor context for the active chapter, including history, selection, comments, and branches.
+- **AI engine layer:** Engine context that runs analysis, magic edits, token guarding, and manuscript indexing.
+- **Omniscient agent layer:** App Brain + agent tools that sit on top of the engine and can safely control the app.
+
+Related docs:
+
+- [Omniscient Agent Architecture](./AGENT_ARCHITECTURE.md)
+- [App Brain, Memory, and Intelligence Flow](./APP_BRAIN_FLOW.md)
+- [Token limits and analysis truncation](./token-limits.md)
+
 ## 1. State Hierarchy
 
 Quill AI separates state into three main layers to keep persistence, editor behavior, and AI processing concerns loosely coupled.

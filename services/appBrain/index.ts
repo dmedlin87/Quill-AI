@@ -47,7 +47,16 @@ export {
   VOICE_MODE_BUDGET,
   EDITING_BUDGET,
   DEEP_ANALYSIS_BUDGET,
+  // v1 Enhancement: Context Profiles & Model-aware budgets
+  getContextBudgetForModel,
+  selectContextProfile,
+  PROFILE_ALLOCATIONS,
+  type ContextProfile,
+  type AdaptiveContextOptions,
 } from './adaptiveContext';
+
+// v1 Enhancement: Smart Context (unified entry point)
+export { getSmartAgentContext, type SmartContextOptions } from './contextBuilder';
 
 // Enhancement 2B: Context Streaming
 export {

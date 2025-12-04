@@ -209,6 +209,114 @@ export async function getMemoriesForContext(
 }
 
 /**
+ * Options for filtering memories by relevance to current context.
+ */
+export interface MemoryRelevanceOptions {
+  /** Names of currently active entities (characters, locations) */
+  activeEntityNames?: string[];
+  /** Keywords from current selection or query */
+  selectionKeywords?: string[];
+  /** Boost memories related to the active chapter */
+  activeChapterId?: string;
+}
+
+/**
+ * Get memories filtered by relevance to current context.
+ * 
+ * This is an enhanced version of getMemoriesForContext that:
+ * - Always returns all author-scoped memories (global preferences)
+ * - Filters project memories by relevance to active entities, selection, etc.
+ * - Scores and sorts by relevance + importance
+ * 
+ * @param projectId - The project to get memories for
+ * @param relevance - Context relevance filters
+ * @param options - Limit and other options
+ */
+export async function getRelevantMemoriesForContext(
+  projectId: string,
+  relevance: MemoryRelevanceOptions = {},
+  options: { limit?: number } = {}
+): Promise<{ author: MemoryNote[]; project: MemoryNote[] }> {
+  const { limit = 50 } = options;
+  const { activeEntityNames = [], selectionKeywords = [], activeChapterId } = relevance;
+
+  // Fetch author memories (always fully relevant)
+  const authorNotes = await getMemories({ scope: 'author', limit });
+
+  // Fetch all project memories, then filter by relevance
+  const allProjectNotes = await getMemories({ scope: 'project', projectId });
+
+  // If no relevance filters, return all (sorted by importance)
+  if (activeEntityNames.length === 0 && selectionKeywords.length === 0) {
+    return {
+      author: authorNotes,
+      project: allProjectNotes.slice(0, limit),
+    };
+  }
+
+  // Normalize entity names and keywords for matching
+  const normalizedEntities = activeEntityNames.map(e => e.toLowerCase());
+  const normalizedKeywords = selectionKeywords.map(k => k.toLowerCase());
+
+  // Score each memory by relevance
+  const scoredNotes = allProjectNotes.map(note => {
+    let relevanceScore = 0;
+
+    // Check tag matches against entity names
+    for (const tag of note.topicTags) {
+      const normalizedTag = tag.toLowerCase();
+      // Extract entity name from prefixed tags like "character:seth"
+      const tagName = normalizedTag.includes(':') 
+        ? normalizedTag.split(':')[1] 
+        : normalizedTag;
+
+      if (normalizedEntities.some(entity => 
+        entity.includes(tagName) || tagName.includes(entity)
+      )) {
+        relevanceScore += 2; // Strong match for entity
+      }
+    }
+
+    // Check text content against keywords
+    const normalizedText = note.text.toLowerCase();
+    for (const keyword of normalizedKeywords) {
+      if (normalizedText.includes(keyword)) {
+        relevanceScore += 1; // Moderate match for keyword
+      }
+    }
+
+    // Boost high-importance notes
+    relevanceScore += note.importance;
+
+    return { note, relevanceScore };
+  });
+
+  // Filter to only relevant notes (score > 0) or fall back to all if nothing matches
+  let relevantNotes = scoredNotes.filter(s => s.relevanceScore > 0);
+  
+  // If no relevant notes found, include top by importance anyway
+  if (relevantNotes.length === 0) {
+    relevantNotes = scoredNotes;
+  }
+
+  // Sort by relevance score (desc), then importance (desc), then recency (desc)
+  relevantNotes.sort((a, b) => {
+    if (b.relevanceScore !== a.relevanceScore) {
+      return b.relevanceScore - a.relevanceScore;
+    }
+    if (b.note.importance !== a.note.importance) {
+      return b.note.importance - a.note.importance;
+    }
+    return b.note.createdAt - a.note.createdAt;
+  });
+
+  return {
+    author: authorNotes,
+    project: relevantNotes.slice(0, limit).map(s => s.note),
+  };
+}
+
+/**
  * Update an existing memory note.
  * 
  * @throws Error if note doesn't exist

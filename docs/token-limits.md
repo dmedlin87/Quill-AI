@@ -9,3 +9,9 @@ To avoid truncation:
 - Keep supplemental context (like lore or notes) concise.
 
 If you continue to hit limits, consider refactoring the scene or running multiple focused analyses instead of one long request.
+
+## Developer notes
+
+- Implementation: `services/gemini/tokenGuard.ts`, `config/models.ts`, and `config/api.ts` define limits and token-budget helpers.
+- UI reference: `public/token-limits.html` renders a small dev helper page for visualising limits.
+- When changing limits or budgets, keep this document and the Analysis panel warning text in sync.

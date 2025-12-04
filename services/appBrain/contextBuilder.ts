@@ -9,10 +9,19 @@ import { AppBrainState, AppBrainContext, AgentContextOptions } from './types';
 import { eventBus } from './eventBus';
 import {
   getMemoriesForContext,
+  getRelevantMemoriesForContext,
   getActiveGoals,
   formatMemoriesForPrompt,
   formatGoalsForPrompt,
+  type MemoryRelevanceOptions,
 } from '../memory';
+import {
+  buildAdaptiveContext,
+  getContextBudgetForModel,
+  selectContextProfile,
+  type ContextProfile,
+  type AdaptiveContextResult,
+} from './adaptiveContext';
 import { getCommandHistory } from '../commands/history';
 
 /**
@@ -444,3 +453,92 @@ export const createContextBuilder = (getState: () => AppBrainState): AppBrainCon
     getRecentEvents: (count?: number) => eventBus.getRecentEvents(count),
   };
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMART CONTEXT (v1 Enhancement: Token + Memory combo)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Options for getSmartAgentContext
+ */
+export interface SmartContextOptions {
+  /** Context profile to use. If not provided, will be auto-selected. */
+  profile?: ContextProfile;
+  /** Model role for budget calculation */
+  modelRole?: 'agent' | 'analysis';
+  /** Memory relevance filters */
+  relevance?: MemoryRelevanceOptions;
+  /** Interaction mode for auto profile selection */
+  mode?: 'text' | 'voice';
+  /** Query type hint for auto profile selection */
+  queryType?: 'editing' | 'analysis' | 'general';
+}
+
+/**
+ * Unified entry point for smart agent context.
+ * 
+ * Combines:
+ * - Model-aware token budgeting (from config/models.ts limits)
+ * - Automatic context profile selection based on interaction state
+ * - Relevance-filtered memory (prioritizes active entities, keywords)
+ * - Adaptive section building with truncation
+ * 
+ * This is the "one obvious way" to get context for agent prompts.
+ * 
+ * @param state - Current AppBrainState
+ * @param projectId - Project ID for memory retrieval
+ * @param options - Configuration options
+ * @returns AdaptiveContextResult with context string and diagnostics
+ */
+export async function getSmartAgentContext(
+  state: AppBrainState,
+  projectId: string | null,
+  options: SmartContextOptions = {}
+): Promise<AdaptiveContextResult> {
+  const {
+    modelRole = 'agent',
+    mode = 'text',
+    queryType = 'general',
+    relevance = {},
+  } = options;
+
+  // Auto-select profile if not provided
+  const profile = options.profile ?? selectContextProfile({
+    mode,
+    hasSelection: !!state.ui.selection,
+    queryType,
+  });
+
+  // Get budget from model config
+  const budget = getContextBudgetForModel(modelRole, profile);
+
+  // Build relevance options from state if not provided
+  const effectiveRelevance: MemoryRelevanceOptions = {
+    activeEntityNames: relevance.activeEntityNames ?? 
+      state.intelligence.hud?.context.activeEntities.map(e => e.name) ?? [],
+    selectionKeywords: relevance.selectionKeywords ?? 
+      (state.ui.selection?.text ? extractKeywords(state.ui.selection.text) : []),
+    activeChapterId: relevance.activeChapterId ?? state.manuscript.activeChapterId ?? undefined,
+  };
+
+  // Build context with adaptive budgeting
+  return buildAdaptiveContext(state, projectId, {
+    budget,
+    relevance: effectiveRelevance,
+  });
+}
+
+/**
+ * Extract simple keywords from text for memory matching.
+ * Returns unique words > 3 chars, lowercased, limited to 10.
+ */
+function extractKeywords(text: string): string[] {
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 3);
+  
+  // Deduplicate and limit
+  return [...new Set(words)].slice(0, 10);
+}

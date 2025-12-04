@@ -10,10 +10,13 @@ import { AppBrainState } from './types';
 import { eventBus } from './eventBus';
 import {
   getMemoriesForContext,
+  getRelevantMemoriesForContext,
   getActiveGoals,
   formatMemoriesForPrompt,
   formatGoalsForPrompt,
+  type MemoryRelevanceOptions,
 } from '../memory';
+import { ActiveModels, TokenLimits, type ModelId } from '../../config/models';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -99,6 +102,105 @@ export const DEEP_ANALYSIS_BUDGET: ContextBudget = {
     history: 0.05,
   },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTEXT PROFILES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Named context profiles for different interaction modes.
+ * Each profile maps to a budget configuration optimized for that use case.
+ */
+export type ContextProfile = 
+  | 'full'           // Default full context for general queries
+  | 'editing'        // Editing mode with selection emphasis
+  | 'voice'          // Compressed for voice/low-latency
+  | 'analysis_deep'; // Deep analysis with more intelligence/analysis sections
+
+/**
+ * Section allocation presets for each profile.
+ * These define the percentage distribution of token budget across sections.
+ */
+export const PROFILE_ALLOCATIONS: Record<ContextProfile, ContextBudget['sections']> = {
+  full: DEFAULT_BUDGET.sections,
+  editing: EDITING_BUDGET.sections,
+  voice: VOICE_MODE_BUDGET.sections,
+  analysis_deep: DEEP_ANALYSIS_BUDGET.sections,
+};
+
+/**
+ * Get a context budget derived from model configuration.
+ * 
+ * This pulls token limits from config/models.ts and applies appropriate
+ * reservations for response tokens, then combines with profile allocations.
+ * 
+ * @param modelRole - Which model role to use for limits ('agent' | 'analysis')
+ * @param profile - Context profile for section allocations
+ * @param options - Additional options
+ */
+export function getContextBudgetForModel(
+  modelRole: 'agent' | 'analysis' = 'agent',
+  profile: ContextProfile = 'full',
+  options: {
+    /** Tokens to reserve for model response */
+    reserveForResponse?: number;
+    /** Maximum context budget even if model allows more */
+    maxBudget?: number;
+  } = {}
+): ContextBudget {
+  const { reserveForResponse = 4000, maxBudget = 16000 } = options;
+  
+  // Get model definition and its token limit
+  const modelDef = ActiveModels[modelRole];
+  const modelLimit = modelDef.maxTokens ?? TokenLimits[modelDef.id as ModelId] ?? 32_000;
+  
+  // Calculate available tokens after reserving for response
+  const availableTokens = Math.max(0, modelLimit - reserveForResponse);
+  
+  // Cap at maxBudget to avoid overwhelming context (even large models benefit from focused context)
+  const totalTokens = Math.min(availableTokens, maxBudget);
+  
+  // Get section allocations for the profile
+  const sections = PROFILE_ALLOCATIONS[profile];
+  
+  return {
+    totalTokens,
+    sections,
+  };
+}
+
+/**
+ * Automatically select the best context profile based on interaction state.
+ * 
+ * @param options - Current interaction state
+ * @returns The most appropriate ContextProfile
+ */
+export function selectContextProfile(options: {
+  mode: 'text' | 'voice';
+  hasSelection: boolean;
+  queryType?: 'editing' | 'analysis' | 'general';
+  conversationTurns?: number;
+}): ContextProfile {
+  const { mode, hasSelection, queryType, conversationTurns = 0 } = options;
+  
+  // Voice mode always uses compressed profile
+  if (mode === 'voice') {
+    return 'voice';
+  }
+  
+  // Explicit query type takes precedence
+  if (queryType === 'analysis') {
+    return 'analysis_deep';
+  }
+  
+  if (queryType === 'editing' || hasSelection) {
+    return 'editing';
+  }
+  
+  // Long conversations might benefit from more focused context
+  // but we default to full for general queries
+  return 'full';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOKEN ESTIMATION
@@ -295,7 +397,8 @@ const buildAnalysisSection = (state: AppBrainState, maxTokens: number): ContextS
 const buildMemorySection = async (
   state: AppBrainState, 
   projectId: string | null,
-  maxTokens: number
+  maxTokens: number,
+  relevance?: MemoryRelevanceOptions
 ): Promise<ContextSection> => {
   let content = '[AGENT MEMORY]\n';
   
@@ -311,8 +414,15 @@ const buildMemorySection = async (
   }
   
   try {
+    // Use relevance-filtered memories if relevance options provided
+    const memoriesPromise = relevance && (
+      relevance.activeEntityNames?.length || relevance.selectionKeywords?.length
+    )
+      ? getRelevantMemoriesForContext(projectId, relevance, { limit: 20 })
+      : getMemoriesForContext(projectId, { limit: 20 });
+    
     const [memories, goals] = await Promise.all([
-      getMemoriesForContext(projectId, { limit: 20 }),
+      memoriesPromise,
       getActiveGoals(projectId),
     ]);
     
@@ -413,13 +523,24 @@ const buildHistorySection = (state: AppBrainState, maxTokens: number): ContextSe
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Options for buildAdaptiveContext
+ */
+export interface AdaptiveContextOptions {
+  /** Token budget configuration */
+  budget?: ContextBudget;
+  /** Memory relevance filters */
+  relevance?: MemoryRelevanceOptions;
+}
+
+/**
  * Build context with adaptive token budgeting
  */
 export const buildAdaptiveContext = async (
   state: AppBrainState,
   projectId: string | null,
-  budget: ContextBudget = DEFAULT_BUDGET
+  options: AdaptiveContextOptions = {}
 ): Promise<AdaptiveContextResult> => {
+  const { budget = DEFAULT_BUDGET, relevance } = options;
   const sectionsIncluded: string[] = [];
   const sectionsTruncated: string[] = [];
   const sectionsOmitted: string[] = [];
@@ -440,7 +561,8 @@ export const buildAdaptiveContext = async (
   const memorySection = await buildMemorySection(
     state, 
     projectId,
-    Math.floor(budget.totalTokens * budget.sections.memory)
+    Math.floor(budget.totalTokens * budget.sections.memory),
+    relevance
   );
   const loreSection = buildLoreSection(
     state, 
