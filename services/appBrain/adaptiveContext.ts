@@ -21,7 +21,7 @@ import {
   BEDSIDE_NOTE_DEFAULT_TAGS,
   type MemoryRelevanceOptions,
 } from '../memory';
-import type { AgentGoal } from '../memory/types';
+import type { AgentGoal, BedsideNoteContent } from '../memory/types';
 import { ActiveModels, TokenLimits, type ModelId } from '../../config/models';
 import type { SceneType, Scene } from '../../types/intelligence';
 
@@ -630,6 +630,28 @@ const buildMemorySection = async (
     const otherProjectNotes = memories.project.filter(note =>
       !note.topicTags.includes(BEDSIDE_NOTE_TAG)
     );
+
+    const conflictNotes = refreshedBedsideNotes.filter(note =>
+      note.topicTags.includes('conflict:detected')
+    );
+    if (conflictNotes.length > 0) {
+      content += '[CONFLICT ALERT]\n';
+      for (const note of conflictNotes) {
+        const structured = (note.structuredContent || {}) as BedsideNoteContent;
+        const conflicts = structured.conflicts || [];
+
+        if (conflicts.length === 0) {
+          content += `• Conflicting updates detected in bedside note ${note.id}. Review history.\n`;
+          continue;
+        }
+
+        for (const conflict of conflicts) {
+          const resolution = conflict.resolution ?? 'unresolved';
+          content += `• Previous: "${conflict.previous}" | New: "${conflict.current}" (resolution: ${resolution})\n`;
+        }
+      }
+      content += '\n';
+    }
 
     const activeChapterId = state.manuscript.activeChapterId || undefined;
     const activeArcId = state.manuscript.activeArcId || undefined;

@@ -21,7 +21,7 @@ vi.mock('@/services/memory/index', async (importOriginal) => {
   };
 });
 
-const { getOrCreateBedsideNote, evolveBedsideNote } = chains;
+const { getOrCreateBedsideNote, evolveBedsideNote, detectBedsideNoteConflicts } = chains;
 
 describe('memory chains bedside-note helpers', () => {
   const projectId = 'proj-bedside';
@@ -79,6 +79,20 @@ describe('memory chains bedside-note helpers', () => {
     expect(result).toBe(existing);
   });
 
+  it('detectBedsideNoteConflicts flags contradictory statements with heuristics', async () => {
+    const conflicts = await detectBedsideNoteConflicts(
+      'Sarah has green eyes. Keep Sarah alive.',
+      'Sarah has blue eyes. Sarah must die.'
+    );
+
+    expect(conflicts.length).toBeGreaterThanOrEqual(1);
+    expect(conflicts[0]).toMatchObject({
+      previous: 'Sarah has blue eyes',
+      current: 'Sarah has green eyes',
+      strategy: 'heuristic',
+    });
+  });
+
   it('evolveBedsideNote delegates to evolveMemory with chain metadata', async () => {
     const base: MemoryNote = {
       id: 'bed-base',
@@ -124,9 +138,58 @@ describe('memory chains bedside-note helpers', () => {
         'change_reason:analysis_update',
       ])
     );
-    expect(createInput.structuredContent).toBe(structuredContent);
+    expect(createInput.structuredContent).toEqual(structuredContent);
     expect(result.id).toBe('bed-evolved');
   });
+
+  it.each(['auto', 'agent', 'user'] as const)(
+    'evolveBedsideNote tags conflicts and resolution path (%s)',
+    async resolutionStrategy => {
+      const base: MemoryNote = {
+        id: 'bed-base',
+        scope: 'project',
+        projectId,
+        type: 'plan',
+        text: 'Sarah has blue eyes. Keep Sarah alive.',
+        topicTags: BEDSIDE_NOTE_DEFAULT_TAGS,
+        importance: 0.8,
+        createdAt: Date.now() - 5000,
+      };
+
+      memoryMocks.getMemories.mockResolvedValueOnce([base]);
+      memoryMocks.getMemory.mockResolvedValueOnce(base);
+
+      let createdMemory: MemoryNote | undefined;
+      memoryMocks.createMemory.mockImplementation(async (input: any) => {
+        createdMemory = {
+          ...base,
+          ...input,
+          id: `bed-evolved-${resolutionStrategy}`,
+          createdAt: Date.now(),
+        } as MemoryNote;
+        return createdMemory;
+      });
+
+      memoryMocks.updateMemory.mockImplementation(async (_id: string, updates: any) => ({
+        ...(createdMemory as MemoryNote),
+        ...updates,
+      } as MemoryNote));
+
+      const result = await evolveBedsideNote(projectId, 'Sarah has green eyes. Sarah is not alive.', {
+        conflictResolution: resolutionStrategy,
+      });
+
+      expect(memoryMocks.createMemory).toHaveBeenCalledTimes(1);
+      const [createInput] = memoryMocks.createMemory.mock.calls[0];
+      expect(createInput.structuredContent?.conflicts?.[0]).toMatchObject({ resolution: resolutionStrategy });
+      expect(createInput.structuredContent?.warnings?.[0]).toContain('Conflict:');
+
+      expect(result.topicTags).toEqual(
+        expect.arrayContaining(['conflict:detected', `conflict:resolution:${resolutionStrategy}`])
+      );
+      expect((result.structuredContent as any)?.conflicts?.[0].resolution).toBe(resolutionStrategy);
+    }
+  );
 
   it('rolls chapter bedside updates up to arc and project scopes', async () => {
     const chapterNote: MemoryNote = {

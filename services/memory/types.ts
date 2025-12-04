@@ -47,6 +47,21 @@ export interface BedsideNoteContent {
   nextSteps?: string[];
   /** Continuity risks or contradictions to watch */
   warnings?: string[];
+  /** Conflicts detected when evolving the bedside note */
+  conflicts?: BedsideNoteConflict[];
+}
+
+export interface BedsideNoteConflict {
+  /** Statement from the previous bedside note version */
+  previous: string;
+  /** Statement from the new bedside note version */
+  current: string;
+  /** Confidence score for the conflict detection */
+  confidence: number;
+  /** Detection pathway */
+  strategy: 'heuristic' | 'llm';
+  /** How the conflict should be handled */
+  resolution?: 'auto' | 'agent' | 'user' | 'unresolved';
 }
 
 /**

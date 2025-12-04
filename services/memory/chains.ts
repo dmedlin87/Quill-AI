@@ -12,6 +12,7 @@ import {
   BEDSIDE_NOTE_TAG,
   BEDSIDE_NOTE_DEFAULT_TAGS,
   BedsideNoteContent,
+  BedsideNoteConflict,
 } from './types';
 import { createMemory, getMemory, updateMemory, getMemories } from './index';
 
@@ -42,6 +43,179 @@ export interface ChainMetadata {
   supersedes?: string; // Previous memory ID
   supersededBy?: string; // Next memory ID
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BEDSIDE NOTE CONFLICT DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CONTRADICTION_VERBS = [
+  'is',
+  'was',
+  'are',
+  'becomes',
+  'remains',
+  'stays',
+  'has',
+  'have',
+  'owns',
+];
+
+const CONTRADICTION_NEGATIONS = ['no longer', 'not', "isn't", "wasn't", 'never'];
+
+type ParsedFact = {
+  subject: string;
+  verb: string;
+  value: string;
+  raw: string;
+};
+
+const normalizeSentence = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+const extractFacts = (text: string): ParsedFact[] => {
+  const sentences = text
+    .split(/[\.\n]+/)
+    .map(normalizeSentence)
+    .filter(Boolean);
+
+  const facts: ParsedFact[] = [];
+  for (const sentence of sentences) {
+    const factMatch = sentence.match(
+      new RegExp(
+        `^(?<subject>[A-Z][A-Za-z0-9'’\-]+)\s+(?<verb>${CONTRADICTION_VERBS.join('|')})\s+(?<value>.+)$`,
+        'i'
+      )
+    );
+
+    if (factMatch?.groups) {
+      facts.push({
+        subject: factMatch.groups.subject.toLowerCase(),
+        verb: factMatch.groups.verb.toLowerCase(),
+        value: factMatch.groups.value.toLowerCase(),
+        raw: sentence,
+      });
+    }
+  }
+
+  return facts;
+};
+
+const isNegationFlip = (previous: string, current: string): boolean => {
+  const prevHasNegation = CONTRADICTION_NEGATIONS.some(neg => previous.toLowerCase().includes(neg));
+  const currentHasNegation = CONTRADICTION_NEGATIONS.some(neg => current.toLowerCase().includes(neg));
+  return prevHasNegation !== currentHasNegation;
+};
+
+const detectHeuristicConflicts = (
+  newText: string,
+  previousText: string
+): BedsideNoteConflict[] => {
+  const previousFacts = extractFacts(previousText);
+  const newFacts = extractFacts(newText);
+  const conflicts: BedsideNoteConflict[] = [];
+
+  for (const prev of previousFacts) {
+    for (const curr of newFacts) {
+      const sameSubject = prev.subject === curr.subject;
+      const sameVerb = prev.verb === curr.verb;
+      const valuesDiffer = prev.value && curr.value && prev.value !== curr.value;
+      if (sameSubject && sameVerb && valuesDiffer) {
+        conflicts.push({
+          previous: prev.raw,
+          current: curr.raw,
+          confidence: 0.78,
+          strategy: 'heuristic',
+          resolution: 'unresolved',
+        });
+        continue;
+      }
+
+      if (sameSubject && valuesDiffer && isNegationFlip(prev.raw, curr.raw)) {
+        conflicts.push({
+          previous: prev.raw,
+          current: curr.raw,
+          confidence: 0.7,
+          strategy: 'heuristic',
+          resolution: 'unresolved',
+        });
+      }
+    }
+  }
+
+  if (conflicts.length === 0) {
+    const previousStatements = previousText
+      .split(/[\.\n]+/)
+      .map(normalizeSentence)
+      .filter(Boolean);
+    const newStatements = newText
+      .split(/[\.\n]+/)
+      .map(normalizeSentence)
+      .filter(Boolean);
+
+    for (const prev of previousStatements) {
+      const prevSubject = prev.split(' ')[0]?.toLowerCase();
+      for (const curr of newStatements) {
+        const currSubject = curr.split(' ')[0]?.toLowerCase();
+        const similarSubject = prevSubject && currSubject && prevSubject === currSubject;
+        const clearlyDifferent = prev.toLowerCase() !== curr.toLowerCase();
+        if (similarSubject && clearlyDifferent) {
+          conflicts.push({
+            previous: prev,
+            current: curr,
+            confidence: 0.55,
+            strategy: 'heuristic',
+            resolution: 'unresolved',
+          });
+        }
+      }
+    }
+  }
+
+  return conflicts;
+};
+
+const detectLLMLikeConflicts = (
+  newText: string,
+  previousText: string
+): BedsideNoteConflict[] => {
+  // Lightweight fallback: look for explicit contradiction cues
+  const newStatements = newText
+    .split(/[\.\n]+/)
+    .map(normalizeSentence)
+    .filter(Boolean);
+  const previousStatements = previousText
+    .split(/[\.\n]+/)
+    .map(normalizeSentence)
+    .filter(Boolean);
+
+  const conflicts: BedsideNoteConflict[] = [];
+  for (const prev of previousStatements) {
+    for (const curr of newStatements) {
+      if (curr.toLowerCase().includes('contradicts') || curr.toLowerCase().includes('conflicts with')) {
+        conflicts.push({
+          previous: prev,
+          current: curr,
+          confidence: 0.6,
+          strategy: 'llm',
+          resolution: 'unresolved',
+        });
+      }
+    }
+  }
+
+  return conflicts;
+};
+
+export const detectBedsideNoteConflicts = async (
+  newText: string,
+  previousText: string
+): Promise<BedsideNoteConflict[]> => {
+  const heuristicConflicts = detectHeuristicConflicts(newText, previousText);
+  if (heuristicConflicts.length > 0) {
+    return heuristicConflicts;
+  }
+
+  return detectLLMLikeConflicts(newText, previousText);
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CHAIN CREATION
@@ -199,6 +373,7 @@ export const evolveBedsideNote = async (
     structuredContent?: BedsideNoteContent;
     arcId?: string;
     chapterId?: string;
+    conflictResolution?: 'auto' | 'agent' | 'user';
   } = {},
 ): Promise<MemoryNote> => {
   const base = await getOrCreateBedsideNote(projectId, {
@@ -206,12 +381,40 @@ export const evolveBedsideNote = async (
     chapterId: options.chapterId,
   });
 
-  const evolved = await evolveMemory(base.id, newText, {
+  const conflicts = await detectBedsideNoteConflicts(newText, base.text);
+  const resolution = conflicts.length > 0 ? options.conflictResolution ?? 'unresolved' : undefined;
+
+  const structuredContent: BedsideNoteContent = {
+    ...(base.structuredContent as BedsideNoteContent | undefined),
+    ...options.structuredContent,
+  };
+
+  if (conflicts.length > 0) {
+    const resolvedConflicts = conflicts.map(conflict => ({
+      ...conflict,
+      resolution,
+    }));
+
+    structuredContent.conflicts = resolvedConflicts;
+    structuredContent.warnings = [
+      ...(structuredContent.warnings ?? []),
+      ...resolvedConflicts.map(c => `Conflict: ${c.previous} ↔ ${c.current}`),
+    ];
+  }
+
+  let evolved = await evolveMemory(base.id, newText, {
     changeType: 'update',
     changeReason: options.changeReason,
     keepOriginal: true,
-    structuredContent: options.structuredContent,
+    structuredContent,
   });
+
+  if (conflicts.length > 0) {
+    const uniqueTags = new Set(
+      evolved.topicTags.concat(['conflict:detected']).concat(resolution ? [`conflict:resolution:${resolution}`] : [])
+    );
+    evolved = await updateMemory(evolved.id, { topicTags: Array.from(uniqueTags) });
+  }
 
   // Roll up chapter-specific changes to parent scopes for broader visibility
   if (options.changeReason !== 'roll_up') {
@@ -228,7 +431,7 @@ export const evolveBedsideNote = async (
           changeType: 'update',
           changeReason: 'roll_up',
           keepOriginal: true,
-          structuredContent: options.structuredContent,
+          structuredContent,
         });
       }
 
@@ -237,7 +440,7 @@ export const evolveBedsideNote = async (
         changeType: 'update',
         changeReason: 'roll_up',
         keepOriginal: true,
-        structuredContent: options.structuredContent,
+        structuredContent,
       });
     } else if (rollupText && options.arcId) {
       const projectBase = await getOrCreateBedsideNote(projectId);
@@ -245,7 +448,7 @@ export const evolveBedsideNote = async (
         changeType: 'update',
         changeReason: 'roll_up',
         keepOriginal: true,
-        structuredContent: options.structuredContent,
+        structuredContent,
       });
     }
   }

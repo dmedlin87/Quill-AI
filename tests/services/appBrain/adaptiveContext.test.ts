@@ -449,6 +449,45 @@ describe('adaptiveContext', () => {
       expect(formatSpy.mock.results[0]?.value as string).toContain('Arc plan (The Descent)');
       expect(formatSpy.mock.results[0]?.value as string).toContain('Chapter plan (One)');
     });
+
+    it('injects a conflict alert section when bedside notes are tagged with conflicts', async () => {
+      const conflictNote = {
+        id: 'bed-conflict',
+        scope: 'project',
+        projectId: 'p1',
+        type: 'plan',
+        text: 'Sarah has green eyes',
+        topicTags: ['meta:bedside-note', 'conflict:detected'],
+        importance: 0.9,
+        structuredContent: {
+          conflicts: [
+            {
+              previous: 'Sarah has blue eyes',
+              current: 'Sarah has green eyes',
+              resolution: 'agent',
+            },
+          ],
+        },
+      } as any;
+
+      vi.spyOn(memoryService, 'getMemories').mockResolvedValue([conflictNote]);
+      vi.spyOn(memoryService, 'getActiveGoals').mockResolvedValue([] as any);
+      vi.spyOn(memoryService, 'getMemoriesForContext').mockResolvedValue({
+        author: [],
+        project: [conflictNote],
+      } as any);
+      vi.spyOn(memoryService, 'formatMemoriesForPrompt').mockReturnValue('Formatted memories');
+      vi.spyOn(memoryService, 'formatGoalsForPrompt').mockReturnValue('');
+
+      const result = await buildAdaptiveContext(baseState, 'p1', {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('[CONFLICT ALERT]');
+      expect(result.context).toContain('Sarah has blue eyes');
+      expect(result.context).toContain('resolution: agent');
+    });
   });
 
   describe('estimateTokens', () => {
