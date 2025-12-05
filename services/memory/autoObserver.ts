@@ -13,8 +13,8 @@
 
 import { AnalysisResult, CharacterProfile } from '@/types';
 import { ManuscriptIntelligence } from '@/types/intelligence';
-import { createMemory } from './memoryService';
-import { getMemories, searchMemoriesByTags } from './memoryQueries';
+// Use index re-exports so tests can mock the memory module in one place.
+import { createMemory, getMemories, searchMemoriesByTags } from './index';
 import { MemoryNote, MemoryNoteType } from './types';
 import { DUPLICATE_TEXT_OVERLAP_THRESHOLD } from '../../config/heuristics';
 

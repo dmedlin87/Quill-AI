@@ -32,10 +32,16 @@ describe('useTextToSpeech', () => {
 
   beforeEach(() => {
     mockAudio = createMockAudioContext();
-    // @ts-expect-error test-only audio context
-    global.AudioContext = vi.fn().mockImplementation(() => mockAudio.context);
-    // @ts-expect-error test-only audio context
-    global.webkitAudioContext = undefined;
+    function MockAudioContext(this: any) {
+      return mockAudio.context;
+    }
+    (globalThis as any).AudioContext = MockAudioContext as any;
+    (globalThis as any).webkitAudioContext = undefined;
+    // keep window in sync when running in jsdom
+    if (typeof window !== 'undefined') {
+      (window as any).AudioContext = MockAudioContext as any;
+      (window as any).webkitAudioContext = undefined;
+    }
   });
 
   afterEach(() => {
@@ -142,10 +148,8 @@ describe('useTextToSpeech', () => {
   });
 
   it('fails gracefully when Web Audio API is unavailable', async () => {
-    // @ts-expect-error remove audio APIs
-    global.AudioContext = undefined;
-    // @ts-expect-error remove audio APIs
-    global.webkitAudioContext = undefined;
+    (globalThis as any).AudioContext = undefined;
+    (globalThis as any).webkitAudioContext = undefined;
     const { result } = renderHook(() => useTextToSpeech());
 
     await act(async () => {

@@ -22,17 +22,7 @@ export default defineConfig(({ mode }) => {
       },
       test: {
         globals: true,
-        environment: 'node',
-        environmentMatchGlobs: [
-          ['tests/components/**', 'jsdom'],
-          ['tests/features/**', 'jsdom'],
-          ['tests/hooks/**', 'jsdom'],
-          ['tests/services/**', 'jsdom'],
-          ['tests/integration/**', 'jsdom'],
-          ['**/*.test.tsx', 'jsdom'],
-          ['**/*.test.ts', 'jsdom'],
-          ['**/*.ts', 'node'],
-        ],
+        environment: 'jsdom',
         isolate: true,
         pool: 'forks',
         poolOptions: {

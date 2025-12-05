@@ -611,8 +611,13 @@ const buildMemorySection = async (
     );
     const firstBedsideNote = bedsideNotes[0];
 
-    if (firstBedsideNote && firstBedsideNote.updatedAt) {
-      const ageMs = Date.now() - firstBedsideNote.updatedAt;
+    if (firstBedsideNote) {
+      // Consider either updatedAt or createdAt (whichever is earlier) for staleness.
+      const lastTouched = Math.min(
+        firstBedsideNote.updatedAt ?? Infinity,
+        firstBedsideNote.createdAt ?? Infinity
+      );
+      const ageMs = Date.now() - lastTouched;
       if (ageMs > bedsideNoteStalenessMs) {
         const planText = buildBedsidePlanText(state.analysis.result, goals);
         if (planText) {

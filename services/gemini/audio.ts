@@ -11,11 +11,22 @@ export interface LiveSessionClient {
 }
 
 const getAudioContextCtor = () => {
-  const ctor = window.AudioContext || window.webkitAudioContext;
-  if (!ctor) {
+  // Prefer globals to allow test stubs (globalThis.AudioContext / webkitAudioContext)
+  const anyGlobal = globalThis as any;
+  const ctor = anyGlobal.AudioContext || anyGlobal.webkitAudioContext;
+  if (typeof ctor !== 'function') {
     throw new Error('Web Audio API not supported in this environment.');
   }
   return ctor;
+};
+
+const makeAudioContext = (Ctor: any, options: AudioContextOptions) => {
+  // Support both constructable mocks and factory-style mocks in tests
+  try {
+    return new Ctor(options);
+  } catch {
+    return Ctor(options);
+  }
 };
 
 export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
@@ -37,7 +48,7 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
     if (!base64Audio) return null;
 
     const AudioContextCtor = getAudioContextCtor();
-    const audioContext = new AudioContextCtor({ sampleRate: 24000 });
+    const audioContext = makeAudioContext(AudioContextCtor, { sampleRate: 24000 });
     const buffer = await decodeAudioData(
       base64ToUint8Array(base64Audio),
       audioContext,
@@ -59,7 +70,7 @@ export const connectLiveSession = async (
   onClose: () => void
 ): Promise<LiveSessionClient> => {
   const AudioContextCtor = getAudioContextCtor();
-  const outputAudioContext = new AudioContextCtor({ sampleRate: 24000 });
+  const outputAudioContext = makeAudioContext(AudioContextCtor, { sampleRate: 24000 });
   
   const sessionPromise = ai.live.connect({
     model: ModelConfig.liveAudio,

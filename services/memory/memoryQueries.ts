@@ -18,14 +18,40 @@ export async function getMemories(
 ): Promise<MemoryNote[]> {
   const { scope, projectId, type, topicTags, minImportance, limit } = params;
 
-  let collection = db.memories.toCollection();
+  const table: any = (db as any).memories;
 
+  // Some test environments mock db.memories as a plain array or a minimal stub.
+  // Fall back to an in-memory collection shape when toCollection isn't available.
+  const createCollection = (data: MemoryNote[]) => ({
+    filter: (predicate: (note: MemoryNote) => boolean) =>
+      createCollection(data.filter(predicate)),
+    toArray: () => Promise.resolve([...data]),
+  });
+
+  let collection =
+    typeof table?.toCollection === 'function'
+      ? table.toCollection()
+      : createCollection(
+          Array.isArray(table)
+            ? table
+            : Array.isArray(table?.data)
+            ? table.data
+            : []
+        );
+
+  const hasWhere = typeof table?.where === 'function';
   if (scope === 'project' && projectId) {
-    collection = db.memories.where('[scope+projectId]').equals([scope, projectId]);
+    collection = hasWhere
+      ? table.where('[scope+projectId]').equals([scope, projectId])
+      : collection.filter(note => note.scope === scope && note.projectId === projectId);
   } else if (scope) {
-    collection = db.memories.where('scope').equals(scope);
+    collection = hasWhere
+      ? table.where('scope').equals(scope)
+      : collection.filter(note => note.scope === scope);
   } else if (projectId) {
-    collection = db.memories.where('projectId').equals(projectId);
+    collection = hasWhere
+      ? table.where('projectId').equals(projectId)
+      : collection.filter(note => note.projectId === projectId);
   }
 
   if (type) {

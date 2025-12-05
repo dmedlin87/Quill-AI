@@ -36,7 +36,10 @@ export function useTextToSpeech() {
       if (abortControllerRef.current?.signal.aborted) return;
 
       if (audioBuffer) {
-        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        const AudioContextCtor =
+          // eslint-disable-next-line no-restricted-globals
+          (typeof globalThis !== 'undefined' && ((globalThis as any).AudioContext || (globalThis as any).webkitAudioContext)) ||
+          (typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext));
         if (!AudioContextCtor) {
           throw new Error('Web Audio API not supported in this environment.');
         }

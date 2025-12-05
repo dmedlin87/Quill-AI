@@ -4,6 +4,55 @@ import * as memoryService from '@/services/memory/index';
 import { AnalysisResult } from '@/types';
 import { ManuscriptIntelligence } from '@/types/intelligence';
 
+// Minimal Dexie-like mock for db.memories to satisfy toCollection/where usage
+interface MockCollection {
+  filter: ReturnType<typeof vi.fn>;
+  toArray: ReturnType<typeof vi.fn>;
+}
+
+interface MockWhereClause {
+  equals: ReturnType<typeof vi.fn>;
+}
+
+const createMemoriesTableMock = (data: any[] = []) => {
+  let stored = [...data];
+
+  const createCollection = (items: any[]): MockCollection => ({
+    filter: vi.fn().mockImplementation((pred: (n: any) => boolean) =>
+      createCollection(items.filter(pred))
+    ),
+    toArray: vi.fn().mockResolvedValue([...items]),
+  });
+
+  return {
+    where: vi.fn().mockImplementation((field: string): MockWhereClause => ({
+      equals: vi.fn().mockImplementation((value: any) => {
+        let filtered = stored;
+        if (field === '[scope+projectId]') {
+          const [scope, projectId] = value;
+          filtered = stored.filter(n => n.scope === scope && n.projectId === projectId);
+        } else if (field === 'scope') {
+          filtered = stored.filter(n => n.scope === value);
+        } else if (field === 'projectId') {
+          filtered = stored.filter(n => n.projectId === value);
+        }
+        return createCollection(filtered);
+      }),
+    })),
+    toCollection: vi.fn().mockImplementation(() => createCollection(stored)),
+  };
+};
+
+let mockMemoriesTable = createMemoriesTableMock([]);
+
+vi.mock('@/services/db', () => ({
+  db: {
+    get memories() {
+      return mockMemoriesTable;
+    },
+  },
+}));
+
 // Mock the memory service dependencies
 vi.mock('@/services/memory/index', () => ({
   createMemory: vi.fn(),

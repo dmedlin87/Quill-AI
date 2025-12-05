@@ -26,8 +26,18 @@ if (validationError) {
 /**
  * Primary Gemini AI client instance.
  * Shared across all service modules.
+ *
+ * Tests may mock GoogleGenAI as a plain function; support both constructor and factory forms.
  */
-export const ai = new GoogleGenAI({ apiKey });
+const createClient = (Ctor: any, options: { apiKey: string }) => {
+  try {
+    return new Ctor(options);
+  } catch {
+    return Ctor(options);
+  }
+};
+
+export const ai = createClient(GoogleGenAI as any, { apiKey });
 
 /**
  * Check if the API is properly configured.

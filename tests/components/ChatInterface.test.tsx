@@ -3,19 +3,24 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
 import { RateLimitError, AIError } from '@/services/gemini/errors';
 
-const { mockCreateAgentSession, mockSendMessage } = vi.hoisted(() => {
+const { MockQuillAgent, mockCreateAgentSession, mockSendMessage, mockInitialize } = vi.hoisted(() => {
   const sendMessage = vi.fn();
+  const initialize = vi.fn().mockResolvedValue(undefined);
 
-  // Use this as the QuillAgent constructor mock. When used with `new`,
-  // returning an object will make that the constructed instance.
-  const createAgentSession = vi.fn(() => ({
-    initialize: vi.fn().mockResolvedValue(undefined),
-    sendMessage,
-  }));
+  class QuillAgentMock {
+    public initialize = initialize;
+    public sendMessage = sendMessage;
+  }
+
+  const createAgentSession = vi.fn(function MockedQuillAgentConstructor() {
+    return new QuillAgentMock();
+  });
 
   return {
-    mockSendMessage: sendMessage,
+    MockQuillAgent: QuillAgentMock,
     mockCreateAgentSession: createAgentSession,
+    mockSendMessage: sendMessage,
+    mockInitialize: initialize,
   };
 });
 
@@ -47,6 +52,7 @@ describe('ChatInterface', () => {
 
   beforeEach(() => {
     mockSendMessage.mockReset();
+    mockInitialize.mockReset();
     mockSendMessage.mockResolvedValue({ text: '', functionCalls: [] });
     mockCreateAgentSession.mockClear();
     baseProps.onAgentAction = vi.fn().mockResolvedValue('action complete');
