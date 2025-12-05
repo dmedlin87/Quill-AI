@@ -2,24 +2,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DefaultAgentController } from '@/services/core/AgentController';
 
 const {
-  mockCreateAgentSession,
+  mockCreateChatSessionFromContext,
   mockSendMessage,
   mockGetOrCreateBedsideNote,
 } = vi.hoisted(() => {
   const mockSendMessage = vi.fn();
-  const mockCreateAgentSession = vi.fn(() => ({
-    sendMessage: mockSendMessage,
+  const mockCreateChatSessionFromContext = vi.fn(() => ({
+    chat: {
+      sendMessage: mockSendMessage,
+    },
+    memoryContext: '',
   }));
 
   const mockGetOrCreateBedsideNote = vi.fn(async () => ({
     text: 'Existing bedside note summary',
   }));
 
-  return { mockCreateAgentSession, mockSendMessage, mockGetOrCreateBedsideNote };
+  return { mockCreateChatSessionFromContext, mockSendMessage, mockGetOrCreateBedsideNote };
 });
 
-vi.mock('@/services/gemini/agent', () => ({
-  createAgentSession: mockCreateAgentSession,
+vi.mock('@/services/core/agentSession', () => ({
+  createChatSessionFromContext: mockCreateChatSessionFromContext,
+  buildInitializationMessage: vi.fn(({ chapters, fullText, persona }) =>
+    `init ${chapters.length} ${fullText.length} ${persona.name}`
+  ),
 }));
 
 vi.mock('@/services/memory', () => ({
@@ -105,7 +111,7 @@ describe('DefaultAgentController', () => {
 
     await controller.sendMessage({ text: 'Hello', editorContext });
 
-    expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+    expect(mockCreateChatSessionFromContext).toHaveBeenCalledTimes(1);
     expect(toolExecutor.execute).not.toHaveBeenCalled();
 
     const stateCalls = (events.onStateChange as any).mock.calls;

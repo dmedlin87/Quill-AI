@@ -43,6 +43,10 @@ export interface ThinkerConfig {
   urgentEventTypes: AppEvent['type'][];
   /** Enable/disable the thinker */
   enabled: boolean;
+  /** Allow bedside note evolution side effects */
+  allowBedsideEvolve: boolean;
+  /** Minimum interval between bedside evolves (ms) */
+  bedsideCooldownMs: number;
 }
 
 export interface ThinkerState {
@@ -55,6 +59,7 @@ export interface ThinkerState {
   pendingEvents: AppEvent[];
   editDeltaAccumulator: number;
   lastEditEvolveAt: number;
+  lastBedsideEvolveAt: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,6 +75,8 @@ const DEFAULT_CONFIG: ThinkerConfig = {
   minEventsToThink: 3,
   urgentEventTypes: ['ANALYSIS_COMPLETED', 'INTELLIGENCE_UPDATED'],
   enabled: true,
+  allowBedsideEvolve: true,
+  bedsideCooldownMs: 60_000,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,6 +155,7 @@ export class ProactiveThinker {
       pendingEvents: [],
       editDeltaAccumulator: 0,
       lastEditEvolveAt: 0,
+      lastBedsideEvolveAt: 0,
     };
   }
 
@@ -289,16 +297,14 @@ export class ProactiveThinker {
     const chapterLine = activeChapter ? ` in "${activeChapter.title}"` : '';
     const planText = `Significant edits detected${chapterLine}. Recheck continuity, goals, and conflicts.`;
 
-    evolveBedsideNote(manuscript.projectId, planText, {
+    this.maybeEvolveBedsideNote(planText, {
       changeReason: 'significant_edit',
       chapterId: manuscript.activeChapterId ?? undefined,
       extraTags: [
         ...(manuscript.activeChapterId ? [`chapter:${manuscript.activeChapterId}`] : []),
         'edit:significant',
       ],
-    }).catch(error =>
-      console.warn('[ProactiveThinker] Significant edit bedside update failed:', error)
-    );
+    });
   }
 
   private enqueueEvent(event: AppEvent): void {
@@ -336,7 +342,10 @@ export class ProactiveThinker {
     if (this.state.isThinking || !this.getState || !this.projectId) {
       return null;
     }
-    
+    if (this.state.pendingEvents.length === 0) {
+      return null;
+    }
+
     this.state.isThinking = true;
     const startTime = Date.now();
     
@@ -410,7 +419,7 @@ export class ProactiveThinker {
 
           const planText = lines.join('\n');
           if (planText.trim()) {
-            await evolveBedsideNote(this.projectId, planText, {
+            await this.maybeEvolveBedsideNote(planText, {
               changeReason: 'proactive_thinking',
             });
           }
@@ -492,6 +501,26 @@ export class ProactiveThinker {
     if (!this.debounceTimer) return;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
+  }
+
+  private canEvolveBedside(): boolean {
+    if (!this.config.allowBedsideEvolve) return false;
+    const now = Date.now();
+    const elapsed = now - this.state.lastBedsideEvolveAt;
+    return elapsed >= this.config.bedsideCooldownMs;
+  }
+
+  private async maybeEvolveBedsideNote(
+    planText: string,
+    options: Parameters<typeof evolveBedsideNote>[2],
+  ): Promise<void> {
+    if (!this.projectId || !this.canEvolveBedside()) return;
+    this.state.lastBedsideEvolveAt = Date.now();
+    try {
+      await evolveBedsideNote(this.projectId, planText, options);
+    } catch (error) {
+      console.warn('[ProactiveThinker] Bedside evolve failed:', error);
+    }
   }
 }
 

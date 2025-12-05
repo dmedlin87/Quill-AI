@@ -8,9 +8,9 @@ import { ExperienceLevel, AutonomyMode } from '@/types/experienceSettings';
 import { ManuscriptHUD } from '@/types/intelligence';
 import type { UsageMetadata, Chat, FunctionCall } from '@google/genai';
 import type { ToolResult } from '@/services/gemini/toolExecutor';
-import { createAgentSession } from '@/services/gemini/agent';
 import { runAgentToolLoop, AgentToolLoopModelResult } from '@/services/core/agentToolLoop';
-import { getOrCreateBedsideNote } from '@/services/memory';
+import { createChatSessionFromContext, buildInitializationMessage } from './agentSession';
+import { ToolRunner } from './toolRunner.ts';
 
 // ---- Shared with existing hook ----
 
@@ -214,18 +214,24 @@ export class DefaultAgentController implements AgentController {
   private readonly context: AgentContextInput;
   private readonly deps: AgentControllerDependencies;
   private readonly events?: AgentControllerEvents;
+  private readonly toolRunner: ToolRunner;
   private state: AgentState = { status: 'idle' };
   private currentPersona: Persona | undefined;
   private currentAbortController: AbortController | null = null;
   private chat: Chat | null = null;
-  private significantActionSeen = false;
-  private bedsideNoteUpdatedThisTurn = false;
 
   constructor(args: AgentControllerConstructorArgs) {
     this.context = args.context;
     this.deps = args.deps;
     this.events = args.events;
     this.currentPersona = args.initialPersona;
+
+    this.toolRunner = new ToolRunner({
+      toolExecutor: this.deps.toolExecutor,
+      getProjectId: () => this.context.projectId ?? null,
+      onMessage: this.events?.onMessage,
+      onStateChange: state => this.updateState(state),
+    });
   }
 
   private updateState(newState: Partial<AgentState>): void {
@@ -245,54 +251,23 @@ export class DefaultAgentController implements AgentController {
     this.currentPersona = persona;
     this.updateState({ status: 'idle', lastError: undefined });
 
-    // Construct manuscript context for the agent (mirrors useAgentService initSession)
-    const { chapters, fullText } = this.context;
-    const fullManuscript = chapters
-      .map(c => {
-        const isActive = c.content === fullText;
-        return `[CHAPTER: ${c.title}]${
-          isActive
-            ? ' (ACTIVE - You can edit this)'
-            : ' (READ ONLY - Request user to switch)'
-        }\n${c.content}\n`;
-      })
-      .join('\n-------------------\n');
-
-    // Fetch memory context if a memory provider and project id are available
-    let memoryContext = '';
-    const effectiveProjectId = projectId ?? this.context.projectId ?? undefined;
-    if (this.deps.memoryProvider && effectiveProjectId) {
-      try {
-        memoryContext = await this.deps.memoryProvider.buildMemoryContext(
-          effectiveProjectId,
-        );
-      } catch (error) {
-        console.warn('[AgentController] Failed to fetch memory context:', error);
-      }
-    }
-
-    // Create the underlying Gemini chat session
-    this.chat = createAgentSession({
-      lore: this.context.lore,
-      analysis: this.context.analysis || undefined,
-      fullManuscriptContext: fullManuscript,
-      persona: this.currentPersona,
-      intensity: this.context.critiqueIntensity,
-      experience: this.context.experienceLevel,
-      autonomy: this.context.autonomyMode,
-      intelligenceHUD: this.context.intelligenceHUD,
-      interviewTarget: this.context.interviewTarget,
-      memoryContext,
+    const { chat, memoryContext } = await createChatSessionFromContext({
+      context: this.context,
+      persona,
+      memoryProvider: this.deps.memoryProvider,
+      projectId,
     });
+    this.chat = chat;
 
     // Silent initialization message with persona and memory status (no UI message)
-    const memoryStatus = memoryContext ? 'Memory loaded.' : 'No memories yet.';
     this.chat
       ?.sendMessage({
-        message:
-          `I have loaded the manuscript. Total Chapters: ${chapters.length}. ` +
-          `Active Chapter Length: ${fullText.length} characters. ${memoryStatus} ` +
-          `I am ${persona.name}, ready to help with my ${persona.role} expertise.`,
+        message: buildInitializationMessage({
+          chapters: this.context.chapters,
+          fullText: this.context.fullText,
+          memoryContext,
+          persona,
+        }),
       })
       .catch(console.error);
   }
@@ -312,8 +287,7 @@ export class DefaultAgentController implements AgentController {
     }
 
     this.updateState({ status: 'thinking', lastError: undefined });
-    this.significantActionSeen = false;
-    this.bedsideNoteUpdatedThisTurn = false;
+    this.toolRunner.resetTurn();
 
     const internalAbortController = new AbortController();
     this.currentAbortController = internalAbortController;
@@ -377,7 +351,7 @@ export class DefaultAgentController implements AgentController {
         chat,
         initialResult,
         abortSignal,
-        processToolCalls: functionCalls => this.processToolCalls(functionCalls),
+        processToolCalls: functionCalls => this.toolRunner.processToolCalls(functionCalls),
         onThinkingRoundStart: () => {
           this.updateState({ status: 'thinking', lastError: undefined });
         },
@@ -398,7 +372,9 @@ export class DefaultAgentController implements AgentController {
       };
       this.events?.onMessage?.(modelMessage);
 
-      await this.maybeSuggestBedsideNoteRefresh(`${input.text} ${responseText || ''}`);
+      await this.toolRunner.maybeSuggestBedsideNoteRefresh(
+        `${input.text} ${responseText || ''}`,
+      );
 
       this.updateState({ status: 'idle' });
     } catch (error) {
@@ -432,111 +408,6 @@ export class DefaultAgentController implements AgentController {
       editorContext: input.editorContext,
       options: { streamHandlers: input.handlers },
     });
-  }
-
-  private isSignificantTool(name: string): boolean {
-    return new Set([
-      'update_manuscript',
-      'append_to_manuscript',
-      'insert_at_cursor',
-      'rewrite_selection',
-      'continue_writing',
-      'create_goal',
-      'update_goal',
-      'write_memory_note',
-      'update_memory_note',
-      'delete_memory_note',
-      'update_bedside_note',
-    ]).has(name);
-  }
-
-  private buildBedsideReflectionMessage(toolName: string): string | null {
-    if (!this.context.projectId) return null;
-    if (!this.isSignificantTool(toolName)) return null;
-
-    this.significantActionSeen = true;
-    if (toolName === 'update_bedside_note') {
-      this.bedsideNoteUpdatedThisTurn = true;
-    }
-
-    return 'Reflection: Should the bedside note be updated based on this action? If yes, call update_bedside_note with the section/action/content to capture the change.';
-  }
-
-  private async maybeSuggestBedsideNoteRefresh(conversationText: string) {
-    if (!this.context.projectId || !this.significantActionSeen || this.bedsideNoteUpdatedThisTurn) {
-      return;
-    }
-
-    try {
-      const note = await getOrCreateBedsideNote(this.context.projectId);
-      const normalizedConversation = conversationText.trim().toLowerCase();
-      const normalizedNote = (note.text || '').toLowerCase();
-
-      if (!normalizedConversation || normalizedNote.includes(normalizedConversation)) {
-        return;
-      }
-
-      const preview = note.text ? note.text.slice(0, 160) : 'No bedside note text yet.';
-      const suggestion = `🧠 Bedside note may need an update. Conversation touched on: "${conversationText.slice(0, 120)}". Current note preview: "${preview}". Consider calling update_bedside_note to align.`;
-      this.events?.onMessage?.({
-        role: 'system',
-        text: suggestion,
-        timestamp: new Date(),
-      });
-    } catch (error) {
-      console.warn('[AgentController] Failed bedside-note reflection:', error);
-    }
-  }
-
-  private async processToolCalls(
-    functionCalls: FunctionCall[],
-  ): Promise<Array<{ id: string; name: string; response: { result: string } }>> {
-    const responses: Array<{
-      id: string;
-      name: string;
-      response: { result: string };
-    }> = [];
-
-    for (const call of functionCalls) {
-      this.updateState({ status: 'executing', lastError: undefined });
-
-      // Add tool call indicator to messages (mirrors original hook)
-      const toolMessage: ChatMessage = {
-        role: 'model',
-        text: `🔨 Suggesting Action: ${call.name}...`,
-        timestamp: new Date(),
-      };
-      this.events?.onMessage?.(toolMessage);
-
-      try {
-        const args = (call.args || {}) as Record<string, unknown>;
-        const result = await this.deps.toolExecutor.execute(call.name, args);
-
-        const reflection = this.buildBedsideReflectionMessage(call.name);
-        const actionResult = reflection
-          ? `${result.message}\n\n${reflection}`
-          : result.message;
-
-        responses.push({
-          id: call.id || (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
-          name: call.name,
-          response: { result: actionResult },
-        });
-
-        if (actionResult.includes('Waiting for user review')) {
-          const reviewMessage: ChatMessage = {
-            role: 'model',
-            text: '📝 Reviewing proposed edit...',
-            timestamp: new Date(),
-          };
-          this.events?.onMessage?.(reviewMessage);
-        }
-      } catch (_err: unknown) {
-        // Preserve original behavior: swallow tool execution errors silently.
-      }
-    }
-
-    return responses;
   }
 
   async resetSession(): Promise<void> {

@@ -16,6 +16,8 @@ export * from './types';
 // Event system
 export {
   eventBus,
+  enableEventPersistence,
+  disableEventPersistence,
   emitSelectionChanged,
   emitCursorMoved,
   emitChapterChanged,

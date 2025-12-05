@@ -11,7 +11,7 @@ import { Lore, Chapter } from '@/types/schema';
 import { Persona, DEFAULT_PERSONAS } from '@/types/personas';
 import { useSettingsStore } from '@/features/settings';
 import { ManuscriptHUD } from '@/types/intelligence';
-import { getMemoriesForContext, getActiveGoals, formatMemoriesForPrompt, formatGoalsForPrompt } from '@/services/memory';
+import { fetchMemoryContext } from '@/services/core/agentSession';
 import {
   DefaultAgentController,
   AgentController,
@@ -96,39 +96,6 @@ export function useAgentService(
     });
   }, [messageLimit]);
 
-  /**
-   * Build memory context string from stored memories and goals
-   */
-  const buildMemoryContext = useCallback(async (): Promise<string> => {
-    if (!projectId) return '';
-    
-    try {
-      const [memories, goals] = await Promise.all([
-        getMemoriesForContext(projectId, { limit: 25 }),
-        getActiveGoals(projectId),
-      ]);
-
-      let memorySection = '[AGENT MEMORY]\n';
-      
-      const formattedMemories = formatMemoriesForPrompt(memories, { maxLength: 3000 });
-      if (formattedMemories) {
-        memorySection += formattedMemories + '\n';
-      } else {
-        memorySection += '(No stored memories yet.)\n';
-      }
-
-      const formattedGoals = formatGoalsForPrompt(goals);
-      if (formattedGoals) {
-        memorySection += '\n' + formattedGoals + '\n';
-      }
-
-      return memorySection;
-    } catch (error) {
-      console.warn('[AgentService] Failed to fetch memory context:', error);
-      return '';
-    }
-  }, [projectId]);
-
   const createToolExecutor = useCallback((): AgentToolExecutor => ({
     async execute(toolName, args) {
       try {
@@ -149,10 +116,15 @@ export function useAgentService(
     if (!projectId) return undefined;
     return {
       async buildMemoryContext(_projectId: string): Promise<string> {
-        return buildMemoryContext();
+        try {
+          return await fetchMemoryContext(projectId);
+        } catch (error) {
+          console.warn('[AgentService] Failed to fetch memory context:', error);
+          return '';
+        }
       },
     };
-  }, [projectId, buildMemoryContext]);
+  }, [projectId]);
 
   /**
    * Initialize or reinitialize the chat session

@@ -11,7 +11,10 @@ const MAX_HISTORY = 100;
 const MAX_CHANGE_LOG = 500;
 const CHANGE_LOG_STORAGE_KEY = 'quillai_change_log';
 
-const hasStorage = () => typeof window !== 'undefined' && !!window.localStorage;
+let persistenceEnabled = true;
+
+const hasStorage = () =>
+  persistenceEnabled && typeof window !== 'undefined' && !!window.localStorage;
 
 const loadChangeLog = (): AppEvent[] => {
   if (!hasStorage()) return [];
@@ -58,11 +61,13 @@ class EventBusImpl {
     }
 
     // Persist to audit log
-    this.changeLog.push(eventWithTimestamp);
-    if (this.changeLog.length > MAX_CHANGE_LOG) {
-      this.changeLog.shift();
+    if (persistenceEnabled) {
+      this.changeLog.push(eventWithTimestamp);
+      if (this.changeLog.length > MAX_CHANGE_LOG) {
+        this.changeLog.shift();
+      }
+      persistChangeLog(this.changeLog);
     }
-    persistChangeLog(this.changeLog);
 
     // Notify type-specific listeners
     const typeListeners = this.listeners.get(eventWithTimestamp.type);
@@ -146,7 +151,19 @@ class EventBusImpl {
    */
   clearPersistentLog(): void {
     this.changeLog = [];
-    persistChangeLog(this.changeLog);
+    if (persistenceEnabled) {
+      persistChangeLog(this.changeLog);
+    }
+  }
+
+  /**
+   * Remove all listeners and clear state (for tests / teardown).
+   */
+  dispose(): void {
+    this.listeners.clear();
+    this.globalListeners.clear();
+    this.clearHistory();
+    this.clearPersistentLog();
   }
 
   /**
@@ -229,6 +246,14 @@ class EventBusImpl {
 // Singleton instance
 export const eventBus = new EventBusImpl();
 
+export const enableEventPersistence = () => {
+  persistenceEnabled = true;
+};
+
+export const disableEventPersistence = () => {
+  persistenceEnabled = false;
+};
+
 // Convenience emit functions
 export const emitSelectionChanged = (text: string, start: number, end: number) => {
   eventBus.emit({ type: 'SELECTION_CHANGED', payload: { text, start, end } });
@@ -243,8 +268,8 @@ export const emitChapterChanged = (
   chapterId: string,
   title: string,
   metadata?: {
-    issues?: { description: string; severity?: string }[];
-    watchedEntities?: { name: string; reason?: string; priority?: string }[];
+    issues?: { description: string; severity?: 'info' | 'warning' | 'error' | 'critical' }[];
+    watchedEntities?: { name: string; reason?: string; priority?: 'high' | 'medium' | 'low' }[];
   },
 ) => {
   eventBus.emit({

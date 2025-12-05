@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   eventBus,
+  disableEventPersistence,
+  enableEventPersistence,
   emitSelectionChanged,
   emitCursorMoved,
   emitChapterSwitched,
@@ -12,6 +14,16 @@ import {
 } from '@/services/appBrain';
 
 describe('eventBus', () => {
+  beforeEach(() => {
+    disableEventPersistence();
+    (eventBus as any).dispose?.();
+  });
+
+  afterEach(() => {
+    (eventBus as any).dispose?.();
+    enableEventPersistence();
+  });
+
   beforeEach(() => {
     // Clear history between tests
     (eventBus as any).clearHistory();
@@ -78,6 +90,7 @@ describe('eventBus', () => {
   });
 
   it('stores events in the persistent change log for audits', () => {
+    enableEventPersistence();
     emitTextChanged(20, 5);
     emitAnalysisCompleted('chapter-1', 'success');
 
@@ -87,7 +100,9 @@ describe('eventBus', () => {
   });
 
   it('replays logged events to orchestrator subscribers', () => {
+    enableEventPersistence();
     emitPanelSwitch();
+    disableEventPersistence();
     const handler = vi.fn();
 
     const unsubscribe = eventBus.subscribeForOrchestrator(handler, {
@@ -95,8 +110,27 @@ describe('eventBus', () => {
       replay: true,
     });
 
-    expect(handler).toHaveBeenCalled();
+    // subscribeForOrchestrator replays synchronously
+    expect(handler).toHaveBeenCalledTimes(1);
     unsubscribe();
+  });
+
+  it('disposes listeners and clears state', () => {
+    const handler = vi.fn();
+    const unsubscribe = eventBus.subscribe('TEXT_CHANGED', handler);
+    emitTextChanged(1, 1);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    eventBus.dispose();
+    expect(eventBus.getRecentEvents().length).toBe(0);
+    unsubscribe();
+  });
+
+  it('does not persist when persistence disabled', () => {
+    const setItem = vi.spyOn(window.localStorage ?? ({} as any), 'setItem' as any).mockImplementation(() => {});
+    emitTextChanged(5, 1);
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
   });
 });
 
