@@ -27,6 +27,7 @@ import { analyzeVoices } from './voiceProfiler';
 import { buildHeatmap } from './heatmapBuilder';
 import { buildHUD } from './contextBuilder';
 import { createDelta, hashContent } from './deltaTracker';
+import { INCREMENTAL_CHANGE_SIZE_THRESHOLD, INCREMENTAL_SCENE_MATCH_BUFFER } from '../../config/heuristics';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -142,7 +143,7 @@ const patchStructure = (
   const totalChangeSize = affectedRanges.reduce((sum, r) => 
     sum + Math.abs(r.lengthDelta) + (r.end - r.start), 0);
   
-  if (affectedRanges.length > 3 || totalChangeSize > 2000) {
+  if (affectedRanges.length > 3 || totalChangeSize > INCREMENTAL_CHANGE_SIZE_THRESHOLD) {
     const structural = parseStructure(newText);
     return { 
       structural, 
@@ -172,7 +173,7 @@ const patchStructure = (
     const oldScene = prevStructural.scenes.find(s => 
       !affectedSceneIds.has(s.id) &&
       s.type === newScene.type &&
-      Math.abs(s.startOffset - newScene.startOffset) < 100
+      Math.abs(s.startOffset - newScene.startOffset) < INCREMENTAL_SCENE_MATCH_BUFFER
     );
     
     if (oldScene) {

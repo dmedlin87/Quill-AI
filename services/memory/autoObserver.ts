@@ -13,8 +13,10 @@
 
 import { AnalysisResult, CharacterProfile } from '@/types';
 import { ManuscriptIntelligence } from '@/types/intelligence';
-import { createMemory, getMemories, searchMemoriesByTags } from './index';
+import { createMemory } from './memoryService';
+import { getMemories, searchMemoriesByTags } from './memoryQueries';
 import { MemoryNote, MemoryNoteType } from './types';
+import { DUPLICATE_TEXT_OVERLAP_THRESHOLD } from '../../config/heuristics';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -72,7 +74,7 @@ export async function isDuplicate(
       const noteWords = noteLower.split(/\s+/);
       const overlap = noteWords.filter(w => words.has(w)).length / noteWords.length;
       
-      if (overlap > 0.6) return true;
+      if (overlap > DUPLICATE_TEXT_OVERLAP_THRESHOLD) return true;
     }
   }
   

@@ -1,44 +1,11 @@
-import { serializeBedsideNote, BedsideNoteSectionKey } from './bedsideNoteSerializer';
+import { serializeBedsideNote } from './bedsideNoteSerializer';
 import { BedsideNoteContent, BedsideNoteGoalSummary, MemoryNote } from './types';
 import { evolveBedsideNote, getOrCreateBedsideNote } from './chains';
-
-export type BedsideNoteAction = 'set' | 'append' | 'remove';
-
-export interface BedsideNoteMutationRequest {
-  section: BedsideNoteSectionKey;
-  action: BedsideNoteAction;
-  content: unknown;
-}
-
-const toArray = (value: unknown): string[] => {
-  if (Array.isArray(value)) {
-    return value.filter((v): v is string => typeof v === 'string');
-  }
-  if (typeof value === 'string') {
-    return [value];
-  }
-  return [];
-};
-
-const toGoalArray = (value: unknown): BedsideNoteGoalSummary[] => {
-  if (Array.isArray(value)) {
-    return value
-      .map(item => (typeof item === 'string' ? { title: item } : item))
-      .filter((item): item is BedsideNoteGoalSummary =>
-        !!item && typeof item === 'object' && 'title' in item && typeof (item as any).title === 'string'
-      );
-  }
-
-  if (typeof value === 'object' && value !== null && 'title' in value) {
-    return [value as BedsideNoteGoalSummary];
-  }
-
-  if (typeof value === 'string') {
-    return [{ title: value }];
-  }
-
-  return [];
-};
+import {
+  BedsideNoteMutation,
+  BedsideNoteMutationRequest,
+  parseBedsideNoteMutation,
+} from './bedside/schema';
 
 const mergeUnique = (existing: string[] = [], additions: string[]): string[] => {
   const set = new Set(existing);
@@ -46,15 +13,37 @@ const mergeUnique = (existing: string[] = [], additions: string[]): string[] => 
   return Array.from(set);
 };
 
-export function applyBedsideNoteMutationLocally(
+const mergeGoals = (
+  current: BedsideNoteGoalSummary[],
+  additions: BedsideNoteGoalSummary[],
+): BedsideNoteGoalSummary[] => {
+  const titles = new Set(current.map(goal => goal.title.toLowerCase()));
+  const merged = [...current];
+  for (const goal of additions) {
+    if (!titles.has(goal.title.toLowerCase())) {
+      merged.push(goal);
+    }
+  }
+  return merged;
+};
+
+const removeGoals = (
+  current: BedsideNoteGoalSummary[],
+  removals: BedsideNoteGoalSummary[],
+): BedsideNoteGoalSummary[] => {
+  const titlesToRemove = new Set(removals.map(goal => goal.title.toLowerCase()));
+  return current.filter(goal => !titlesToRemove.has(goal.title.toLowerCase()));
+};
+
+const applyMutation = (
   baseContent: BedsideNoteContent,
-  mutation: BedsideNoteMutationRequest,
-): { nextContent: BedsideNoteContent; text: string } {
+  mutation: BedsideNoteMutation,
+): BedsideNoteContent => {
   const nextContent: BedsideNoteContent = { ...baseContent };
 
   switch (mutation.section) {
     case 'currentFocus': {
-      const value = typeof mutation.content === 'string' ? mutation.content : '';
+      const value = mutation.content;
       if (mutation.action === 'set') {
         nextContent.currentFocus = value;
       } else if (mutation.action === 'append' && value) {
@@ -73,7 +62,7 @@ export function applyBedsideNoteMutationLocally(
     case 'nextSteps':
     case 'openQuestions':
     case 'recentDiscoveries': {
-      const values = toArray(mutation.content);
+      const values = mutation.content;
       const current = (nextContent[mutation.section] as string[] | undefined) ?? [];
 
       if (mutation.action === 'set') {
@@ -91,23 +80,15 @@ export function applyBedsideNoteMutationLocally(
     }
 
     case 'activeGoals': {
-      const goals = toGoalArray(mutation.content);
+      const goals = mutation.content;
       const currentGoals = nextContent.activeGoals ?? [];
 
       if (mutation.action === 'set') {
         nextContent.activeGoals = goals;
       } else if (mutation.action === 'append') {
-        const titles = new Set(currentGoals.map(goal => goal.title.toLowerCase()));
-        const merged = [...currentGoals];
-        for (const goal of goals) {
-          if (!titles.has(goal.title.toLowerCase())) {
-            merged.push(goal);
-          }
-        }
-        nextContent.activeGoals = merged;
+        nextContent.activeGoals = mergeGoals(currentGoals, goals);
       } else if (mutation.action === 'remove') {
-        const titlesToRemove = new Set(goals.map(goal => goal.title.toLowerCase()));
-        nextContent.activeGoals = currentGoals.filter(goal => !titlesToRemove.has(goal.title.toLowerCase()));
+        nextContent.activeGoals = removeGoals(currentGoals, goals);
         if (nextContent.activeGoals.length === 0) {
           delete nextContent.activeGoals;
         }
@@ -116,9 +97,18 @@ export function applyBedsideNoteMutationLocally(
     }
 
     default:
-      break;
+      return nextContent;
   }
 
+  return nextContent;
+};
+
+export function applyBedsideNoteMutationLocally(
+  baseContent: BedsideNoteContent,
+  mutationInput: BedsideNoteMutationRequest,
+): { nextContent: BedsideNoteContent; text: string } {
+  const mutation = parseBedsideNoteMutation(mutationInput);
+  const nextContent = applyMutation(baseContent, mutation);
   const { text } = serializeBedsideNote(nextContent);
   return { nextContent, text };
 }

@@ -7,13 +7,12 @@
 
 import { AppBrainState, AppBrainContext, AgentContextOptions } from './types';
 import { eventBus } from './eventBus';
+import { getMemoriesForContext } from '../memory/memoryQueries';
+import { getRelevantMemoriesForContext, type MemoryRelevanceOptions } from '../memory/memoryScoring';
 import {
-  getMemoriesForContext,
-  getRelevantMemoriesForContext,
   getActiveGoals,
   formatMemoriesForPrompt,
   formatGoalsForPrompt,
-  type MemoryRelevanceOptions,
 } from '../memory';
 import {
   buildAdaptiveContext,
@@ -22,7 +21,47 @@ import {
   type ContextProfile,
   type AdaptiveContextResult,
 } from './adaptiveContext';
-import { getCommandHistory } from '../commands/history';
+import {
+  getCommandHistory
+} from '../commands/history';
+
+export interface ContextSection {
+  key: string;
+  title: string;
+  lines: string[];
+}
+
+export interface ContextTemplate {
+  format: 'markdown' | 'json' | 'xml';
+}
+
+export const CHAT_CONTEXT_TEMPLATE: ContextTemplate = { format: 'markdown' };
+export const API_CONTEXT_TEMPLATE: ContextTemplate = { format: 'json' };
+
+const renderContext = (template: ContextTemplate, sections: ContextSection[]): string => {
+  const nonEmpty = sections.filter(section => section.lines.length > 0);
+
+  switch (template.format) {
+    case 'json':
+      return JSON.stringify(
+        nonEmpty.map(({ key, title, lines }) => ({ key, title, lines })),
+        null,
+        2
+      );
+    case 'xml':
+      return nonEmpty
+        .map(({ key, title, lines }) => {
+          const body = lines.map(line => `<line>${line}</line>`).join('');
+          return `<section id="${key}"><title>${title}</title>${body}</section>`;
+        })
+        .join('');
+    case 'markdown':
+    default:
+      return nonEmpty
+        .map(({ title, lines }) => `${title ? `[${title}]` : ''}\n${lines.join('\n')}`)
+        .join('\n\n');
+  }
+};
 
 /**
  * Build full context string for agent system prompt
@@ -30,120 +69,130 @@ import { getCommandHistory } from '../commands/history';
 export const buildAgentContext = (
   state: AppBrainState,
   options?: AgentContextOptions,
+  template: ContextTemplate = CHAT_CONTEXT_TEMPLATE,
 ): string => {
   const { manuscript, intelligence, analysis, lore, ui, session } = state;
-  let ctx = '';
+  const sections: ContextSection[] = [];
+
+  const createSection = (key: string, title: string): ContextSection => {
+    const section: ContextSection = { key, title, lines: [] };
+    sections.push(section);
+    return section;
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // MANUSCRIPT STATE
   // ─────────────────────────────────────────────────────────────────────────
-  ctx += `[MANUSCRIPT STATE]\n`;
-  ctx += `Project: ${manuscript.projectTitle}\n`;
-  ctx += `Chapters: ${manuscript.chapters.length}\n`;
+  const manuscriptSection = createSection('manuscript', 'MANUSCRIPT STATE');
+  manuscriptSection.lines.push(`Project: ${manuscript.projectTitle}`);
+  manuscriptSection.lines.push(`Chapters: ${manuscript.chapters.length}`);
   
   const activeChapter = manuscript.chapters.find(c => c.id === manuscript.activeChapterId);
   if (activeChapter) {
-    ctx += `Active Chapter: "${activeChapter.title}" (${manuscript.currentText.length} chars)\n`;
+    manuscriptSection.lines.push(`Active Chapter: "${activeChapter.title}" (${manuscript.currentText.length} chars)`);
   }
   
   if (manuscript.setting) {
-    ctx += `Setting: ${manuscript.setting.timePeriod}, ${manuscript.setting.location}\n`;
+    manuscriptSection.lines.push(`Setting: ${manuscript.setting.timePeriod}, ${manuscript.setting.location}`);
   }
   
   if (manuscript.branches.length > 0) {
-    ctx += `Branches: ${manuscript.branches.length}${manuscript.activeBranchId ? ' (on branch)' : ' (on main)'}\n`;
+    manuscriptSection.lines.push(`Branches: ${manuscript.branches.length}${manuscript.activeBranchId ? ' (on branch)' : ' (on main)'}`);
   }
-  ctx += '\n';
 
   // ─────────────────────────────────────────────────────────────────────────
   // UI STATE (What user is doing right now)
   // ─────────────────────────────────────────────────────────────────────────
-  ctx += `[CURRENT USER STATE]\n`;
-  ctx += `Cursor Position: ${ui.cursor.position}`;
-  if (ui.cursor.scene) ctx += ` (${ui.cursor.scene} scene)`;
-  ctx += '\n';
+  const uiSection = createSection('ui', 'CURRENT USER STATE');
+  const cursorLine = ui.cursor.scene
+    ? `Cursor Position: ${ui.cursor.position} (${ui.cursor.scene} scene)`
+    : `Cursor Position: ${ui.cursor.position}`;
+  uiSection.lines.push(cursorLine);
   
   if (ui.selection) {
     const previewText = ui.selection.text.length > 100 
       ? ui.selection.text.slice(0, 100) + '...' 
       : ui.selection.text;
-    ctx += `Selection: "${previewText}" [${ui.selection.start}-${ui.selection.end}]\n`;
+    uiSection.lines.push(`Selection: "${previewText}" [${ui.selection.start}-${ui.selection.end}]`);
   } else {
-    ctx += `Selection: None\n`;
+    uiSection.lines.push('Selection: None');
   }
   
-  ctx += `Active Panel: ${ui.activePanel}\n`;
-  ctx += `View Mode: ${ui.activeView}${ui.isZenMode ? ' (Zen Mode)' : ''}\n`;
-  ctx += `Mic: ${ui.microphone.status}${ui.microphone.lastTranscript ? ` (heard: "${ui.microphone.lastTranscript.slice(0, 60)}${ui.microphone.lastTranscript.length > 60 ? '...' : ''}")` : ''}\n`;
-  ctx += '\n';
+  uiSection.lines.push(`Active Panel: ${ui.activePanel}`);
+  uiSection.lines.push(`View Mode: ${ui.activeView}${ui.isZenMode ? ' (Zen Mode)' : ''}`);
+  uiSection.lines.push(
+    `Mic: ${ui.microphone.status}${
+      ui.microphone.lastTranscript
+        ? ` (heard: "${ui.microphone.lastTranscript.slice(0, 60)}${ui.microphone.lastTranscript.length > 60 ? '...' : ''}")`
+        : ''
+    }`
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
   // INTELLIGENCE HUD (if available)
   // ─────────────────────────────────────────────────────────────────────────
   if (intelligence.hud) {
     const hud = intelligence.hud;
+    const hudSection = createSection('intelligence_hud', 'INTELLIGENCE HUD');
     
-    ctx += `[INTELLIGENCE HUD]\n`;
-    
-    // Current scene context
     if (hud.situational.currentScene) {
       const scene = hud.situational.currentScene;
-      ctx += `Scene: ${scene.type}`;
-      if (scene.pov) ctx += `, POV: ${scene.pov}`;
-      if (scene.location) ctx += `, Location: ${scene.location}`;
-      ctx += `\n`;
+      const sceneParts = [`Scene: ${scene.type}`];
+      if (scene.pov) sceneParts.push(`POV: ${scene.pov}`);
+      if (scene.location) sceneParts.push(`Location: ${scene.location}`);
+      hudSection.lines.push(sceneParts.join(', '));
     }
     
-    ctx += `Tension: ${hud.situational.tensionLevel.toUpperCase()}\n`;
-    ctx += `Pacing: ${hud.situational.pacing}\n`;
-    ctx += `Progress: Scene ${hud.situational.narrativePosition.sceneIndex} of ${hud.situational.narrativePosition.totalScenes} (${hud.situational.narrativePosition.percentComplete}%)\n`;
+    hudSection.lines.push(`Tension: ${hud.situational.tensionLevel.toUpperCase()}`);
+    hudSection.lines.push(`Pacing: ${hud.situational.pacing}`);
+    hudSection.lines.push(
+      `Progress: Scene ${hud.situational.narrativePosition.sceneIndex} of ${hud.situational.narrativePosition.totalScenes} (${hud.situational.narrativePosition.percentComplete}%)`
+    );
     
-    // Active entities
     if (hud.context.activeEntities.length > 0) {
-      ctx += `\nActive Characters:\n`;
+      hudSection.lines.push('');
+      hudSection.lines.push('Active Characters:');
       for (const entity of hud.context.activeEntities.slice(0, 5)) {
-        ctx += `• ${entity.name} (${entity.type}) - ${entity.mentionCount} mentions\n`;
+        hudSection.lines.push(`• ${entity.name} (${entity.type}) - ${entity.mentionCount} mentions`);
       }
     }
     
-    // Active relationships
     if (hud.context.activeRelationships.length > 0) {
-      ctx += `\nKey Relationships:\n`;
+      hudSection.lines.push('');
+      hudSection.lines.push('Key Relationships:');
       for (const rel of hud.context.activeRelationships.slice(0, 3)) {
         const source = hud.context.activeEntities.find(e => e.id === rel.source);
         const target = hud.context.activeEntities.find(e => e.id === rel.target);
         if (source && target) {
-          ctx += `• ${source.name} ←${rel.type}→ ${target.name}\n`;
+          hudSection.lines.push(`• ${source.name} ←${rel.type}→ ${target.name}`);
         }
       }
     }
     
-    // Open plot threads
     if (hud.context.openPromises.length > 0) {
-      ctx += `\nOpen Plot Threads:\n`;
+      hudSection.lines.push('');
+      hudSection.lines.push('Open Plot Threads:');
       for (const promise of hud.context.openPromises.slice(0, 3)) {
-        ctx += `⚡ [${promise.type.toUpperCase()}] ${promise.description.slice(0, 60)}...\n`;
+        hudSection.lines.push(`⚡ [${promise.type.toUpperCase()}] ${promise.description.slice(0, 60)}...`);
       }
     }
     
-    // Style alerts
     if (hud.styleAlerts.length > 0) {
-      ctx += `\nStyle Alerts:\n`;
+      hudSection.lines.push('');
+      hudSection.lines.push('Style Alerts:');
       for (const alert of hud.styleAlerts) {
-        ctx += `⚠️ ${alert}\n`;
+        hudSection.lines.push(`⚠️ ${alert}`);
       }
     }
     
-    // Priority issues
     if (hud.prioritizedIssues.length > 0) {
-      ctx += `\nPriority Issues:\n`;
+      hudSection.lines.push('');
+      hudSection.lines.push('Priority Issues:');
       for (const issue of hud.prioritizedIssues) {
         const icon = issue.severity > 0.7 ? '🔴' : issue.severity > 0.4 ? '🟡' : '🟢';
-        ctx += `${icon} ${issue.description}\n`;
+        hudSection.lines.push(`${icon} ${issue.description}`);
       }
     }
-    
-    ctx += '\n';
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -151,61 +200,58 @@ export const buildAgentContext = (
   // ─────────────────────────────────────────────────────────────────────────
   if (analysis.result) {
     const result = analysis.result;
-    
-    ctx += `[ANALYSIS INSIGHTS]\n`;
+    const analysisSection = createSection('analysis', 'ANALYSIS INSIGHTS');
     
     if (result.summary) {
-      ctx += `Summary: ${result.summary.slice(0, 200)}...\n`;
+      analysisSection.lines.push(`Summary: ${result.summary.slice(0, 200)}...`);
     }
     
     if (result.strengths.length > 0) {
-      ctx += `Strengths: ${result.strengths.slice(0, 3).join(', ')}\n`;
+      analysisSection.lines.push(`Strengths: ${result.strengths.slice(0, 3).join(', ')}`);
     }
     
     if (result.weaknesses.length > 0) {
-      ctx += `Weaknesses: ${result.weaknesses.slice(0, 3).join(', ')}\n`;
+      analysisSection.lines.push(`Weaknesses: ${result.weaknesses.slice(0, 3).join(', ')}`);
     }
     
     if (result.plotIssues.length > 0) {
-      ctx += `\nPlot Issues:\n`;
+      analysisSection.lines.push('');
+      analysisSection.lines.push('Plot Issues:');
       for (const issue of result.plotIssues.slice(0, 3)) {
-        ctx += `• ${issue.issue} (Fix: ${issue.suggestion?.slice(0, 50)}...)\n`;
+        analysisSection.lines.push(`• ${issue.issue} (Fix: ${issue.suggestion?.slice(0, 50)}...)`);
       }
     }
-    
-    ctx += '\n';
   }
   
-  // Inline comments status
   if (analysis.inlineComments.length > 0) {
     const activeComments = analysis.inlineComments.filter(c => !c.dismissed);
-    ctx += `Active Inline Comments: ${activeComments.length}\n\n`;
+    const commentsSection = createSection('inline_comments', 'INLINE COMMENTS');
+    commentsSection.lines.push(`Active Inline Comments: ${activeComments.length}`);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // LORE CONTEXT
   // ─────────────────────────────────────────────────────────────────────────
   if (lore.characters.length > 0 || lore.worldRules.length > 0) {
-    ctx += `[LORE BIBLE]\n`;
+    const loreSection = createSection('lore', 'LORE BIBLE');
     
     if (lore.characters.length > 0) {
-      ctx += `Characters (${lore.characters.length}):\n`;
+      loreSection.lines.push(`Characters (${lore.characters.length}):`);
       for (const char of lore.characters.slice(0, 5)) {
-        ctx += `• ${char.name}: ${char.bio?.slice(0, 60) || 'No bio'}...\n`;
+        loreSection.lines.push(`• ${char.name}: ${char.bio?.slice(0, 60) || 'No bio'}...`);
         if (char.inconsistencies && char.inconsistencies.length > 0) {
-          ctx += `  ⚠️ Has ${char.inconsistencies.length} inconsistencies\n`;
+          loreSection.lines.push(`  ⚠️ Has ${char.inconsistencies.length} inconsistencies`);
         }
       }
     }
     
     if (lore.worldRules.length > 0) {
-      ctx += `\nWorld Rules (${lore.worldRules.length}):\n`;
+      loreSection.lines.push('');
+      loreSection.lines.push(`World Rules (${lore.worldRules.length}):`);
       for (const rule of lore.worldRules.slice(0, 3)) {
-        ctx += `• ${rule.slice(0, 80)}...\n`;
+        loreSection.lines.push(`• ${rule.slice(0, 80)}...`);
       }
     }
-    
-    ctx += '\n';
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -213,8 +259,8 @@ export const buildAgentContext = (
   // ─────────────────────────────────────────────────────────────────────────
   const recentEvents = eventBus.formatRecentEventsForAI(5);
   if (recentEvents) {
-    ctx += recentEvents;
-    ctx += '\n';
+    const eventsSection = createSection('recent_activity', 'RECENT ACTIVITY');
+    eventsSection.lines.push(...recentEvents.trim().split('\n'));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -222,7 +268,8 @@ export const buildAgentContext = (
   // ─────────────────────────────────────────────────────────────────────────
   const commandHistory = getCommandHistory().formatForPrompt(5);
   if (commandHistory) {
-    ctx += commandHistory;
+    const historySection = createSection('agent_actions', 'RECENT AGENT ACTIONS');
+    historySection.lines.push(...commandHistory.trim().split('\n'));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -233,30 +280,29 @@ export const buildAgentContext = (
     const profiles = Object.values(voice.profiles);
 
     if (profiles.length > 0) {
-      ctx += `[DEEP ANALYSIS: VOICE FINGERPRINTS]\n`;
+      const voiceSection = createSection('voice_fingerprints', 'DEEP ANALYSIS: VOICE FINGERPRINTS');
       for (const profile of profiles.slice(0, 5)) {
         const latinatePct = Math.round(profile.metrics.latinateRatio * 100);
         const contractionPct = Math.round(profile.metrics.contractionRatio * 100);
-        ctx += `• ${profile.speakerName}: ${profile.impression} (${latinatePct}% Formal, ${contractionPct}% Casual).\n`;
+        voiceSection.lines.push(`• ${profile.speakerName}: ${profile.impression} (${latinatePct}% Formal, ${contractionPct}% Casual).`);
       }
-      ctx += 'Use these metrics to ensure character voice consistency.\n\n';
+      voiceSection.lines.push('Use these metrics to ensure character voice consistency.');
     }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // AGENT MEMORY (async section - placeholder, populated separately)
   // ─────────────────────────────────────────────────────────────────────────
-  // Memory is injected via buildAgentContextWithMemory() for async retrieval
-  ctx += `[AGENT MEMORY]\n`;
-  ctx += `(Memory context loaded separately - see buildAgentContextWithMemory)\n\n`;
+  const memorySection = createSection('agent_memory', 'AGENT MEMORY');
+  memorySection.lines.push('(Memory context loaded separately - see buildAgentContextWithMemory)');
 
   // ─────────────────────────────────────────────────────────────────────────
   // SESSION STATE
   // ─────────────────────────────────────────────────────────────────────────
   if (session.lastAgentAction) {
-    ctx += `[LAST AGENT ACTION]\n`;
-    ctx += `${session.lastAgentAction.type}: ${session.lastAgentAction.description}\n`;
-    ctx += `Result: ${session.lastAgentAction.success ? 'Success' : 'Failed'}\n\n`;
+    const sessionSection = createSection('session', 'LAST AGENT ACTION');
+    sessionSection.lines.push(`${session.lastAgentAction.type}: ${session.lastAgentAction.description}`);
+    sessionSection.lines.push(`Result: ${session.lastAgentAction.success ? 'Success' : 'Failed'}`);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -264,26 +310,28 @@ export const buildAgentContext = (
   // ─────────────────────────────────────────────────────────────────────────
   if (intelligence.hud) {
     const stats = intelligence.hud.stats;
-    ctx += `[STATS]\n`;
-    ctx += `Words: ${stats.wordCount.toLocaleString()} | `;
-    ctx += `Reading: ~${stats.readingTime} min | `;
-    ctx += `Dialogue: ${stats.dialoguePercent}% | `;
-    ctx += `Avg Sentence: ${stats.avgSentenceLength} words\n`;
+    const statsSection = createSection('stats', 'STATS');
+    statsSection.lines.push(
+      `Words: ${stats.wordCount.toLocaleString()} | Reading: ~${stats.readingTime} min | Dialogue: ${stats.dialoguePercent}% | Avg Sentence: ${stats.avgSentenceLength} words`
+    );
   }
 
-  return ctx;
+  return renderContext(template, sections);
 };
 
 /**
  * Build full context string with memory (async)
  * This is the primary context builder for agent sessions.
  */
+const MEMORY_PLACEHOLDER = '[AGENT MEMORY]\n(Memory context loaded separately - see buildAgentContextWithMemory)';
+
 export const buildAgentContextWithMemory = async (
   state: AppBrainState,
-  projectId: string | null
+  projectId: string | null,
+  template: ContextTemplate = CHAT_CONTEXT_TEMPLATE,
 ): Promise<string> => {
   // Start with base context
-  let ctx = buildAgentContext(state);
+  let ctx = buildAgentContext(state, undefined, template);
 
   // Replace the placeholder memory section with actual memory
   if (projectId) {
@@ -294,27 +342,41 @@ export const buildAgentContextWithMemory = async (
       ]);
 
       // Build memory section
-      let memorySection = '[AGENT MEMORY]\n';
-      
-      const formattedMemories = formatMemoriesForPrompt({ author, project }, { maxLength: 1500 });
-      if (formattedMemories) {
-        memorySection += formattedMemories + '\n';
-      } else {
-        memorySection += 'No memories stored yet.\n';
-      }
-
+      const formattedMemories = formatMemoriesForPrompt({ author, project }, { maxLength: 1500 }) || 'No memories stored yet.';
       const formattedGoals = formatGoalsForPrompt(goals);
-      if (formattedGoals) {
-        memorySection += '\n' + formattedGoals + '\n';
+
+      if (template.format === 'markdown') {
+        const memoryBlock = `[AGENT MEMORY]\n${formattedMemories}${formattedGoals ? `\n\n${formattedGoals}` : ''}`;
+        ctx = ctx.replace(MEMORY_PLACEHOLDER, memoryBlock);
+      } else if (template.format === 'json') {
+        try {
+          const parsed = JSON.parse(ctx) as { key: string; title: string; lines: string[] }[];
+          const memorySection = parsed.find(section => section.key === 'agent_memory');
+          if (memorySection) {
+            const lines: string[] = [formattedMemories];
+            if (formattedGoals) {
+              lines.push(...formattedGoals.split('\n'));
+            }
+            memorySection.lines = lines;
+          }
+          ctx = JSON.stringify(parsed, null, 2);
+        } catch {
+          // Fallback: append a JSON block if parsing fails
+          const memoryLines = formattedGoals ? [formattedMemories, ...formattedGoals.split('\n')] : [formattedMemories];
+          const memorySection = JSON.stringify(
+            { key: 'agent_memory', title: 'AGENT MEMORY', lines: memoryLines },
+            null,
+            2
+          );
+          ctx = `${ctx}\n${memorySection}`;
+        }
+      } else if (template.format === 'xml') {
+        const memoryLines = formattedGoals ? [formattedMemories, ...formattedGoals.split('\n')] : [formattedMemories];
+        const memoryXmlLines = memoryLines.map(line => `<line>${line}</line>`).join('');
+        const memoryBlock = `<section id="agent_memory"><title>AGENT MEMORY</title>${memoryXmlLines}</section>`;
+        const replaced = ctx.replace(/<section id="agent_memory">[\s\S]*?<\/section>/, memoryBlock);
+        ctx = replaced === ctx ? `${ctx}${memoryBlock}` : replaced;
       }
-
-      memorySection += '\n';
-
-      // Replace placeholder with actual memory content
-      ctx = ctx.replace(
-        /\[AGENT MEMORY\]\n\(Memory context loaded separately - see buildAgentContextWithMemory\)\n\n/,
-        memorySection
-      );
     } catch (error) {
       console.warn('Failed to load memory context:', error);
       // Leave placeholder if memory fails
