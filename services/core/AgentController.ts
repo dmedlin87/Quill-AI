@@ -330,17 +330,9 @@ export class DefaultAgentController implements AgentController {
         console.warn('[AgentController] Streaming is not yet implemented.');
       }
 
-      // Build context-aware prompt (ported from useAgentService)
+      // Build context-aware prompt using shared builder
       const { editorContext } = input;
-      const contextPrompt = `
-      [USER CONTEXT]
-      Cursor Index: ${editorContext.cursorPosition}
-      Selection: ${editorContext.selection ? `"${editorContext.selection.text}"` : 'None'}
-      Total Text Length: ${editorContext.totalLength}
-      
-      [USER REQUEST]
-      ${input.text}
-      `;
+      const contextPrompt = buildUserContextPrompt(editorContext, input.text);
 
       // Send to agent and run shared tool loop
       const initialResult = (await chat.sendMessage({

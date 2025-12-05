@@ -162,35 +162,9 @@ export function useAgentService(
       onMessage: (message) => {
         appendMessages(message);
       },
-      onToolCallStart: ({ name }) => {
-        setAgentState({ status: 'executing' });
-        appendMessages({
-          role: 'model',
-          text: `🛠️ Suggesting Action: ${name}...`,
-          timestamp: new Date()
-        });
-      },
-      onToolCallEnd: ({ result }) => {
-        if (result.message.includes('Waiting for user review')) {
-          appendMessages({
-            role: 'model',
-            text: `📝 Reviewing proposed edit...`,
-            timestamp: new Date()
-          });
-        }
-      },
       onError: (error) => {
         console.error('[AgentService] Error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        setAgentState({
-          status: 'error',
-          lastError: errorMessage
-        });
-        appendMessages({
-          role: 'model',
-          text: "Sorry, I encountered an error connecting to the Agent.",
-          timestamp: new Date()
-        });
+        // State and UI messages are handled by onStateChange/onMessage from the controller
       },
     };
 

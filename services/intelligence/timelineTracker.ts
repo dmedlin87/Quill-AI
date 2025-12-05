@@ -92,6 +92,7 @@ const PROMISE_PATTERNS: Array<{ pattern: RegExp; type: PlotPromise['type'] }> = 
   { pattern: /\b(who (?:was|had|could) \w+\?)/gi, type: 'question' },
   { pattern: /\b(why (?:had|did|would) \w+\?)/gi, type: 'question' },
   { pattern: /\b(the mystery of)\b/gi, type: 'question' },
+  { pattern: /\b(the mystery (?:remained|remains|still|persisted)(?:\s+\w+)*)\b/gi, type: 'question' },
   { pattern: /\b(remained a (?:mystery|secret|puzzle))\b/gi, type: 'question' },
   
   // Conflicts
@@ -120,6 +121,10 @@ const RESOLUTION_PATTERNS = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 const generateId = (): string => Math.random().toString(36).substring(2, 11);
+const resetPattern = (pattern: RegExp) => {
+  pattern.lastIndex = 0;
+  return pattern;
+};
 
 const extractSentence = (text: string, offset: number): string => {
   // Find sentence boundaries
@@ -293,6 +298,7 @@ export const extractPlotPromises = (
   // Find promises/setups
   for (const { pattern, type } of PROMISE_PATTERNS) {
     let match;
+    resetPattern(pattern);
     while ((match = pattern.exec(text)) !== null) {
       const sentence = extractSentence(text, match.index);
       
@@ -311,6 +317,7 @@ export const extractPlotPromises = (
   // Check for resolutions
   for (const pattern of RESOLUTION_PATTERNS) {
     let match;
+    resetPattern(pattern);
     while ((match = pattern.exec(text)) !== null) {
       // Look for a promise that might be resolved here
       const nearbyPromise = promises.find(p => 

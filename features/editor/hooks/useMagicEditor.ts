@@ -199,6 +199,13 @@ export function useMagicEditor({
     });
   }, []);
 
+  const closeMagicBar = useCallback(() => {
+    abortMagicOperation();
+    resetMagicState();
+    operationSelectionRef.current = null;
+    // Note: caller should decide whether to clear selection
+  }, [abortMagicOperation, resetMagicState]);
+
   const applyGrammarSuggestion = useCallback((id: string | null = null) => {
     const targetSuggestion = id
       ? grammarSuggestions.find(s => s.id === id)
@@ -266,13 +273,6 @@ export function useMagicEditor({
     closeMagicBar();
     clearSelection();
   }, [grammarSuggestions, getCurrentText, commit, closeMagicBar, clearSelection]);
-
-  const closeMagicBar = useCallback(() => {
-    abortMagicOperation();
-    resetMagicState();
-    operationSelectionRef.current = null;
-    // Note: caller should decide whether to clear selection
-  }, [abortMagicOperation, resetMagicState]);
 
   const applyVariation = useCallback((newText: string) => {
     const currentText = getCurrentText();

@@ -364,5 +364,67 @@ describe('proactiveThinker', () => {
 
       thinker.stop();
     });
+
+    it('skips thinking when already in progress', async () => {
+      const thinker = new ProactiveThinker();
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      // Prime with an event
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 100, delta: 10 } });
+
+      // Force in-progress state
+      (thinker as any).state.isThinking = true;
+
+      vi.useRealTimers();
+      const result = await (thinker as any).performThinking();
+      vi.useFakeTimers();
+
+      expect(result).toBeNull();
+      expect(onSuggestion).not.toHaveBeenCalled();
+
+      thinker.stop();
+    });
+
+    it('respects bedside evolve cooldown for significant edits', () => {
+      const thinker = new ProactiveThinker({
+        bedsideCooldownMs: 1000,
+        minEventsToThink: 1,
+      });
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      // First significant edit
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 1000, delta: 600 } });
+      expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledTimes(1);
+
+      // Second edit within cooldown should be suppressed
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 1600, delta: 600 } });
+      expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledTimes(1);
+
+      // Advance past both bedside cooldown (1s) and significant edit cooldown (5 min)
+      vi.advanceTimersByTime(5 * 60 * 1000 + 2000);
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 2200, delta: 600 } });
+      expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledTimes(2);
+
+      thinker.stop();
+    });
+
+    it('disables bedside evolves when flag is off', () => {
+      const thinker = new ProactiveThinker({
+        allowBedsideEvolve: false,
+      });
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 1000, delta: 600 } });
+      expect(memoryMocks.evolveBedsideNote).not.toHaveBeenCalled();
+
+      thinker.stop();
+    });
   });
 });
