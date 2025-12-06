@@ -12,7 +12,7 @@ import { runAgentToolLoop, AgentToolLoopModelResult } from '@/services/core/agen
 import { createChatSessionFromContext, buildInitializationMessage } from './agentSession';
 import { buildAgentContextPrompt } from './agentContextBuilder';
 import { getSmartAgentContext, type AppBrainState } from '@/services/appBrain';
-import { ToolRunner } from './toolRunner.ts';
+import { ToolRunner } from './toolRunner';
 
 // ---- Shared with existing hook ----
 
@@ -233,6 +233,8 @@ export class DefaultAgentController implements AgentController {
       getProjectId: () => this.context.projectId ?? null,
       onMessage: this.events?.onMessage,
       onStateChange: state => this.updateState(state),
+      onToolCallStart: this.events?.onToolCallStart,
+      onToolCallEnd: this.events?.onToolCallEnd,
     });
   }
 
@@ -328,7 +330,16 @@ export class DefaultAgentController implements AgentController {
     try {
       const { streamHandlers } = input.options || {};
       if (streamHandlers) {
-        throw new Error('Streaming is not yet implemented for AgentController.');
+        // Streaming not yet implemented; fail fast with a friendly message and callback
+        const streamingError = new Error('Streaming is not yet implemented for AgentController.');
+        streamHandlers.onError?.(streamingError);
+        this.events?.onMessage?.({
+          role: 'model',
+          text: 'Streaming is not available yet; falling back to standard response.',
+          timestamp: new Date(),
+        });
+        this.updateState({ status: 'idle', lastError: undefined });
+        return;
       }
 
       // Build smart context when possible; fallback to editor-only context
@@ -405,7 +416,8 @@ export class DefaultAgentController implements AgentController {
         });
         smartContextString = smartContext.context;
       } catch (e) {
-        console.warn('[AgentController] Falling back to editor-only context:', e);
+        const reason = e instanceof Error ? e.message : String(e);
+        console.warn('[AgentController] Falling back to editor-only context:', reason);
       }
 
       const contextPrompt = buildAgentContextPrompt({
@@ -486,17 +498,28 @@ export class DefaultAgentController implements AgentController {
   async resetSession(): Promise<void> {
     this.abortCurrentRequest();
     this.updateState({ status: 'idle', lastError: undefined });
-    // TODO: Reset underlying chat session once wired to Gemini layer.
+    // Reinitialize chat session with current persona if available
+    if (this.currentPersona) {
+      await this.initializeChat(this.currentPersona, this.context.projectId ?? null);
+    } else {
+      this.chat = null;
+    }
   }
 
   dispose(): void {
     this.abortCurrentRequest();
+    this.chat = null;
     this.updateState({ status: 'idle', lastError: undefined });
-    // TODO: Additional resource cleanup if the implementation requires it.
+    // Additional resource cleanup would go here if the underlying Chat supports it.
   }
 
   async setPersona(persona: Persona): Promise<void> {
     await this.initializeChat(persona, this.context.projectId ?? null);
+    this.events?.onMessage?.({
+      role: 'model',
+      text: `${persona.icon ?? '🤖'} Switching to ${persona.name}. ${persona.role ?? ''}`.trim(),
+      timestamp: new Date(),
+    });
   }
 
   abortCurrentRequest(): void {

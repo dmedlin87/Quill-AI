@@ -1,6 +1,7 @@
 import type { FunctionCall } from '@google/genai';
 import type { ChatMessage } from '@/types';
 import type { AgentToolExecutor, AgentState } from './AgentController';
+import type { ToolResult } from '@/services/gemini/toolExecutor';
 import { getOrCreateBedsideNote } from '@/services/memory';
 
 interface ToolRunnerOptions {
@@ -8,6 +9,8 @@ interface ToolRunnerOptions {
   getProjectId: () => string | null;
   onMessage?: (message: ChatMessage) => void;
   onStateChange?: (state: Partial<AgentState>) => void;
+  onToolCallStart?: (payload: { id: string; name: string; args: Record<string, unknown> }) => void;
+  onToolCallEnd?: (payload: { id: string; name: string; result: ToolResult }) => void;
 }
 
 export class ToolRunner {
@@ -15,6 +18,8 @@ export class ToolRunner {
   private readonly getProjectId: () => string | null;
   private readonly onMessage?: (message: ChatMessage) => void;
   private readonly onStateChange?: (state: Partial<AgentState>) => void;
+  private readonly onToolCallStart?: ToolRunnerOptions['onToolCallStart'];
+  private readonly onToolCallEnd?: ToolRunnerOptions['onToolCallEnd'];
   private significantActionSeen = false;
   private bedsideNoteUpdatedThisTurn = false;
 
@@ -23,6 +28,8 @@ export class ToolRunner {
     this.getProjectId = options.getProjectId;
     this.onMessage = options.onMessage;
     this.onStateChange = options.onStateChange;
+    this.onToolCallStart = options.onToolCallStart;
+    this.onToolCallEnd = options.onToolCallEnd;
   }
 
   resetTurn(): void {
@@ -96,6 +103,10 @@ export class ToolRunner {
     }> = [];
 
     for (const call of functionCalls) {
+      const callId =
+        call.id ||
+        (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+
       this.onStateChange?.({ status: 'executing', lastError: undefined });
 
       const toolMessage: ChatMessage = {
@@ -104,6 +115,7 @@ export class ToolRunner {
         timestamp: new Date(),
       };
       this.onMessage?.(toolMessage);
+      this.onToolCallStart?.({ id: callId, name: call.name, args: (call.args || {}) as Record<string, unknown> });
 
       try {
         const args = (call.args || {}) as Record<string, unknown>;
@@ -115,14 +127,12 @@ export class ToolRunner {
           : result.message;
 
         responses.push({
-          id:
-            call.id ||
-            (typeof crypto !== 'undefined'
-              ? crypto.randomUUID()
-              : `${Date.now()}-${Math.random()}`),
+          id: callId,
           name: call.name,
           response: { result: actionResult },
         });
+
+        this.onToolCallEnd?.({ id: callId, name: call.name, result });
 
         if (actionResult.includes('Waiting for user review')) {
           const reviewMessage: ChatMessage = {
@@ -132,8 +142,31 @@ export class ToolRunner {
           };
           this.onMessage?.(reviewMessage);
         }
-      } catch (_err: unknown) {
-        // Preserve original behavior: swallow tool execution errors silently.
+      } catch (err: unknown) {
+        // Push fallback functionResponse so the model stays in sync
+        const errorMessage =
+          err instanceof Error ? err.message : 'Unknown error executing tool';
+        const fallbackResult = `Error executing ${call.name}: ${errorMessage}`;
+
+        responses.push({
+          id: callId,
+          name: call.name,
+          response: { result: fallbackResult },
+        });
+
+        // Surface error to UI
+        const errorMsg: ChatMessage = {
+          role: 'model',
+          text: `⚠️ Tool error: ${errorMessage}`,
+          timestamp: new Date(),
+        };
+        this.onMessage?.(errorMsg);
+        this.onStateChange?.({ status: 'error', lastError: errorMessage });
+        this.onToolCallEnd?.({
+          id: callId,
+          name: call.name,
+          result: { success: false, message: fallbackResult, error: errorMessage },
+        });
       }
     }
 

@@ -333,6 +333,76 @@ describe('DefaultAgentController', () => {
     ).toBe(true);
   });
 
+  it('rejects streaming requests with a friendly message and idle state', async () => {
+    mockSendMessage.mockResolvedValueOnce({ text: '' }); // init
+
+    const streamHandlers = {
+      onChunk: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    const events = {
+      onStateChange: vi.fn(),
+      onMessage: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    const { controller } = makeController({ events });
+
+    await controller.sendMessage({
+      text: 'Stream this',
+      editorContext,
+      options: { streamHandlers },
+    });
+
+    expect(streamHandlers.onError).toHaveBeenCalled();
+    const messageTexts = (events.onMessage as any).mock.calls.map((call: any[]) => call[0].text);
+    expect(messageTexts).toContain('Streaming is not available yet; falling back to standard response.');
+
+    const lastState = (events.onStateChange as any).mock.calls.at(-1)?.[0];
+    expect(lastState.status).toBe('idle');
+  });
+
+  it('reinitializes chat on resetSession and clears chat on dispose', async () => {
+    mockSendMessage.mockResolvedValueOnce({ text: '' }); // init
+    mockSendMessage.mockResolvedValueOnce({ text: 'First reply', functionCalls: [] });
+
+    const { controller } = makeController();
+    await controller.sendMessage({ text: 'Hello once', editorContext });
+
+    expect(mockCreateChatSessionFromContext).toHaveBeenCalledTimes(1);
+
+    // resetSession should reinitialize
+    mockSendMessage.mockResolvedValueOnce({ text: '' }); // init after reset
+    await controller.resetSession();
+    expect(mockCreateChatSessionFromContext).toHaveBeenCalledTimes(2);
+
+    // dispose should drop chat; next sendMessage re-inits
+    controller.dispose();
+    mockSendMessage.mockResolvedValueOnce({ text: '' }); // init after dispose
+    mockSendMessage.mockResolvedValueOnce({ text: 'After dispose', functionCalls: [] });
+    await controller.sendMessage({ text: 'After dispose send', editorContext });
+    expect(mockCreateChatSessionFromContext).toHaveBeenCalledTimes(3);
+  });
+
+  it('announces persona switch on setPersona', async () => {
+    mockSendMessage.mockResolvedValueOnce({ text: '' }); // init
+
+    const events = {
+      onStateChange: vi.fn(),
+      onMessage: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    const { controller } = makeController({ events });
+
+    const newPersona = { ...persona, name: 'Navigator', icon: '🧭', role: 'Guides you' };
+    await controller.setPersona(newPersona as any);
+
+    const messageTexts = (events.onMessage as any).mock.calls.map((call: any[]) => call[0].text);
+    expect(messageTexts.some(text => text.includes('Switching to Navigator'))).toBe(true);
+  });
+
   it('builds smart context when available and falls back on failure', async () => {
     mockSendMessage.mockResolvedValueOnce({ text: 'init-ok' });
     mockSendMessage.mockResolvedValueOnce({ text: 'response' });
@@ -349,12 +419,13 @@ describe('DefaultAgentController', () => {
 
     // Now force smart context to throw to ensure fallback still sends
     mockSendMessage.mockClear();
+    mockSendMessage.mockResolvedValueOnce({ text: 'fallback-response' });
     mockGetSmartAgentContext.mockRejectedValueOnce(new Error('ctx failed'));
 
     await controller.sendMessage({ text: 'Fallback please', editorContext });
 
     expect(mockGetSmartAgentContext).toHaveBeenCalledTimes(2);
-    const sentPromptFallback = mockSendMessage.mock.calls[1]?.[0]?.message as string;
+    const sentPromptFallback = mockSendMessage.mock.calls[0]?.[0]?.message as string;
     expect(sentPromptFallback).toContain('[USER CONTEXT]'); // fallback path uses editor context
 
     // User/model messages still emitted
@@ -396,5 +467,63 @@ describe('DefaultAgentController', () => {
       ),
     ).toBe(false);
     expect(events.onError).not.toHaveBeenCalled();
+  });
+
+  it('pushes fallback functionResponse on tool execution error', async () => {
+    // Init session
+    mockSendMessage.mockResolvedValueOnce({ text: '' });
+    // First model response: one tool call
+    mockSendMessage.mockResolvedValueOnce({
+      text: '',
+      functionCalls: [
+        { id: 'call-err', name: 'update_manuscript', args: { foo: 'bar' } },
+      ],
+    });
+    // Second model response after receiving the error fallback
+    mockSendMessage.mockResolvedValueOnce({
+      text: 'Recovered after error',
+      functionCalls: [],
+    });
+
+    const events = {
+      onStateChange: vi.fn(),
+      onMessage: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    const { controller, toolExecutor } = makeController({
+      events,
+      toolExecutorExecute: async () => {
+        throw new Error('Network failure');
+      },
+    });
+
+    await controller.sendMessage({ text: 'Trigger tool error', editorContext });
+
+    // Tool executor was invoked
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+
+    // Third sendMessage call contains the fallback functionResponse with error
+    const toolLoopPayload = mockSendMessage.mock.calls[2]?.[0]?.message?.[0]?.functionResponse;
+    expect(toolLoopPayload).toBeDefined();
+    expect(toolLoopPayload.response.result).toContain('Error executing update_manuscript');
+    expect(toolLoopPayload.response.result).toContain('Network failure');
+
+    // Error message surfaced to UI
+    const messageTexts = (events.onMessage as any).mock.calls.map(
+      (call: any[]) => call[0].text,
+    );
+    expect(messageTexts.some((text: string) => text.includes('⚠️ Tool error: Network failure'))).toBe(
+      true,
+    );
+
+    // State updated to error then recovered
+    const statuses = (events.onStateChange as any).mock.calls.map(
+      (call: any[]) => call[0].status,
+    );
+    expect(statuses).toContain('error');
+
+    // Final model response still received after recovery
+    expect(messageTexts).toContain('Recovered after error');
   });
 });

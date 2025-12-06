@@ -5,18 +5,26 @@ import { DEFAULT_PERSONAS } from '@/types/personas';
 import type { FunctionCall } from '@google/genai';
 import type { EditorContext } from '@/types';
 
-const { mockSendMessage, mockCreateAgentSession } = vi.hoisted(() => {
+const { mockSendMessage, mockCreateAgentSession, mockFetchMemoryContext } = vi.hoisted(() => {
   const mockSendMessage = vi.fn();
   const mockCreateAgentSession = vi.fn(() => ({
     sendMessage: mockSendMessage,
   }));
+  const mockFetchMemoryContext = vi.fn(async () => '[AGENT MEMORY]');
 
-  return { mockSendMessage, mockCreateAgentSession };
+  return { mockSendMessage, mockCreateAgentSession, mockFetchMemoryContext };
 });
 
 vi.mock('@/services/gemini/agent', () => ({
   createAgentSession: mockCreateAgentSession,
 }));
+
+vi.mock('@/services/core/agentSession', async actual => {
+  const mod = (await actual()) as Record<string, unknown>;
+  return Object.assign({}, mod, {
+    fetchMemoryContext: mockFetchMemoryContext,
+  });
+});
 
 describe('useAgentService', () => {
   const baseContext: EditorContext = {
@@ -189,5 +197,58 @@ describe('useAgentService', () => {
     expect(texts).not.toContain('First');
     expect(texts).toContain('Second');
     expect(texts.filter(t => t === 'Reply').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('trims messages when exceeding the limit', async () => {
+    mockSendMessage.mockResolvedValue({ text: 'Reply' });
+
+    const onToolAction = vi.fn().mockResolvedValue('ok');
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [{ id: 'ch1', projectId: 'p1', title: 'Chapter 1', content: 'Hello world', order: 0, updatedAt: Date.now() }],
+        analysis: null,
+        onToolAction,
+        messageLimit: 2,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.sendMessage('First', baseContext);
+      await result.current.sendMessage('Second', baseContext);
+      await result.current.sendMessage('Third', baseContext);
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages.length).toBe(2);
+      expect(result.current.messages.map(m => m.text)).toEqual(['Third', 'Reply']);
+    });
+  });
+
+  it('falls back gracefully when memory provider fails', async () => {
+    mockSendMessage.mockResolvedValue({ text: '' });
+    mockFetchMemoryContext.mockRejectedValueOnce(new Error('boom'));
+
+    const onToolAction = vi.fn().mockResolvedValue('ok');
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [{ id: 'ch1', projectId: 'p1', title: 'Chapter 1', content: 'Hello world', order: 0, updatedAt: Date.now() }],
+        analysis: null,
+        onToolAction,
+        projectId: 'p1',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockFetchMemoryContext).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Hi after failure', baseContext);
+    });
+
+    expect(result.current.messages.map(m => m.text)).toContain('Hi after failure');
+    expect(result.current.agentState.status).toBe('idle');
   });
 });

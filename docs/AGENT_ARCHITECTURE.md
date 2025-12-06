@@ -121,6 +121,14 @@ const agent = useAgent(); // Automatically has full context
 
 ## Implementation Plan
 
+### Current Controller Runtime Behavior (as implemented)
+
+- **Smart context with fallback**: AgentController builds AppBrain-aware context; if fetching fails, it logs a warning and falls back to editor-only context.
+- **Streaming guard**: Streaming requests are rejected with a friendly model message and onError callback until streaming is implemented.
+- **Lifecycle**: `resetSession` reinitializes chat if a persona is active; `dispose` aborts and clears chat; `setPersona` reinitializes and announces the switch.
+- **Tool loop signaling**: ToolRunner emits `onToolCallStart`/`onToolCallEnd` so UI can track tool execution rounds; bedside-note reflection still fires after significant tools.
+- **Aborts**: AbortError is treated as a clean cancel (idle state, no error message); other errors emit a friendly model error and set error state.
+
 ### Phase 1: App Brain (Foundation)
 
 Create a unified context provider that aggregates all state:

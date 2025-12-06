@@ -1,6 +1,11 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { vi, type Mock } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+
+// Hoist store mock so vi.mock factories can reference it safely
+const { mockUseProjectStore } = vi.hoisted(() => ({
+  mockUseProjectStore: vi.fn(),
+}));
 
 // Mock feature providers and layout before importing App
 vi.mock('@/features/shared', () => ({
@@ -42,27 +47,36 @@ vi.mock('@/features/layout', () => ({
 }));
 
 vi.mock('@/features/project', () => ({
-  useProjectStore: vi.fn(),
+  useProjectStore: mockUseProjectStore,
+}));
+vi.mock('@/features/project/store/useProjectStore', () => ({
+  useProjectStore: mockUseProjectStore,
 }));
 
 import App from '@/App';
-import { useProjectStore } from '@/features/project';
-
-const mockUseProjectStore = useProjectStore as unknown as Mock;
 
 describe('App', () => {
+  let store: any;
+
   beforeEach(() => {
-    vi.clearAllMocks();
+    const flushPendingWrites = vi.fn().mockResolvedValue({ pendingCount: 0, errors: [] });
+    store = {
+      init: vi.fn(),
+      isLoading: false,
+      flushPendingWrites,
+      projects: [],
+      currentProject: null,
+      chapters: [],
+      activeChapterId: null,
+      selectChapter: vi.fn(),
+      setActiveChapter: vi.fn(),
+      getActiveChapter: vi.fn(() => undefined),
+    };
+
+    mockUseProjectStore.mockReturnValue(store);
   });
 
   it('renders full provider tree and MainLayout when store is initialized', () => {
-    const initMock = vi.fn();
-
-    mockUseProjectStore.mockReturnValue({
-      init: initMock,
-      isLoading: false,
-    });
-
     render(<App />);
 
     expect(screen.getByTestId('usage-provider')).toBeInTheDocument();
@@ -70,13 +84,15 @@ describe('App', () => {
     expect(screen.getByTestId('engine-provider')).toBeInTheDocument();
     expect(screen.getByTestId('analysis-provider')).toBeInTheDocument();
     expect(screen.getByTestId('main-layout')).toBeInTheDocument();
-    expect(initMock).toHaveBeenCalledTimes(1);
+    expect(store.init).toHaveBeenCalledTimes(1);
   });
 
   it('shows loading spinner while project store is loading', () => {
     mockUseProjectStore.mockReturnValue({
+      ...store,
       init: vi.fn(),
       isLoading: true,
+      flushPendingWrites: vi.fn(),
     });
 
     render(<App />);
@@ -87,8 +103,10 @@ describe('App', () => {
 
   it('renders MainLayout when isLoading is false (initialized state)', () => {
     mockUseProjectStore.mockReturnValue({
+      ...store,
       init: vi.fn(),
       isLoading: false,
+      flushPendingWrites: vi.fn(),
     });
 
     render(<App />);
