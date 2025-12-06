@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
 import {
   addGoal,
   addWatchedEntity,
@@ -28,21 +28,32 @@ interface MemoryManagerProps {
   projectId?: string | null;
 }
 
+type MemoryFormState = Omit<CreateMemoryNoteInput, 'projectId' | 'topicTags' | 'importance'> & {
+  id?: string;
+  topicTags: string;
+  importance: number;
+  projectId?: string;
+};
+
+type GoalFormState = Partial<CreateGoalInput & { id?: string }>;
+
+type EntityFormState = Partial<WatchedEntity>;
+
 const MEMORY_TYPES: MemoryNoteType[] = ['observation', 'issue', 'fact', 'plan', 'preference'];
 const MEMORY_SCOPES: MemoryScope[] = ['project', 'author'];
 const GOAL_STATUSES: AgentGoal['status'][] = ['active', 'completed', 'abandoned'];
 
-const defaultMemoryForm = (projectId?: string | null) => ({
-  id: undefined as string | undefined,
+const defaultMemoryForm = (projectId?: string | null): MemoryFormState => ({
+  id: undefined,
   text: '',
-  type: 'observation' as MemoryNoteType,
+  type: 'observation',
   topicTags: '',
   importance: 0.5,
-  scope: 'project' as MemoryScope,
+  scope: 'project',
   projectId: projectId ?? undefined,
 });
 
-const defaultGoalForm: Partial<CreateGoalInput & { id?: string }> = {
+const defaultGoalForm: GoalFormState = {
   id: undefined,
   title: '',
   description: '',
@@ -50,7 +61,7 @@ const defaultGoalForm: Partial<CreateGoalInput & { id?: string }> = {
   progress: 0,
 };
 
-const defaultEntityForm: Partial<WatchedEntity> = {
+const defaultEntityForm: EntityFormState = {
   id: undefined,
   name: '',
   reason: '',
@@ -63,6 +74,10 @@ const TagBadge: React.FC<{ label: string }> = ({ label }) => (
 );
 
 const clampImportance = (value: number) => Math.max(0, Math.min(1, value));
+
+/**
+ * Normalizes user-entered importance to the [0, 1] range with a safe fallback.
+ */
 const normalizeImportance = (value: number) => (Number.isFinite(value) ? clampImportance(value) : 0.5);
 
 export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
@@ -77,8 +92,23 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
   const [error, setError] = useState<string | null>(null);
 
   const projectGuard = useMemo(() => !projectId, [projectId]);
+  const isMountedRef = useRef(true);
+  const memoryTextId = useId();
+  const memoryTagsId = useId();
+  const memoryImportanceId = useId();
 
-  const refreshData = async () => {
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  /**
+   * Fetches all scoped memory data for the active project.
+   * Memoized to avoid recreating the function in effects and handlers.
+   */
+  const refreshData = useCallback(async () => {
     if (!projectId) return;
     try {
       const [projectNotes, authorNotes, projectGoals, entities] = await Promise.all([
@@ -87,6 +117,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
         getGoals(projectId),
         getWatchedEntities(projectId),
       ]);
+      if (!isMountedRef.current) return;
       setProjectMemories(projectNotes);
       setAuthorMemories(authorNotes);
       setGoals(projectGoals);
@@ -94,7 +125,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
     } catch (err) {
       console.warn('[MemoryManager] Failed to refresh data', err);
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
     setMemoryForm(defaultMemoryForm(projectId));
@@ -102,11 +133,11 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
     setEntityForm(defaultEntityForm);
     setError(null);
     if (projectId) {
-      refreshData();
+      void refreshData();
     }
-  }, [projectId]);
+  }, [projectId, refreshData]);
 
-  const handleMemorySubmit = async (event: React.FormEvent) => {
+  const handleMemorySubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
 
@@ -136,13 +167,13 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
         await createMemory(payload);
       }
       setMemoryForm(defaultMemoryForm(projectId));
-      refreshData();
+      void refreshData();
     } catch (err: any) {
       setError(err?.message || 'Unable to save memory');
     }
-  };
+  }, [memoryForm, projectId, refreshData]);
 
-  const startEditMemory = (note: MemoryNote) => {
+  const startEditMemory = useCallback((note: MemoryNote) => {
     setMemoryForm({
       id: note.id,
       text: note.text,
@@ -152,14 +183,14 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       scope: note.scope,
       projectId: note.projectId,
     });
-  };
+  }, []);
 
-  const handleDeleteMemory = async (id: string) => {
+  const handleDeleteMemory = useCallback(async (id: string) => {
     await deleteMemory(id);
-    refreshData();
-  };
+    void refreshData();
+  }, [refreshData]);
 
-  const handleGoalSubmit = async (event: React.FormEvent) => {
+  const handleGoalSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     if (!projectId) {
@@ -182,13 +213,13 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
         await addGoal(payload);
       }
       setGoalForm(defaultGoalForm);
-      refreshData();
+      void refreshData();
     } catch (err: any) {
       setError(err?.message || 'Unable to save goal');
     }
-  };
+  }, [goalForm, projectId, refreshData]);
 
-  const startEditGoal = (goal: AgentGoal) => {
+  const startEditGoal = useCallback((goal: AgentGoal) => {
     setGoalForm({
       id: goal.id,
       title: goal.title,
@@ -196,14 +227,14 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       status: goal.status,
       progress: goal.progress,
     });
-  };
+  }, []);
 
-  const handleDeleteGoal = async (id: string) => {
+  const handleDeleteGoal = useCallback(async (id: string) => {
     await deleteGoal(id);
-    refreshData();
-  };
+    void refreshData();
+  }, [refreshData]);
 
-  const handleEntitySubmit = async (event: React.FormEvent) => {
+  const handleEntitySubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     if (!projectId) {
@@ -226,13 +257,13 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
         await addWatchedEntity(payload);
       }
       setEntityForm(defaultEntityForm);
-      refreshData();
+      void refreshData();
     } catch (err: any) {
       setError(err?.message || 'Unable to save watched entity');
     }
-  };
+  }, [entityForm, projectId, refreshData]);
 
-  const startEditEntity = (entity: WatchedEntity) => {
+  const startEditEntity = useCallback((entity: WatchedEntity) => {
     setEntityForm({
       id: entity.id,
       name: entity.name,
@@ -240,22 +271,22 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       priority: entity.priority,
       monitoringEnabled: entity.monitoringEnabled !== false,
     });
-  };
+  }, []);
 
-  const handleDeleteEntity = async (id: string) => {
+  const handleDeleteEntity = useCallback(async (id: string) => {
     await removeWatchedEntity(id);
     if (entityForm.id === id) {
       setEntityForm(defaultEntityForm);
     }
-    refreshData();
-  };
+    void refreshData();
+  }, [entityForm.id, refreshData]);
 
-  const handleToggleMonitoring = async (entity: WatchedEntity) => {
+  const handleToggleMonitoring = useCallback(async (entity: WatchedEntity) => {
     await updateWatchedEntity(entity.id, {
       monitoringEnabled: entity.monitoringEnabled === false ? true : !entity.monitoringEnabled,
     });
-    refreshData();
-  };
+    void refreshData();
+  }, [refreshData]);
 
   useEffect(() => {
     if (entityForm.monitoringEnabled === undefined) {
@@ -265,14 +296,14 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
 
   if (projectGuard) {
     return (
-      <div className="p-4 text-[var(--text-secondary)] text-sm">
+      <div data-testid="memory-manager" className="p-4 text-[var(--text-secondary)] text-sm">
         Select a project to manage agent memories, goals, and proactive monitoring.
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-6">
+    <div data-testid="memory-manager" className="h-full overflow-y-auto p-4 space-y-6">
       {error && (
         <div className="bg-[var(--error-50)] border border-[var(--error-200)] text-[var(--error-700)] px-3 py-2 rounded">
           {error}
@@ -288,7 +319,11 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
           <span className="text-[var(--text-tertiary)] text-xs">Project & Author scoped</span>
         </header>
 
-        <form onSubmit={handleMemorySubmit} className="space-y-2 bg-[var(--surface-secondary)] p-3 rounded-lg border border-[var(--border-primary)]">
+        <form
+          aria-label="Memories form"
+          onSubmit={handleMemorySubmit}
+          className="space-y-2 bg-[var(--surface-secondary)] p-3 rounded-lg border border-[var(--border-primary)]"
+        >
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-[var(--text-secondary)] block mb-1">Scope</label>

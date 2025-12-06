@@ -1,12 +1,16 @@
-## Plan: UsageBadge refactor & tests
+# Plan: MemoryManager refactor
 
-1. Review UsageBadge.tsx and existing tests for typing gaps, memo/callback overuse, and potential leaks.
-2. Refactor UsageBadge.tsx with stricter typing, memo/callback hygiene, and add JSDoc for complex logic.
-3. Update/add tests for the refactor and run relevant component tests.
-4. Run relevant tests and summarize changes.
+- [ ] Analyze features/memory/MemoryManager.tsx for typing gaps, memo/callback needs, and lifecycle cleanup.
+- [ ] Refactor MemoryManager with stricter typing, memoized callbacks, JSDoc on complex flows, and leak prevention.
+- [ ] Add/adjust tests for MemoryManager behaviors and run relevant vitest suites.
 
-## Plan: AppBrainContext tests
+## Plan: ImportWizard refactor & tests
 
-- [ ] Review AppBrainContext.test.tsx for smells and missing coverage
-- [ ] Refactor mocks/types to strict TS + React 18 patterns, add JSDoc where helpful
-- [ ] Add/adjust tests as needed and run relevant test suite
+1. Inspect ImportWizard for missing identifiers (id, cursorPos, mergeChapters, splitChapter) flagged by IDE.
+2. Implement/correct chapter operations (merge, split, delete) ensuring proper state updates and history.
+3. Validate fixes (build/check relevant tests).
+4. Summarize changes and test results.
+
+## Plan: ImportWizard runtime review
+
+1. Analyze ImportWizard.tsx for runtime risks (race conditions in effects, null/undefined handling, event listener cleanup).

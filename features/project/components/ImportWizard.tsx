@@ -1,5 +1,12 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { ParsedChapter } from '@/services/manuscriptParser';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  memo,
+} from 'react';
+import type { ParsedChapter } from '@/services/manuscriptParser';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -67,9 +74,20 @@ interface Props {
 // UTILITY FUNCTIONS
 // ============================================================================
 
-const generateId = () => crypto.randomUUID();
+/** Generates a unique identifier using crypto.randomUUID. */
+const generateId = (): string => crypto.randomUUID();
 
-const detectChapterType = (title: string, content: string, index: number, total: number): ChapterType => {
+/**
+ * Infers chapter type from title patterns and position within the manuscript.
+ * Uses regex matching on common structural indicators (prologue, epilogue, etc.)
+ * and falls back to positional heuristics for short first/last chapters.
+ */
+const detectChapterType = (
+  title: string,
+  content: string,
+  index: number,
+  total: number
+): ChapterType => {
   const lowerTitle = title.toLowerCase();
   
   if (/^(prologue|prol\.?|preface|introduction|intro)/.test(lowerTitle)) return 'prologue';
@@ -104,16 +122,31 @@ const calculateReadTime = (wordCount: number): number => {
   return Math.ceil(wordCount / 250); // 250 wpm average
 };
 
-const analyzeChapterIssues = (chapter: EnhancedChapter, allChapters: EnhancedChapter[]): ChapterIssue[] => {
+/**
+ * Analyzes a chapter for common structural and content issues.
+ * Detects short/long content, duplicate titles, orphaned fragments,
+ * excess whitespace, and page-number artifacts.
+ */
+const analyzeChapterIssues = (
+  chapter: EnhancedChapter,
+  allChapters: EnhancedChapter[]
+): ChapterIssue[] => {
   const issues: ChapterIssue[] = [];
   
+  // Detect potential page number artifacts early so we can avoid double-counting
+  // minor length warnings on text that is primarily numeric artifacts.
+  const artifactPattern = /^\s*\d{1,4}\s*$/gm;
+  const artifactMatches = chapter.content.match(artifactPattern);
+  const artifactCount = artifactMatches?.length ?? 0;
+  const hasArtifacts = artifactCount >= 3;
+
   // Check for very short content
-  if (chapter.wordCount < 100) {
+  if (chapter.wordCount < 100 && !hasArtifacts) {
     issues.push({
       type: 'warning',
       code: 'SHORT_CONTENT',
       message: 'Chapter has very little content (< 100 words)',
-      autoFixable: false
+      autoFixable: true
     });
   }
   
@@ -151,7 +184,7 @@ const analyzeChapterIssues = (chapter: EnhancedChapter, allChapters: EnhancedCha
   }
   
   // Check for orphaned content (very short, no real structure)
-  if (chapter.paragraphCount < 2 && chapter.wordCount < 50) {
+  if (!hasArtifacts && chapter.paragraphCount < 2 && chapter.wordCount < 50) {
     issues.push({
       type: 'warning',
       code: 'ORPHANED_CONTENT',
@@ -171,13 +204,11 @@ const analyzeChapterIssues = (chapter: EnhancedChapter, allChapters: EnhancedCha
   }
   
   // Check for potential page numbers or artifacts left in text
-  const artifactPattern = /^\s*\d{1,4}\s*$/gm;
-  const artifactMatches = chapter.content.match(artifactPattern);
-  if (artifactMatches && artifactMatches.length > 3) {
+  if (artifactCount >= 3) {
     issues.push({
       type: 'warning',
       code: 'PAGE_ARTIFACTS',
-      message: `${artifactMatches.length} potential page number artifacts detected`,
+      message: `${artifactCount} potential page number artifacts detected`,
       autoFixable: true
     });
   }
@@ -185,6 +216,10 @@ const analyzeChapterIssues = (chapter: EnhancedChapter, allChapters: EnhancedCha
   return issues;
 };
 
+/**
+ * Computes a quality score (0-100) for a chapter based on detected issues
+ * and structural heuristics (paragraph count, word count, title length).
+ */
 const calculateQualityScore = (chapter: EnhancedChapter): number => {
   let score = 100;
   
@@ -233,6 +268,7 @@ const enhanceChapter = (
   return enhanced;
 };
 
+/** Aggregates statistics across all chapters for the import dashboard. */
 const calculateStats = (chapters: EnhancedChapter[]): ImportStats => {
   const totalWords = chapters.reduce((sum, c) => sum + c.wordCount, 0);
   const totalChars = chapters.reduce((sum, c) => sum + c.charCount, 0);
@@ -270,7 +306,7 @@ const Icons = {
   ),
   Review: () => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
     </svg>
   ),
   Drag: () => (
@@ -340,7 +376,7 @@ const Icons = {
   ),
   Sparkles: () => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
     </svg>
   ),
   Fix: () => (
@@ -369,7 +405,10 @@ const Icons = {
 // CHAPTER TYPE BADGE COMPONENT
 // ============================================================================
 
-const ChapterTypeBadge: React.FC<{ type: ChapterType }> = ({ type }) => {
+/**
+ * Badge displaying the chapter type with color-coded styling.
+ */
+const ChapterTypeBadge = memo<{ type: ChapterType }>(function ChapterTypeBadge({ type }) {
   const config: Record<ChapterType, { bg: string; text: string; label: string }> = {
     prologue: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Prologue' },
     chapter: { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Chapter' },
@@ -386,13 +425,16 @@ const ChapterTypeBadge: React.FC<{ type: ChapterType }> = ({ type }) => {
       {c.label}
     </span>
   );
-};
+});
 
 // ============================================================================
 // QUALITY SCORE BADGE
 // ============================================================================
 
-const QualityBadge: React.FC<{ score: number }> = ({ score }) => {
+/**
+ * Displays a quality score as a progress bar with color coding.
+ */
+const QualityBadge = memo<{ score: number }>(function QualityBadge({ score }) {
   const getColor = (s: number) => {
     if (s >= 80) return 'bg-green-500';
     if (s >= 60) return 'bg-yellow-500';
@@ -408,13 +450,16 @@ const QualityBadge: React.FC<{ score: number }> = ({ score }) => {
       <span className="text-[10px] font-mono text-gray-500">{score}</span>
     </div>
   );
-};
+});
 
 // ============================================================================
 // ISSUE BADGE
 // ============================================================================
 
-const IssueBadge: React.FC<{ issues: ChapterIssue[] }> = ({ issues }) => {
+/**
+ * Renders compact issue counts (errors, warnings, suggestions) for a chapter.
+ */
+const IssueBadge = memo<{ issues: ChapterIssue[] }>(function IssueBadge({ issues }) {
   if (issues.length === 0) return null;
 
   const errors = issues.filter(i => i.type === 'error').length;
@@ -440,13 +485,17 @@ const IssueBadge: React.FC<{ issues: ChapterIssue[] }> = ({ issues }) => {
       )}
     </div>
   );
-};
+});
 
 // ============================================================================
 // KEYBOARD SHORTCUTS MODAL
 // ============================================================================
 
-const KeyboardShortcutsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+/**
+ * Modal displaying available keyboard shortcuts for the wizard.
+ */
+const KeyboardShortcutsModal = memo<{ isOpen: boolean; onClose: () => void }>(
+  function KeyboardShortcutsModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   const shortcuts = [
@@ -489,13 +538,16 @@ const KeyboardShortcutsModal: React.FC<{ isOpen: boolean; onClose: () => void }>
       </div>
     </div>
   );
-};
+});
 
 // ============================================================================
 // STATS DASHBOARD
 // ============================================================================
 
-const StatsDashboard: React.FC<{ stats: ImportStats }> = ({ stats }) => {
+/**
+ * Dashboard row showing aggregate statistics for the imported manuscript.
+ */
+const StatsDashboard = memo<{ stats: ImportStats }>(function StatsDashboard({ stats }) {
   const statItems = [
     { label: 'Chapters', value: stats.totalChapters, icon: '📚' },
     { label: 'Words', value: stats.totalWords.toLocaleString(), icon: '📝' },
@@ -516,7 +568,7 @@ const StatsDashboard: React.FC<{ stats: ImportStats }> = ({ stats }) => {
       ))}
     </div>
   );
-};
+});
 
 // ============================================================================
 // CHAPTER LIST ITEM
@@ -535,7 +587,10 @@ interface ChapterItemProps {
   isDragOver: boolean;
 }
 
-const ChapterListItem: React.FC<ChapterItemProps> = ({
+/**
+ * Renders a single chapter row in the sidebar list with drag/selection support.
+ */
+const ChapterListItem = memo<ChapterItemProps>(function ChapterListItem({
   chapter,
   index,
   isActive,
@@ -545,8 +600,8 @@ const ChapterListItem: React.FC<ChapterItemProps> = ({
   onDragOver,
   onDrop,
   isDragging,
-  isDragOver
-}) => {
+  isDragOver,
+}) {
   return (
     <div
       draggable
@@ -604,38 +659,70 @@ const ChapterListItem: React.FC<ChapterItemProps> = ({
       <QualityBadge score={chapter.qualityScore} />
     </div>
   );
-};
+});
 
 // ============================================================================
 // CHAPTER EDITOR PANEL
 // ============================================================================
 
 interface ChapterEditorProps {
+  /** The chapter being edited. */
   chapter: EnhancedChapter;
+  /** Callback when title changes. */
   onTitleChange: (title: string) => void;
+  /** Callback when content changes. */
   onContentChange: (content: string) => void;
+  /** Callback when chapter type changes. */
   onTypeChange: (type: ChapterType) => void;
+  /** Callback to split chapter at the given cursor position. */
   onSplit: (cursorPos: number) => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  /** Ref to the textarea for programmatic focus/cursor access. */
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }
 
-const ChapterEditor: React.FC<ChapterEditorProps> = ({
+/**
+ * Editor panel for modifying chapter title, type, and content.
+ * Includes a split-at-cursor action and displays detected issues.
+ */
+const ChapterEditor = memo<ChapterEditorProps>(function ChapterEditor({
   chapter,
   onTitleChange,
   onContentChange,
   onTypeChange,
   onSplit,
-  textareaRef
-}) => {
+  textareaRef,
+}) {
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const chapterTypes: ChapterType[] = ['prologue', 'chapter', 'interlude', 'part', 'epilogue', 'appendix'];
+  const chapterTypes: ChapterType[] = [
+    'prologue',
+    'chapter',
+    'interlude',
+    'part',
+    'epilogue',
+    'appendix',
+  ];
 
-  const handleSplitAtCursor = () => {
+  /** Close dropdown when clicking outside. */
+  useEffect(() => {
+    if (!showTypeDropdown) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowTypeDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showTypeDropdown]);
+
+  const handleSplitAtCursor = useCallback(() => {
     if (textareaRef.current) {
       onSplit(textareaRef.current.selectionStart);
     }
-  };
+  }, [onSplit, textareaRef]);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -643,7 +730,7 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
       <div className="h-14 border-b border-gray-100 flex items-center justify-between px-6 bg-gray-50/50 shrink-0">
         <div className="flex items-center gap-4 flex-1">
           {/* Type Selector */}
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowTypeDropdown(!showTypeDropdown)}
               className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm hover:border-gray-300 transition-colors"
@@ -731,13 +818,17 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
       </div>
     </div>
   );
-};
+});
 
 // ============================================================================
 // WIZARD STEPS
 // ============================================================================
 
-const WizardSteps: React.FC<{ steps: WizardStep[]; currentStep: number }> = ({ steps, currentStep }) => {
+/**
+ * Horizontal stepper showing progress through the import wizard.
+ */
+const WizardSteps = memo<{ steps: WizardStep[]; currentStep: number }>(
+  function WizardSteps({ steps, currentStep }) {
   return (
     <div className="flex items-center justify-center gap-0 py-4 bg-white border-b border-gray-100">
       {steps.map((step, index) => (
@@ -770,7 +861,7 @@ const WizardSteps: React.FC<{ steps: WizardStep[]; currentStep: number }> = ({ s
       ))}
     </div>
   );
-};
+});
 
 // ============================================================================
 // MAIN IMPORT WIZARD COMPONENT
@@ -814,7 +905,11 @@ export const ImportWizard: React.FC<Props> = ({
   
   // ==================== COMPUTED VALUES ====================
   
-  const selectedChapter = chapters[selectedIndex];
+  const selectedChapter = useMemo(
+    () => chapters[selectedIndex] ?? null,
+    [chapters, selectedIndex]
+  );
+  
   const selectedChapterIds = useMemo(() => 
     chapters.filter(c => c.isSelected).map(c => c.id), 
     [chapters]
@@ -926,91 +1021,82 @@ export const ImportWizard: React.FC<Props> = ({
       }));
     });
   }, [pushHistory]);
-
-  const deleteChapters = useCallback((ids: string[]) => {
-    if (chapters.length <= 1) {
-      alert("Cannot delete the only chapter.");
-      return;
-    }
-    
-    if (!confirm(`Delete ${ids.length} chapter(s)?`)) return;
-    
-    pushHistory(`Delete ${ids.length} chapter(s)`);
-    setChapters(prev => {
-      const remaining = prev.filter(c => !ids.includes(c.id));
-      return remaining;
-    });
-    setSelectedIndex(prev => Math.min(prev, chapters.length - ids.length - 1));
-  }, [chapters.length, pushHistory]);
-
   const mergeChapters = useCallback((ids: string[]) => {
     if (ids.length < 2) return;
-    
-    pushHistory(`Merge ${ids.length} chapters`);
-    
+
+    const orderedIds = chapters
+      .filter(c => ids.includes(c.id))
+      .map(c => c.id);
+
+    if (orderedIds.length < 2) return;
+
+    pushHistory('Merge chapters');
+
     setChapters(prev => {
-      const toMerge = prev.filter(c => ids.includes(c.id));
-      const others = prev.filter(c => !ids.includes(c.id));
-      
-      // Sort by original order
-      toMerge.sort((a, b) => {
-        const aIdx = prev.findIndex(c => c.id === a.id);
-        const bIdx = prev.findIndex(c => c.id === b.id);
-        return aIdx - bIdx;
-      });
-      
-      const mergedContent = toMerge.map(c => c.content).join('\n\n');
-      const merged: EnhancedChapter = {
-        ...toMerge[0],
-        id: generateId(),
-        title: toMerge[0].title + ' (Merged)',
+      const selected = prev.filter(c => orderedIds.includes(c.id));
+      if (selected.length < 2) return prev;
+
+      const primaryId = orderedIds[0];
+      const primaryIndex = prev.findIndex(c => c.id === primaryId);
+      if (primaryIndex === -1) return prev;
+
+      const mergedContent = selected.map(c => c.content.trim()).join('\n\n');
+      const mergedTitle = `${selected[0].title} (Merged)`;
+
+      const mergedChapter: EnhancedChapter = {
+        ...selected[0],
+        id: primaryId,
+        title: mergedTitle,
         content: mergedContent,
         wordCount: calculateWordCount(mergedContent),
         charCount: mergedContent.length,
         paragraphCount: calculateParagraphCount(mergedContent),
         estimatedReadTime: calculateReadTime(calculateWordCount(mergedContent)),
-        isSelected: false,
-        issues: []
+        isSelected: false
       };
-      
-      // Insert at the position of first merged chapter
-      const insertIdx = prev.findIndex(c => c.id === toMerge[0].id);
-      others.splice(insertIdx, 0, merged);
-      
-      return others.map(c => ({
+
+      const remaining = prev.filter(c => !orderedIds.includes(c.id));
+      const insertArray = [...remaining];
+      insertArray.splice(primaryIndex, 0, mergedChapter);
+
+      return insertArray.map(c => ({
         ...c,
-        issues: analyzeChapterIssues(c, others),
+        issues: analyzeChapterIssues(c, insertArray),
         qualityScore: calculateQualityScore(c)
       }));
     });
-  }, [pushHistory]);
 
-  const splitChapter = useCallback((id: string, cursorPos: number) => {
-    const chapter = chapters.find(c => c.id === id);
-    if (!chapter || cursorPos <= 0 || cursorPos >= chapter.content.length) {
-      alert("Place cursor inside text to split.");
-      return;
-    }
-    
+    const newLength = chapters.length - (orderedIds.length - 1);
+    setSelectedIndex(prev => Math.min(prev, Math.max(newLength - 1, 0)));
+  }, [chapters, pushHistory]);
+
+  const splitChapter = useCallback((chapterId: string, cursorPos: number) => {
+    if (!Number.isInteger(cursorPos) || cursorPos < 0) return;
+
+    const idx = chapters.findIndex(c => c.id === chapterId);
+    if (idx === -1) return;
+
     pushHistory('Split chapter');
-    
+
     setChapters(prev => {
-      const idx = prev.findIndex(c => c.id === id);
-      if (idx === -1) return prev;
-      
-      const chapter = prev[idx];
-      const firstPart = chapter.content.substring(0, cursorPos).trim();
-      const secondPart = chapter.content.substring(cursorPos).trim();
-      
+      const chapterIndex = prev.findIndex(c => c.id === chapterId);
+      if (chapterIndex === -1) return prev;
+
+      const chapter = prev[chapterIndex];
+      const safeCursor = Math.max(0, Math.min(cursorPos, chapter.content.length));
+      const firstPart = chapter.content.substring(0, safeCursor).trim();
+      const secondPart = chapter.content.substring(safeCursor).trim();
+
       const updatedFirst: EnhancedChapter = {
         ...chapter,
         content: firstPart,
         wordCount: calculateWordCount(firstPart),
         charCount: firstPart.length,
         paragraphCount: calculateParagraphCount(firstPart),
-        estimatedReadTime: calculateReadTime(calculateWordCount(firstPart))
+        estimatedReadTime: calculateReadTime(calculateWordCount(firstPart)),
+        isSelected: false
       };
-      
+
       const newSecond: EnhancedChapter = {
         ...chapter,
         id: generateId(),
@@ -1022,19 +1108,57 @@ export const ImportWizard: React.FC<Props> = ({
         estimatedReadTime: calculateReadTime(calculateWordCount(secondPart)),
         isSelected: false
       };
-      
+
       const newChapters = [...prev];
-      newChapters[idx] = updatedFirst;
-      newChapters.splice(idx + 1, 0, newSecond);
-      
+      newChapters[chapterIndex] = updatedFirst;
+      newChapters.splice(chapterIndex + 1, 0, newSecond);
+
       return newChapters.map(c => ({
         ...c,
         issues: analyzeChapterIssues(c, newChapters),
         qualityScore: calculateQualityScore(c)
       }));
     });
-    
-    setSelectedIndex(prev => prev + 1);
+
+    setSelectedIndex(Math.min(idx + 1, chapters.length));
+  }, [chapters, pushHistory]);
+
+  /**
+   * Delete a set of chapters and keep the selection index within bounds to avoid
+   * rendering a non-existent chapter after removal.
+   */
+  const deleteChapters = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+
+    if (chapters.length <= 1) {
+      alert("Cannot delete the only chapter.");
+      return;
+    }
+
+    const remainingCount = chapters.length - ids.length;
+    if (remainingCount < 1) {
+      alert("Cannot delete the only chapter.");
+      return;
+    }
+
+    const confirmed = confirm(`Delete ${ids.length} chapter(s)?`);
+    if (!confirmed) return;
+
+    pushHistory('Delete chapters');
+
+    setChapters(prev => {
+      const filtered = prev.filter(c => !ids.includes(c.id));
+      if (filtered.length === 0) return prev;
+
+      return filtered.map(c => ({
+        ...c,
+        issues: analyzeChapterIssues(c, filtered),
+        qualityScore: calculateQualityScore(c)
+      }));
+    });
+
+    const nextLength = Math.max(remainingCount, 1);
+    setSelectedIndex(prev => Math.min(prev, nextLength - 1));
   }, [chapters, pushHistory]);
 
   const reorderChapters = useCallback((fromIndex: number, toIndex: number) => {
@@ -1111,33 +1235,70 @@ export const ImportWizard: React.FC<Props> = ({
 
   // ==================== AI ENHANCEMENT ====================
 
+  /** Ref for aborting in-flight AI enhancement on unmount. */
+  const aiAbortRef = useRef<AbortController | null>(null);
+
+  /** Cleanup AI enhancement on unmount to prevent state updates on unmounted component. */
+  useEffect(() => {
+    return () => {
+      aiAbortRef.current?.abort();
+    };
+  }, []);
+
+  /**
+   * Enhances all chapters with AI-generated summaries and suggested titles.
+   * Aborts gracefully if component unmounts during processing.
+   */
   const enhanceWithAI = useCallback(async () => {
     if (!onAIEnhance) return;
-    
+
+    // Abort any previous in-flight request
+    aiAbortRef.current?.abort();
+    const controller = new AbortController();
+    aiAbortRef.current = controller;
+
     setIsProcessing(true);
     try {
-      // Enhance each chapter with AI
-      const enhanced = await Promise.all(chapters.map(async (chapter) => {
-        const result = await onAIEnhance(chapter.content.substring(0, 2000));
-        return {
-          ...chapter,
-          aiSummary: result.summary,
-          suggestedTitle: result.suggestedTitle
-        };
-      }));
-      
-      pushHistory('AI enhancement');
-      setChapters(enhanced);
+      const enhanced = await Promise.all(
+        chapters.map(async (chapter) => {
+          // Check for abort between iterations
+          if (controller.signal.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+          }
+          const result = await onAIEnhance(chapter.content.substring(0, 2000));
+          return {
+            ...chapter,
+            aiSummary: result.summary,
+            suggestedTitle: result.suggestedTitle,
+          };
+        })
+      );
+
+      if (!controller.signal.aborted) {
+        pushHistory('AI enhancement');
+        setChapters(enhanced);
+      }
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        // Silently ignore abort
+        return;
+      }
       console.error('AI enhancement failed:', e);
     } finally {
-      setIsProcessing(false);
+      if (!controller.signal.aborted) {
+        setIsProcessing(false);
+      }
     }
   }, [chapters, onAIEnhance, pushHistory]);
 
   // ==================== KEYBOARD SHORTCUTS ====================
-  
+
   useEffect(() => {
+    /**
+     * Global keyboard shortcuts for the wizard. We keep all behavior in a single handler
+     * so listeners are attached/removed exactly once per dependency change, preventing
+     * stray handlers that could leak memory or react to stale closures.
+     */
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check for meta/ctrl key combinations
       const isMeta = e.metaKey || e.ctrlKey;
@@ -1232,44 +1393,46 @@ export const ImportWizard: React.FC<Props> = ({
   ]);
 
   // ==================== DRAG & DROP HANDLERS ====================
-  
-  const handleDragStart = (e: React.DragEvent, index: number) => {
+
+  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = 'move';
-  };
+  }, []);
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     setDragOverIndex(index);
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    if (draggedIndex !== null && draggedIndex !== dropIndex) {
-      reorderChapters(draggedIndex, dropIndex);
-    }
+  const handleDrop = useCallback(
+    (e: React.DragEvent, dropIndex: number) => {
+      e.preventDefault();
+      if (draggedIndex !== null && draggedIndex !== dropIndex) {
+        reorderChapters(draggedIndex, dropIndex);
+      }
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+    },
+    [draggedIndex, reorderChapters]
+  );
+
+  const handleDragEnd = useCallback(() => {
     setDraggedIndex(null);
     setDragOverIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
+  }, []);
 
   // ==================== FINAL CONFIRM ====================
-  
-  const handleConfirm = () => {
-    // Convert back to ParsedChapter format
-    const output: ParsedChapter[] = chapters.map(c => ({
+
+  const handleConfirm = useCallback(() => {
+    const output: ParsedChapter[] = chapters.map((c) => ({
       title: c.title,
-      content: c.content
+      content: c.content,
     }));
     onConfirm(output);
-  };
+  }, [chapters, onConfirm]);
 
   // ==================== RENDER ====================
-  
+
   return (
     <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col" onDragEnd={handleDragEnd}>
       {/* Keyboard Shortcuts Modal */}

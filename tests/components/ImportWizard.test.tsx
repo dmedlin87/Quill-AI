@@ -245,6 +245,29 @@ describe('ImportWizard', () => {
       expect(screen.queryByText('Chapter 1: The Beginning')).not.toBeInTheDocument();
     });
 
+    it('blocks deleting when only a single chapter exists', () => {
+      const singleChapter: ParsedChapter[] = [{ title: 'Solo', content: 'Only content' }];
+
+      render(
+        <ImportWizard
+          initialChapters={singleChapter}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      const checkbox = screen.getAllByRole('button').find(btn => btn.className.includes('w-4 h-4 rounded border'));
+      expect(checkbox).toBeDefined();
+      if (!checkbox) throw new Error('Checkbox not found');
+
+      fireEvent.click(checkbox);
+      fireEvent.click(screen.getByTitle('Delete Selected (⌫)'));
+
+      expect(mockAlert).toHaveBeenCalledWith('Cannot delete the only chapter.');
+      expect(mockConfirm).not.toHaveBeenCalled();
+      expect(screen.getByText(/1 chapters detected/)).toBeInTheDocument();
+    });
+
     it('does not delete when user cancels the confirmation', () => {
       mockConfirm.mockReturnValueOnce(false);
 
@@ -630,8 +653,31 @@ describe('ImportWizard', () => {
       // Click Split
       fireEvent.click(screen.getByText('Split at Cursor'));
 
-      // Should now have 4 chapters
-      expect(screen.getByText(/4 chapters detected/)).toBeInTheDocument();
+      // Should now have 3 chapters
+      expect(screen.getByText(/3 chapters detected/)).toBeInTheDocument();
+    });
+
+    it('reselects a valid chapter after deleting the last item', () => {
+      render(
+        <ImportWizard
+          initialChapters={sampleChapters}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      // Select the last chapter
+      const checkboxes = screen.getAllByRole('button').filter(
+        btn => btn.className.includes('w-4 h-4 rounded border')
+      );
+      fireEvent.click(checkboxes[2]);
+
+      // Delete it
+      fireEvent.click(screen.getByTitle('Delete Selected (⌫)'));
+
+      // Should now have 2 chapters and an active editor for the new last item
+      expect(screen.getByText(/2 chapters detected/)).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Chapter 2: The Journey')).toBeInTheDocument();
     });
   });
 
@@ -806,6 +852,47 @@ describe('ImportWizard', () => {
       fireEvent.click(chapterRows[1]);
 
       expect(screen.getByText('Needs Work')).toBeInTheDocument();
+    });
+
+    it('detects prologue and appendix chapter types via badges', () => {
+      const chapters: ParsedChapter[] = [
+        { title: 'Introduction', content: 'Short intro content' },
+        { title: 'Main Section', content: 'Main content body with enough words to pass validation checks.' },
+        { title: 'Another Section', content: 'More main content with enough words to pass validation checks.' },
+        { title: 'Appendix A: Glossary', content: 'Term list and notes.' },
+      ];
+
+      render(
+        <ImportWizard
+          initialChapters={chapters}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      const introRow = screen.getByText('Introduction').closest('[draggable="true"]');
+      const appendixRow = screen.getByText('Appendix A: Glossary').closest('[draggable="true"]');
+      if (!introRow || !appendixRow) throw new Error('Chapter rows not found');
+
+      expect(within(introRow as HTMLElement).getByText('Prologue')).toBeInTheDocument();
+      expect(within(appendixRow as HTMLElement).getByText('Appendix')).toBeInTheDocument();
+    });
+
+    it('flags page artifact issues when multiple numbered lines are present', () => {
+      const chapters: ParsedChapter[] = [
+        { title: 'Artifacts', content: '1\n2\n3\n4\n5\n\nValid text after artifacts.' },
+      ];
+
+      render(
+        <ImportWizard
+          initialChapters={chapters}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      expect(screen.getByText(/Issues \(1\)/)).toBeInTheDocument();
+      expect(screen.getByText(/5 potential page number artifacts detected/)).toBeInTheDocument();
     });
 
     it('shows Auto-fixable label for auto-fixable issues', () => {

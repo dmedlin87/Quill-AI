@@ -83,13 +83,21 @@ vi.mock('@/services/commands/navigation', () => ({
   NavigateToTextCommand: vi.fn().mockImplementation(function () {
     this.execute = mockNavigate;
   }),
-  JumpToChapterCommand: vi.fn().mockImplementation(() => ({ execute: mockJumpToChapter })),
-  JumpToSceneCommand: vi.fn().mockImplementation(() => ({ execute: mockJumpToScene })),
+  JumpToChapterCommand: vi.fn().mockImplementation(function () {
+    this.execute = mockJumpToChapter;
+  }),
+  JumpToSceneCommand: vi.fn().mockImplementation(function () {
+    this.execute = mockJumpToScene;
+  }),
 }));
 
 vi.mock('@/services/commands/editing', () => ({
-  UpdateManuscriptCommand: vi.fn().mockImplementation(() => ({ execute: mockUpdateManuscript })),
-  AppendTextCommand: vi.fn().mockImplementation(() => ({ execute: mockAppendText })),
+  UpdateManuscriptCommand: vi.fn().mockImplementation(function () {
+    this.execute = mockUpdateManuscript;
+  }),
+  AppendTextCommand: vi.fn().mockImplementation(function () {
+    this.execute = mockAppendText;
+  }),
 }));
 
 vi.mock('@/services/commands/analysis', () => ({
