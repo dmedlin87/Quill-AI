@@ -91,6 +91,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
       <button
         onClick={toggleView}
         aria-label={activeView === MainView.EDITOR ? 'Switch to Story Board' : 'Switch to Editor'}
+        aria-pressed={activeView === MainView.STORYBOARD}
         className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all mb-2 ${
           activeView === MainView.STORYBOARD
             ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]'
@@ -138,7 +139,8 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
       <div className="mt-auto flex flex-col items-center gap-2">
         <button
           onClick={toggleZenMode}
-          aria-label="Enter Zen Mode"
+          aria-label={isZenMode ? 'Exit Zen Mode' : 'Enter Zen Mode'}
+          aria-pressed={isZenMode}
           className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
         >
           <ZenIcon />
@@ -147,6 +149,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
         <button
           onClick={toggleTheme}
           aria-label={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+          aria-pressed={theme === 'dark'}
           className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
         >
           {theme === 'light' ? <MoonIcon /> : <SunIcon />}

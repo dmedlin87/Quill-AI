@@ -16,7 +16,11 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({ character, onSave, on
   const [newRelationship, setNewRelationship] = useState({ name: '', type: '', dynamic: '' });
   const [newPlotThread, setNewPlotThread] = useState('');
 
-  const handleChange = (field: keyof CharacterProfile, value: any) => {
+  useEffect(() => {
+    setForm({ ...character });
+  }, [character]);
+
+  const handleChange = <K extends keyof CharacterProfile>(field: K, value: CharacterProfile[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 

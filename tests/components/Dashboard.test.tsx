@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { Dashboard } from '@/features/analysis/components/Dashboard';
 import { createAnalysisResult } from '@/tests/factories/analysisResultFactory';
@@ -46,7 +47,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Run an analysis to reveal insights.')).toBeInTheDocument();
   });
 
-  it('renders populated state and passes navigation handler to child', () => {
+  it('renders populated state and passes navigation handler to child', async () => {
     const analysis = createAnalysisResult({
       summary: 'Dashboard summary',
     });
@@ -65,7 +66,9 @@ describe('Dashboard', () => {
     expect(screen.getByText('Dashboard summary')).toBeInTheDocument();
 
     // Clicking a plot issue title should use the editor navigation handler
-    fireEvent.click(screen.getByText('Motivation for leaving home is unclear.'));
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText('Motivation for leaving home is unclear.'));
 
     expect(mockFindQuoteRange).toHaveBeenCalled();
     expect(mockHandleNavigateToIssue).toHaveBeenCalledWith(10, 25);

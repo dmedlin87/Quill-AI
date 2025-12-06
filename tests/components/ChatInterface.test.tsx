@@ -45,6 +45,18 @@ const baseProps = {
   chapters: [],
 };
 
+const typeAndSend = async (text: string) => {
+  const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+  const sendButton = screen.getAllByRole('button').at(-1);
+
+  expect(sendButton).toBeTruthy();
+
+  fireEvent.change(input, { target: { value: text } });
+  fireEvent.click(sendButton!);
+
+  return input;
+};
+
 describe('ChatInterface', () => {
   beforeAll(() => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -82,13 +94,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Hello agent' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Hello agent');
 
     await waitFor(() => {
       expect(screen.getByText('Hello agent')).toBeInTheDocument();
@@ -133,13 +139,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Please edit' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Please edit');
 
     await waitFor(() => {
       expect(screen.getByText(/🛠️ Suggesting Action: applyEdit/)).toBeInTheDocument();
@@ -164,13 +164,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Trigger error' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Trigger error');
 
     await waitFor(() => {
       expect(
@@ -186,13 +180,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Trigger rate limit' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Trigger rate limit');
 
     await waitFor(() => {
       expect(
@@ -208,13 +196,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Trigger AI error' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Trigger AI error');
 
     await waitFor(() => {
       expect(
@@ -241,13 +223,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Fix typo' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Fix typo');
 
     // Step 1: Tool call message appears
     await waitFor(() => {
@@ -305,13 +281,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Do invalid action' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Do invalid action');
 
     // Error message should be displayed
     await waitFor(() => {
@@ -360,13 +330,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Analyze and fix' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Analyze and fix');
 
     // Both tool calls should appear
     await waitFor(() => {
@@ -414,13 +378,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} editorContext={contextWithSelection} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Check this' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Check this');
 
     // Verify context is included in the message
     await waitFor(() => {
@@ -491,14 +449,14 @@ describe('ChatInterface', () => {
       expect(mockSendMessage).toHaveBeenCalledTimes(1); // Only init
     });
 
+    // Try sending empty message
     const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
     const sendButton = screen.getAllByRole('button').at(-1);
 
-    // Try sending empty message
+    expect(sendButton).toBeTruthy();
+
     fireEvent.change(input, { target: { value: '   ' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    fireEvent.click(sendButton!);
 
     // Should still only have the init call
     await waitFor(() => {
@@ -522,13 +480,7 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
 
-    const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-    const sendButton = screen.getAllByRole('button').at(-1);
-
-    fireEvent.change(input, { target: { value: 'Get info' } });
-    if (sendButton) {
-      fireEvent.click(sendButton);
-    }
+    await typeAndSend('Get info');
 
     // Tool action message should appear
     await waitFor(() => {

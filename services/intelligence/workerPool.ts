@@ -70,11 +70,12 @@ export class IntelligenceWorkerPool {
   private isInitialized: boolean = false;
   private workerUrl: string;
   private workersSupported: boolean = true;
-  
-  constructor(
-    private poolSize: number = Math.max(2, navigator.hardwareConcurrency - 1 || 2),
-    workerPath: string = '/src/services/intelligence/worker.ts'
-  ) {
+  private poolSize: number;
+  /** Cached default to avoid repeated capability checks */
+  private defaultPoolSize?: number;
+
+  constructor(poolSize?: number, workerPath: string = './worker.ts') {
+    this.poolSize = poolSize ?? this.computeDefaultPoolSize();
     this.workerUrl = workerPath;
   }
   
@@ -95,7 +96,7 @@ export class IntelligenceWorkerPool {
     try {
       for (let i = 0; i < this.poolSize; i++) {
         const worker = new Worker(
-          new URL('./worker.ts', import.meta.url),
+          new URL(this.workerUrl, import.meta.url),
           { type: 'module' }
         );
         
@@ -366,6 +367,16 @@ export class IntelligenceWorkerPool {
       const nextJob = this.jobQueue.shift()!;
       this.dispatchJob(worker, nextJob);
     }
+  }
+
+  private computeDefaultPoolSize(): number {
+    if (this.defaultPoolSize !== undefined) return this.defaultPoolSize;
+    if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
+      this.defaultPoolSize = Math.max(2, navigator.hardwareConcurrency - 1);
+    } else {
+      this.defaultPoolSize = 2;
+    }
+    return this.defaultPoolSize;
   }
 }
 

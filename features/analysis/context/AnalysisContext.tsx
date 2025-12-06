@@ -92,6 +92,16 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const getAbortController = useCallback(() => {
+    const existing = abortControllerRef.current;
+    if (existing && !existing.signal.aborted) {
+      return existing;
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    return controller;
+  }, []);
+
   // Update a single status field
   const updateStatus = useCallback((section: AnalysisSection, status: 'idle' | 'loading' | 'complete' | 'error') => {
     setAnalysisStatus(prev => ({ ...prev, [section]: status }));
@@ -104,33 +114,36 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Individual analysis methods for incremental loading
   const analyzePacing = useCallback(async (text: string, setting?: { timePeriod: string; location: string }) => {
+    const abortSignal = getAbortController().signal;
     updateStatus('pacing', 'loading');
     try {
-      const result = await fetchPacingAnalysis(text, setting, abortControllerRef.current?.signal);
+      const result = await fetchPacingAnalysis(text, setting, abortSignal);
       mergeAnalysis({ pacing: result.pacing, generalSuggestions: result.generalSuggestions });
       updateStatus('pacing', 'complete');
     } catch (e) {
       console.error('[AnalysisContext] Pacing analysis failed:', e);
       updateStatus('pacing', 'error');
     }
-  }, [updateStatus, mergeAnalysis]);
+  }, [getAbortController, updateStatus, mergeAnalysis]);
 
   const analyzeCharacters = useCallback(async (text: string, manuscriptIndex?: ManuscriptIndex) => {
+    const abortSignal = getAbortController().signal;
     updateStatus('characters', 'loading');
     try {
-      const result = await fetchCharacterAnalysis(text, manuscriptIndex, abortControllerRef.current?.signal);
+      const result = await fetchCharacterAnalysis(text, manuscriptIndex, abortSignal);
       mergeAnalysis({ characters: result.characters });
       updateStatus('characters', 'complete');
     } catch (e) {
       console.error('[AnalysisContext] Character analysis failed:', e);
       updateStatus('characters', 'error');
     }
-  }, [updateStatus, mergeAnalysis]);
+  }, [getAbortController, updateStatus, mergeAnalysis]);
 
   const analyzePlot = useCallback(async (text: string) => {
+    const abortSignal = getAbortController().signal;
     updateStatus('plot', 'loading');
     try {
-      const result = await fetchPlotAnalysis(text, abortControllerRef.current?.signal);
+      const result = await fetchPlotAnalysis(text, abortSignal);
       mergeAnalysis({ 
         plotIssues: result.plotIssues, 
         summary: result.summary,
@@ -146,16 +159,17 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [updateStatus, mergeAnalysis]);
 
   const analyzeSetting = useCallback(async (text: string, setting: { timePeriod: string; location: string }) => {
+    const abortSignal = getAbortController().signal;
     updateStatus('setting', 'loading');
     try {
-      const result = await fetchSettingAnalysis(text, setting, abortControllerRef.current?.signal);
+      const result = await fetchSettingAnalysis(text, setting, abortSignal);
       mergeAnalysis({ settingAnalysis: result.settingAnalysis });
       updateStatus('setting', 'complete');
     } catch (e) {
       console.error('[AnalysisContext] Setting analysis failed:', e);
       updateStatus('setting', 'error');
     }
-  }, [updateStatus, mergeAnalysis]);
+  }, [getAbortController, updateStatus, mergeAnalysis]);
 
   // Run all analyses in parallel
   const runFullAnalysis = useCallback(async (
@@ -177,7 +191,7 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
 
     try {
-      const abortSignal = abortControllerRef.current.signal;
+      const abortSignal = getAbortController().signal;
 
       // Helper to ensure promises reject when the abort signal fires,
       // even if the underlying implementation ignores the signal.
@@ -246,7 +260,7 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } finally {
       setIsAnalyzing(false);
     }
-  }, []);
+  }, [getAbortController]);
 
   const clearAnalysis = useCallback(() => {
     setAnalysis(null);
@@ -259,6 +273,7 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setIsAnalyzing(false);
+    setAnalysisStatus(INITIAL_STATUS);
   }, []);
 
   const value: AnalysisContextValue = {

@@ -5,7 +5,7 @@
  * Orchestrates all analysis components and provides a single entry point.
  */
 
-import {
+import type {
   ManuscriptIntelligence,
   ManuscriptHUD,
   StructuralFingerprint,

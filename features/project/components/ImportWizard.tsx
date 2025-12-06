@@ -1066,16 +1066,14 @@ export const ImportWizard: React.FC<Props> = ({
     setChapters(prev => prev.map(c => ({ ...c, isSelected: false })));
   }, []);
 
-  // ==================== AUTO-FIX ====================
-  
   const autoFixAll = useCallback(() => {
     pushHistory('Auto-fix all issues');
     
     setChapters(prev => {
-      return prev.map((chapter, idx, arr) => {
+      const updated = prev.map((chapter, idx, arr) => {
         let content = chapter.content;
         let title = chapter.title;
-        
+
         // Fix excess whitespace
         content = content.replace(/^\n{3,}/, '\n\n').replace(/\n{3,}$/, '\n\n');
         
@@ -1101,16 +1099,18 @@ export const ImportWizard: React.FC<Props> = ({
           charCount: content.length,
           paragraphCount: calculateParagraphCount(content)
         };
-      }).map(c => ({
+      });
+
+      return updated.map(c => ({
         ...c,
-        issues: analyzeChapterIssues(c, prev),
+        issues: analyzeChapterIssues(c, updated),
         qualityScore: calculateQualityScore(c)
       }));
     });
   }, [pushHistory]);
 
   // ==================== AI ENHANCEMENT ====================
-  
+
   const enhanceWithAI = useCallback(async () => {
     if (!onAIEnhance) return;
     

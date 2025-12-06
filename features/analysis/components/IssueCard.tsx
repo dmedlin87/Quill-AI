@@ -42,6 +42,11 @@ export const IssueCard: React.FC<IssueCardProps> = ({
   showFixButton = false,
 }) => {
   const styles = severityStyles[severity];
+  const handleFixButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onFixClick?.(e);
+  };
 
   return (
     <div
@@ -61,7 +66,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({
         </p>
         {showFixButton && onFixClick && (
           <button
-            onClick={onFixClick}
+            onClick={handleFixButtonClick}
             className="shrink-0 px-2 py-1 bg-[var(--interactive-accent)] hover:bg-[var(--interactive-accent-hover)] text-[var(--text-inverse)] rounded text-[10px] font-medium transition-all duration-150 hover:scale-105 active:scale-95 flex items-center gap-1"
           >
             ✨ Fix with Agent

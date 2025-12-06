@@ -63,6 +63,8 @@ export const BedsideNoteHistory: React.FC<BedsideNoteHistoryProps> = ({
                 {entry.changeType && <span className="px-2 py-1 rounded bg-[var(--surface-secondary)]">{entry.changeType}</span>}
                 <button
                   type="button"
+                  aria-pressed={isPinned}
+                  aria-label={isPinned ? `Unpin version ${entry.version}` : `Pin version ${entry.version}`}
                   onClick={() => onPin(isPinned ? null : entry.memoryId)}
                   className={`px-2 py-1 rounded border ${isPinned ? 'border-[var(--interactive-accent)] text-[var(--interactive-accent)]' : 'border-[var(--border-primary)] text-[var(--text-secondary)]'}`}
                 >

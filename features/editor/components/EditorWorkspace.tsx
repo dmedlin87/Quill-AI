@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEngine, findQuoteRange, useManuscriptIntelligence } from '@/features/shared';
 import { useEditorState, useEditorActions } from '@/features/core/context/EditorContext';
@@ -193,6 +193,17 @@ export const EditorWorkspace: React.FC = () => {
     chapterId: activeChapter?.id || 'default',
     initialText: currentText,
   });
+
+  const latestTextRef = useRef(currentText);
+  useEffect(() => {
+    latestTextRef.current = currentText;
+  }, [currentText]);
+
+  // Keep intelligence layer aligned when the active chapter changes
+  useEffect(() => {
+    updateIntelligenceText(latestTextRef.current, 0);
+    updateCursor(0);
+  }, [activeChapter?.id, updateCursor, updateIntelligenceText]);
 
   // Sync text changes to intelligence layer
   const handleTextUpdate = useCallback((newText: string) => {

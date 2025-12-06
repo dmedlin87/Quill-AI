@@ -18,6 +18,16 @@ import { CreateMemoryNoteInput, MemoryNoteType } from './types';
 import { createMemory, getMemories } from './index';
 import { isSemanticDuplicate } from './semanticDedup';
 
+// Relationship predicate language map shared across relationship extraction
+const RELATIONSHIP_PREDICATE_MAP: Record<string, string> = {
+  'interacts': 'interacts with',
+  'located_at': 'is located at',
+  'possesses': 'possesses',
+  'related_to': 'is related to',
+  'opposes': 'opposes',
+  'allied_with': 'is allied with',
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,24 +115,19 @@ const extractRelationshipFacts = (
   entities: EntityGraph
 ): ExtractedFact[] => {
   const facts: ExtractedFact[] = [];
+  const nodeById = new Map(entities.nodes.map(node => [node.id, node]));
   
   for (const edge of entities.edges) {
-    const source = entities.nodes.find(n => n.id === edge.source);
-    const target = entities.nodes.find(n => n.id === edge.target);
+    const source = nodeById.get(edge.source);
+    const target = nodeById.get(edge.target);
     
     if (!source || !target) continue;
     
     // Convert relationship type to natural language
-    const predicateMap: Record<string, string> = {
-      'interacts': 'interacts with',
-      'located_at': 'is located at',
-      'possesses': 'possesses',
-      'related_to': 'is related to',
-      'opposes': 'opposes',
-      'allied_with': 'is allied with',
-    };
-    
-    const predicate = predicateMap[edge.type] || edge.type;
+    const predicate = RELATIONSHIP_PREDICATE_MAP[edge.type] || edge.type;
+    const evidenceSnippet = edge.evidence?.length
+      ? edge.evidence.slice(0, 3).join('; ')
+      : undefined;
     
     facts.push({
       subject: source.name,
@@ -131,7 +136,7 @@ const extractRelationshipFacts = (
       confidence: Math.min(0.9, 0.5 + (edge.coOccurrences * 0.1)),
       sourceOffset: source.firstMention,
       sourceType: 'relationship',
-      evidence: edge.evidence.slice(0, 3).join('; '),
+      evidence: evidenceSnippet,
     });
     
     // Add sentiment-based relationship inference

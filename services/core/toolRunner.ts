@@ -4,6 +4,20 @@ import type { AgentToolExecutor, AgentState } from './AgentController';
 import type { ToolResult } from '@/services/gemini/toolExecutor';
 import { getOrCreateBedsideNote } from '@/services/memory';
 
+const SIGNIFICANT_TOOLS = new Set([
+  'update_manuscript',
+  'append_to_manuscript',
+  'insert_at_cursor',
+  'rewrite_selection',
+  'continue_writing',
+  'create_goal',
+  'update_goal',
+  'write_memory_note',
+  'update_memory_note',
+  'delete_memory_note',
+  'update_bedside_note',
+]);
+
 interface ToolRunnerOptions {
   toolExecutor: AgentToolExecutor;
   getProjectId: () => string | null;
@@ -38,19 +52,7 @@ export class ToolRunner {
   }
 
   private isSignificantTool(name: string): boolean {
-    return new Set([
-      'update_manuscript',
-      'append_to_manuscript',
-      'insert_at_cursor',
-      'rewrite_selection',
-      'continue_writing',
-      'create_goal',
-      'update_goal',
-      'write_memory_note',
-      'update_memory_note',
-      'delete_memory_note',
-      'update_bedside_note',
-    ]).has(name);
+    return SIGNIFICANT_TOOLS.has(name);
   }
 
   private buildBedsideReflectionMessage(toolName: string): string | null {

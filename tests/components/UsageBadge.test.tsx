@@ -9,9 +9,10 @@ vi.mock('@/features/shared/context/UsageContext', () => ({
 }));
 
 // Mock settings store for deterministic budget threshold
-const mockUseSettingsStore = vi.fn().mockReturnValue({ budgetThreshold: 1.0 });
+const mockUseSettingsStore = vi.fn();
 vi.mock('@/features/settings', () => ({
-  useSettingsStore: () => mockUseSettingsStore(),
+  useSettingsStore: (selector: (state: { budgetThreshold: number }) => number) =>
+    selector(mockUseSettingsStore()),
 }));
 
 // Mock AccessibleTooltip so tooltip content is always rendered in the DOM
@@ -95,6 +96,22 @@ describe('UsageBadge', () => {
     expect(screen.getByText('15,000 tokens')).toBeInTheDocument();
   });
 
+  it('falls back to safe budget threshold when store returns NaN', () => {
+    mockUseSettingsStore.mockReturnValue({ budgetThreshold: Number.NaN });
+    mockUseUsage.mockReturnValue({
+      promptTokens: 10,
+      responseTokens: 5,
+      totalRequestCount: 1,
+      totalCost: 0.01,
+      sessionCost: 0.01,
+    });
+
+    render(<UsageBadge />);
+
+    // With NaN threshold we treat as zero; any positive session cost exceeds it
+    expect(screen.getByLabelText(/budget exceeded/)).toBeInTheDocument();
+  });
+
   it('displays cost and high-budget indicator when cost exceeds threshold', () => {
     mockUseUsage.mockReturnValue({
       promptTokens: 1000,
@@ -108,6 +125,7 @@ describe('UsageBadge', () => {
 
     // Main badge shows session cost with 2 decimals via aria-label
     expect(screen.getByLabelText(/cost: \$1\.23/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/budget exceeded/)).toBeInTheDocument();
 
     // Tooltip shows budget limit and session cost with 4 decimals
     expect(screen.getByText('Limit: $1.00')).toBeInTheDocument();

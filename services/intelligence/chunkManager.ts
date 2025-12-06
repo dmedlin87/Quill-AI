@@ -57,6 +57,7 @@ const DEFAULT_CONFIG: ChunkManagerConfig = {
 export class ChunkManager {
   private index: ChunkIndex;
   private config: ChunkManagerConfig;
+  private isDestroyed = false;
   
   // Processing state
   private isProcessing = false;
@@ -121,6 +122,8 @@ export class ChunkManager {
    * This is the main entry point from the editor
    */
   handleEdit(chapterId: string, newText: string, editStart: number, editEnd: number): void {
+    if (this.isDestroyed) return;
+
     this.lastEditTime = Date.now();
     
     // Store the latest text
@@ -200,7 +203,7 @@ export class ChunkManager {
    * Schedule background processing
    */
   private scheduleProcessing(): void {
-    if (this.processingTimer) return;
+    if (this.isDestroyed || this.processingTimer) return;
     
     // Wait for idle
     const timeSinceEdit = Date.now() - this.lastEditTime;
@@ -539,6 +542,10 @@ export class ChunkManager {
    * Pause background processing
    */
   pause(): void {
+    if (this.editDebounceTimer) {
+      clearTimeout(this.editDebounceTimer);
+      this.editDebounceTimer = null;
+    }
     if (this.processingTimer) {
       clearTimeout(this.processingTimer);
       this.processingTimer = null;
@@ -549,6 +556,8 @@ export class ChunkManager {
    * Resume background processing
    */
   resume(): void {
+    if (this.isDestroyed) return;
+
     if (this.index.hasDirtyChunks()) {
       this.scheduleProcessing();
     }
@@ -598,9 +607,11 @@ export class ChunkManager {
    * Destroy the manager
    */
   destroy(): void {
+    this.isDestroyed = true;
     this.pause();
     if (this.editDebounceTimer) {
       clearTimeout(this.editDebounceTimer);
+      this.editDebounceTimer = null;
     }
     this.clear();
   }

@@ -22,6 +22,12 @@ interface AnalysisPanelProps {
 
 export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoading, currentText, onNavigate, onFixRequest, warning, onAnalyzeSelection, hasSelection, contradictions = [], derivedLore }) => {
   
+  const formatContradictionLabel = (type: string) =>
+    type
+      .split('_')
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+
   const handleQuoteClick = (quote?: string) => {
     if (!quote) return;
     const range = findQuoteRange(currentText, quote);
@@ -200,7 +206,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoadin
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-[var(--text-sm)] font-semibold text-[var(--text-primary)]">
-                          {contradiction.type.replace('_', ' ')}
+                          {formatContradictionLabel(contradiction.type)}
                         </p>
                         <p className="text-[var(--text-xs)] text-[var(--text-secondary)]">
                           {contradiction.characterName ? `${contradiction.characterName} • ` : ''}{contradiction.attribute || 'detail'}

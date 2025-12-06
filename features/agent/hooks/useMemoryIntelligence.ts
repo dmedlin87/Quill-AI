@@ -123,6 +123,7 @@ export function useMemoryIntelligence(
   const [isConsolidating, setIsConsolidating] = useState(false);
   
   const consolidationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isConsolidatingRef = useRef(false);
 
   // Observe analysis results
   const observeAnalysis = useCallback(async (
@@ -183,12 +184,27 @@ export function useMemoryIntelligence(
       };
     }
 
+    if (isConsolidatingRef.current) {
+      return (
+        lastConsolidation ?? {
+          decayed: 0,
+          merged: 0,
+          archived: 0,
+          reinforced: 0,
+          errors: ['Consolidation already in progress'],
+          duration: 0,
+        }
+      );
+    }
+
+    isConsolidatingRef.current = true;
     setIsConsolidating(true);
     try {
       const result = await runConsolidation({ projectId });
       setLastConsolidation(result);
       return result;
     } finally {
+      isConsolidatingRef.current = false;
       setIsConsolidating(false);
     }
   }, [projectId]);

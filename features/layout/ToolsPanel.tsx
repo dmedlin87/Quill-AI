@@ -31,8 +31,6 @@ interface ToolsPanelProps {
   analysisWarning?: AnalysisWarning | null;
   onAnalyzeSelection?: () => void;
   hasSelection?: boolean;
-  onAnalyzeSelection?: () => void;
-  hasSelection?: boolean;
   // Callbacks
   onAgentAction: (action: string, params: any) => Promise<string>;
   onNavigateToText?: (start: number, end: number) => void;

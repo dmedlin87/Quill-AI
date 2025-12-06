@@ -20,6 +20,16 @@ const getAudioContextCtor = () => {
   return ctor;
 };
 
+const safeCloseAudioContext = async (ctx: AudioContext | null) => {
+  if (ctx && ctx.state !== 'closed') {
+    try {
+      await ctx.close();
+    } catch (err) {
+      console.warn('Failed to close AudioContext', err);
+    }
+  }
+};
+
 const makeAudioContext = (Ctor: any, options: AudioContextOptions) => {
   // Support both constructable mocks and factory-style mocks in tests
   try {
@@ -49,16 +59,17 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
 
     const AudioContextCtor = getAudioContextCtor();
     const audioContext = makeAudioContext(AudioContextCtor, { sampleRate: 24000 });
-    const buffer = await decodeAudioData(
-      base64ToUint8Array(base64Audio),
-      audioContext,
-      24000,
-      1
-    );
-    if (audioContext.state !== 'closed') {
-      await audioContext.close();
+    try {
+      const buffer = await decodeAudioData(
+        base64ToUint8Array(base64Audio),
+        audioContext,
+        24000,
+        1
+      );
+      return buffer;
+    } finally {
+      await safeCloseAudioContext(audioContext);
     }
-    return buffer;
   } catch (e) {
     console.error("TTS Error:", e);
     return null;
@@ -101,10 +112,12 @@ export const connectLiveSession = async (
       },
       onclose: () => {
         console.log("Live session closed");
+        void safeCloseAudioContext(outputAudioContext);
         onClose();
       },
       onerror: (err) => {
         console.error("Live session error", err);
+        void safeCloseAudioContext(outputAudioContext);
         onClose();
       }
     }
@@ -117,9 +130,7 @@ export const connectLiveSession = async (
       session.sendRealtimeInput({ media: pcmBlob });
     },
     disconnect: async () => {
-      if (outputAudioContext.state !== 'closed') {
-        await outputAudioContext.close();
-      }
+      await safeCloseAudioContext(outputAudioContext);
       const session = await sessionPromise;
       (session as any).close?.(); 
     }

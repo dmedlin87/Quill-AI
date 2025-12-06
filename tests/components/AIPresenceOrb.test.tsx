@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { AIPresenceOrb } from '@/features/agent/components/AIPresenceOrb';
 import { DEFAULT_PERSONAS } from '@/types/personas';
@@ -21,6 +21,30 @@ describe('AIPresenceOrb', () => {
     const checkIcon = container.querySelector('svg[width="8"][height="8"]');
     expect(checkIcon).not.toBeNull();
     expect(checkIcon?.parentElement).not.toBeNull();
+  });
+
+  it('renders active indicator when isActive is true', () => {
+    const { container } = render(
+      <AIPresenceOrb status="idle" persona={persona} analysisReady={false} isActive />
+    );
+
+    const activeIndicator = container.querySelector('div[style*="height: 20px"]');
+    expect(activeIndicator).not.toBeNull();
+  });
+
+  it('calls onClick when the orb is pressed', () => {
+    const handleClick = vi.fn();
+    render(
+      <AIPresenceOrb
+        status="idle"
+        persona={persona}
+        analysisReady={false}
+        onClick={handleClick}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    expect(handleClick).toHaveBeenCalledTimes(1);
   });
 
   it('uses different status indicator colors for each state', () => {

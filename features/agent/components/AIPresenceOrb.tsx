@@ -5,9 +5,11 @@
  * Shows status through animations: idle (subtle glow), thinking (pulse), writing (shimmer).
  */
 
-import React from 'react';
-import { motion, type Variants, type Easing } from 'framer-motion';
+import React, { useMemo } from 'react';
+import { motion, type Variants, type Easing, useReducedMotion } from 'framer-motion';
 import { Persona } from '@/types/personas';
+
+const EASE_IN_OUT: Easing = [0.42, 0, 0.58, 1];
 
 export type OrbStatus = 'idle' | 'thinking' | 'writing';
 
@@ -27,92 +29,119 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
   isActive = false,
 }) => {
   const baseColor = persona.color;
+  const prefersReducedMotion = useReducedMotion();
 
-  const easeInOut: Easing = [0.42, 0, 0.58, 1];
+  const {
+    orbVariants,
+    glowVariants,
+    shimmerVariants,
+    badgeVariants,
+  } = useMemo(() => {
+    const repeat = prefersReducedMotion ? 0 : Infinity;
 
-  // Animation variants for different states
-  const orbVariants: Variants = {
-    idle: {
-      scale: 1,
-      opacity: 1,
-    },
-    thinking: {
-      scale: [1, 1.1, 1],
-      opacity: [0.8, 1, 0.8],
-      transition: {
-        duration: 1.5,
-        repeat: Infinity,
-        ease: easeInOut,
+    // Animation variants for different states
+    const computedOrbVariants: Variants = {
+      idle: {
+        scale: 1,
+        opacity: 1,
       },
-    },
-    writing: {
-      scale: 1,
-      opacity: 1,
-    },
-  };
+      thinking: prefersReducedMotion
+        ? { scale: 1, opacity: 1 }
+        : {
+            scale: [1, 1.1, 1],
+            opacity: [0.8, 1, 0.8],
+            transition: {
+              duration: 1.5,
+              repeat,
+              ease: EASE_IN_OUT,
+            },
+          },
+      writing: {
+        scale: 1,
+        opacity: 1,
+      },
+    };
 
-  // Glow animation for the outer ring
-  const glowVariants: Variants = {
-    idle: {
-      opacity: 0.3,
-      scale: 1,
-    },
-    thinking: {
-      opacity: [0.3, 0.6, 0.3],
-      scale: [1, 1.15, 1],
-      transition: {
-        duration: 1.5,
-        repeat: Infinity,
-        ease: easeInOut,
+    // Glow animation for the outer ring
+    const computedGlowVariants: Variants = {
+      idle: {
+        opacity: 0.3,
+        scale: 1,
       },
-    },
-    writing: {
-      opacity: [0.4, 0.8, 0.4],
-      scale: [1, 1.1, 1],
-      transition: {
-        duration: 0.8,
-        repeat: Infinity,
-        ease: easeInOut,
-      },
-    },
-  };
+      thinking: prefersReducedMotion
+        ? { opacity: 0.4, scale: 1 }
+        : {
+            opacity: [0.3, 0.6, 0.3],
+            scale: [1, 1.15, 1],
+            transition: {
+              duration: 1.5,
+              repeat,
+              ease: EASE_IN_OUT,
+            },
+          },
+      writing: prefersReducedMotion
+        ? { opacity: 0.6, scale: 1 }
+        : {
+            opacity: [0.4, 0.8, 0.4],
+            scale: [1, 1.1, 1],
+            transition: {
+              duration: 0.8,
+              repeat,
+              ease: EASE_IN_OUT,
+            },
+          },
+    };
 
-  // Shimmer effect for writing state
-  const shimmerVariants: Variants = {
-    idle: { opacity: 0, rotate: 0 },
-    thinking: { opacity: 0, rotate: 0 },
-    writing: {
-      opacity: [0, 0.6, 0],
-      rotate: [0, 180, 360],
-      transition: {
-        duration: 2,
-        repeat: Infinity,
-        ease: 'linear' as Easing,
-      },
-    },
-  };
+    // Shimmer effect for writing state
+    const computedShimmerVariants: Variants = {
+      idle: { opacity: 0, rotate: 0 },
+      thinking: { opacity: 0, rotate: 0 },
+      writing: prefersReducedMotion
+        ? { opacity: 0, rotate: 0 }
+        : {
+            opacity: [0, 0.6, 0],
+            rotate: [0, 180, 360],
+            transition: {
+              duration: 2,
+              repeat,
+              ease: 'linear' as Easing,
+            },
+          },
+    };
 
-  // Analysis ready badge animation
-  const badgeVariants: Variants = {
-    hidden: { scale: 0, opacity: 0 },
-    visible: {
-      scale: 1,
-      opacity: 1,
-      transition: {
-        type: 'spring' as const,
-        stiffness: 500,
-        damping: 25,
+    // Analysis ready badge animation
+    const computedBadgeVariants: Variants = {
+      hidden: { scale: 0, opacity: 0 },
+      visible: {
+        scale: 1,
+        opacity: 1,
+        transition: prefersReducedMotion
+          ? undefined
+          : {
+              type: 'spring' as const,
+              stiffness: 500,
+              damping: 25,
+            },
       },
-    },
-  };
+    };
+
+    return {
+      orbVariants: computedOrbVariants,
+      glowVariants: computedGlowVariants,
+      shimmerVariants: computedShimmerVariants,
+      badgeVariants: computedBadgeVariants,
+    };
+  }, [prefersReducedMotion]);
 
   return (
     <motion.button
+      type="button"
       onClick={onClick}
       className="relative w-10 h-10 rounded-lg flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent"
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       title="Agent"
+      aria-label={`Agent ${persona.name} is ${status}`}
     >
       {/* Outer glow ring */}
       <motion.div
@@ -198,13 +227,14 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
           backgroundColor: status === 'idle' ? '#6b7280' : status === 'thinking' ? '#f59e0b' : '#10b981',
           boxShadow: status !== 'idle' ? `0 0 4px ${status === 'thinking' ? '#f59e0b' : '#10b981'}` : 'none',
         }}
-        animate={{
-          opacity: status === 'idle' ? 0.6 : [0.6, 1, 0.6],
-          scale: status === 'idle' ? 1 : [1, 1.2, 1],
-        }}
+        animate={
+          prefersReducedMotion
+            ? { opacity: status === 'idle' ? 0.6 : 1, scale: 1 }
+            : { opacity: status === 'idle' ? 0.6 : [0.6, 1, 0.6], scale: status === 'idle' ? 1 : [1, 1.2, 1] }
+        }
         transition={{
           duration: 1,
-          repeat: status === 'idle' ? 0 : Infinity,
+          repeat: status === 'idle' || prefersReducedMotion ? 0 : Infinity,
           ease: 'easeInOut',
         }}
       />

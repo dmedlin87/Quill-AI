@@ -124,9 +124,7 @@ const extractSentences = (text: string): string[] => {
   return text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
 };
 
-const countWords = (text: string): number => {
-  return text.trim().split(/\s+/).filter(w => w.length > 0).length;
-};
+const countWords = (text: string): number => tokenize(text).length;
 
 const countSyllables = (word: string): number => {
   word = word.toLowerCase().replace(/[^a-z]/g, '');
@@ -307,8 +305,9 @@ export const analyzeStyleFlags = (text: string): StyleFlags => {
   // Passive voice detection
   const passiveVoiceInstances: Array<{ quote: string; offset: number }> = [];
   for (const pattern of PASSIVE_PATTERNS) {
+    const regex = new RegExp(pattern.source, pattern.flags);
     let match;
-    while ((match = pattern.exec(text)) !== null) {
+    while ((match = regex.exec(text)) !== null) {
       passiveVoiceInstances.push({
         quote: text.slice(Math.max(0, match.index - 10), match.index + match[0].length + 10).trim(),
         offset: match.index,
@@ -369,7 +368,7 @@ export const analyzeStyleFlags = (text: string): StyleFlags => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const findRepeatedPhrases = (text: string): Array<{ phrase: string; count: number; offsets: number[] }> => {
-  const words = text.toLowerCase().split(/\s+/);
+  const words = tokenize(text);
   const phraseMap = new Map<string, number[]>();
   
   // Find 3-grams and 4-grams

@@ -5,7 +5,7 @@
  * preventing near-duplicates like "Sarah has blue eyes" vs "Sarah's eyes are blue".
  */
 
-import { MemoryNote } from './types';
+import { MemoryNote, type MemoryEmbedding } from './types';
 import { getMemories } from './index';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ export interface SemanticDuplicateResult {
   reason?: string;
 }
 
-export interface MemoryEmbedding {
+export interface SemanticMemoryEmbedding {
   memoryId: string;
   embedding: number[];
   keyTerms: string[];
@@ -82,7 +82,7 @@ const EMBEDDING_DIM = 32; // Lightweight for fast comparison
  * Generate a lightweight embedding for memory text
  * Uses bag-of-words with hashing for speed
  */
-export const generateMemoryEmbedding = (text: string): number[] => {
+export const generateMemoryEmbedding = (text: string): MemoryEmbedding => {
   const tokens = tokenize(text);
   const embedding = new Array(EMBEDDING_DIM).fill(0);
   
@@ -101,7 +101,7 @@ export const generateMemoryEmbedding = (text: string): number[] => {
     }
   }
   
-  return embedding;
+  return embedding as MemoryEmbedding;
 };
 
 const simpleHash = (str: string): number => {
@@ -114,9 +114,24 @@ const simpleHash = (str: string): number => {
 };
 
 /**
+ * Prefer stored embeddings when available to avoid recomputation.
+ */
+const getEmbeddingVector = (
+  note: Pick<MemoryNote, 'text' | 'embedding'>
+): MemoryEmbedding => {
+  if (Array.isArray(note.embedding) && note.embedding.length === EMBEDDING_DIM) {
+    return note.embedding;
+  }
+  return generateMemoryEmbedding(note.text);
+};
+
+/**
  * Calculate cosine similarity between embeddings
  */
-export const cosineSimilarity = (a: number[], b: number[]): number => {
+export const cosineSimilarity = (
+  a: MemoryEmbedding,
+  b: MemoryEmbedding,
+): number => {
   if (a.length !== b.length) return 0;
   
   let dotProduct = 0;
@@ -214,7 +229,7 @@ export const isSemanticDuplicate = async (
   
   for (const note of existing) {
     // Calculate embedding similarity
-    const noteEmbedding = generateMemoryEmbedding(note.text);
+    const noteEmbedding = getEmbeddingVector(note);
     const embeddingSim = cosineSimilarity(newEmbedding, noteEmbedding);
     
     // Calculate entity similarity
@@ -279,7 +294,7 @@ export const findSimilarMemories = async (
   const results: Array<{ note: MemoryNote; similarity: number }> = [];
   
   for (const note of existing) {
-    const noteEmbedding = generateMemoryEmbedding(note.text);
+    const noteEmbedding = getEmbeddingVector(note);
     const embeddingSim = cosineSimilarity(queryEmbedding, noteEmbedding);
     
     const noteEntities = extractEntities(note.text);

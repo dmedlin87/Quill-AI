@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { AnalysisPanel } from '@/features/analysis/components/AnalysisPanel';
 import { AnalysisResult } from '@/types';
@@ -95,9 +96,10 @@ describe('AnalysisPanel', () => {
     expect(screen.getByText('Token limit guidance')).toBeInTheDocument();
   });
 
-  it('renders analysis content and supports navigation and fix actions', () => {
+  it('renders analysis content and supports navigation and fix actions', async () => {
     const onNavigate = vi.fn();
     const onFixRequest = vi.fn();
+    const user = userEvent.setup();
     mockFindQuoteRange.mockReturnValue({ start: 10, end: 25 });
 
     render(
@@ -115,16 +117,17 @@ describe('AnalysisPanel', () => {
     expect(screen.getByText('A sweeping summary of the narrative.')).toBeInTheDocument();
     expect(screen.getByText('Pacing dip')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Pacing dip'));
+    await user.click(screen.getByText('Pacing dip'));
     expect(onNavigate).toHaveBeenCalledWith(10, 25);
 
     const fixButtons = screen.getAllByText('✨ Fix with Agent');
-    fireEvent.click(fixButtons[0]);
+    await user.click(fixButtons[0]);
     expect(onFixRequest).toHaveBeenCalledWith('"The hero hesitates too long." (Chapter 1)', 'Tighten the opening scene.');
   });
 
-  it('renders contradictions with navigation hooks and derived lore', () => {
+  it('renders contradictions with navigation hooks and derived lore', async () => {
     const onNavigate = vi.fn();
+    const user = userEvent.setup();
     const contradictions = [{
       type: 'character_attribute' as const,
       attribute: 'eye color',
@@ -152,7 +155,7 @@ describe('AnalysisPanel', () => {
 
     expect(screen.getByText('Intelligence HUD')).toBeInTheDocument();
     expect(screen.getByText('character attribute')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Jump to text'));
+    await user.click(screen.getByText('Jump to text'));
     expect(onNavigate).toHaveBeenCalledWith(42, 92);
     expect(screen.getByText('Magic requires balance')).toBeInTheDocument();
     expect(screen.getByText('Adventurer')).toBeInTheDocument();

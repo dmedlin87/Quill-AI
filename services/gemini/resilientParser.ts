@@ -1,3 +1,4 @@
+import { reportError, ErrorContext } from '@/services/telemetry/errorReporter';
 /**
  * Resilient Parsing Layer
  * 
@@ -11,9 +12,14 @@
  */
 export function cleanJsonOutput(text: string): string {
   let cleaned = text.trim();
+
+  // Strip UTF-8 BOM if present
+  if (cleaned.charCodeAt(0) === 0xfeff) {
+    cleaned = cleaned.slice(1);
+  }
   
-  // Remove markdown code blocks (```json ... ``` or ``` ... ```)
-  const codeBlockRegex = /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/;
+  // Remove markdown code blocks (```json ... ``` or ``` ... ```) even if surrounded by extra text
+  const codeBlockRegex = /```(?:json)?\s*\n?([\s\S]*?)\n?```/;
   const match = cleaned.match(codeBlockRegex);
   if (match) {
     cleaned = match[1].trim();
@@ -207,7 +213,7 @@ export function safeParseJsonWithValidation<T>(
   validator: (data: unknown) => data is T,
   fallback: T
 ): ParseResult<T> {
-  const result = safeParseJson<unknown>(response, null);
+  const result = safeParseJson<unknown>(response, fallback as unknown as null);
   
   if (!result.success || result.data === null) {
     return {
@@ -215,6 +221,7 @@ export function safeParseJsonWithValidation<T>(
       data: fallback,
       error: result.error,
       rawResponse: result.rawResponse,
+      sanitized: result.sanitized,
     };
   }
   
@@ -235,6 +242,7 @@ export function safeParseJsonWithValidation<T>(
     data: fallback,
     error: 'Response does not match expected schema',
     rawResponse: result.rawResponse,
+    sanitized: result.sanitized,
   };
 }
 
@@ -253,4 +261,3 @@ export const validators = {
   isVariationsResponse: (data: unknown): data is { variations: string[] } =>
     validators.hasProperty(data, 'variations') && Array.isArray(data.variations),
 };
-import { reportError, ErrorContext } from '@/services/telemetry/errorReporter';

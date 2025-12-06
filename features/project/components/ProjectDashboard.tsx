@@ -143,6 +143,8 @@ export const ProjectDashboard: React.FC = () => {
   const [newTitle, setNewTitle] = useState('');
   const [newTime, setNewTime] = useState('');
   const [newLocation, setNewLocation] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -153,10 +155,12 @@ export const ProjectDashboard: React.FC = () => {
       setImportedContent(null);
       setParsedChapters(null);
       setIsModalOpen(false);
+      setError(null);
+      setIsProcessing(false);
   };
 
   const handleCreateOrNext = async () => {
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || isProcessing) return;
     
     // If this is an Import workflow
     if (importedContent !== null) {
@@ -173,8 +177,15 @@ export const ProjectDashboard: React.FC = () => {
         location: newLocation || 'General'
     } : undefined;
 
-    await createProject(newTitle, 'Me', setting);
-    resetForm();
+    try {
+      setIsProcessing(true);
+      setError(null);
+      await createProject(newTitle, 'Me', setting);
+      resetForm();
+    } catch (err) {
+      setError('Unable to create project. Please try again.');
+      setIsProcessing(false);
+    }
   };
 
   const handleWizardConfirm = async (finalChapters: ParsedChapter[]) => {
@@ -183,8 +194,15 @@ export const ProjectDashboard: React.FC = () => {
           location: newLocation || 'General'
       } : undefined;
 
-      await importProject(newTitle, finalChapters, 'Me', setting);
-      resetForm();
+      try {
+        setIsProcessing(true);
+        setError(null);
+        await importProject(newTitle, finalChapters, 'Me', setting);
+        resetForm();
+      } catch (err) {
+        setError('Unable to import draft. Please try again.');
+        setIsProcessing(false);
+      }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,7 +217,7 @@ export const ProjectDashboard: React.FC = () => {
           setNewTitle(cleanName);
           setIsModalOpen(true); // Open modal to confirm details/settings
       } catch (err) {
-          alert("Failed to read file.");
+          setError("Failed to read file.");
       }
       
       // Reset input value so same file can be selected again if needed
@@ -232,6 +250,11 @@ export const ProjectDashboard: React.FC = () => {
                   <p className="text-sm text-gray-400 mb-6">
                       {importedContent ? "We'll attempt to detect chapters. You can review them in the next step." : "Tell us a bit about your new book."}
                   </p>
+                  {error && (
+                    <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                      {error}
+                    </div>
+                  )}
                   
                   <div className="space-y-4">
                       <div>
@@ -277,10 +300,10 @@ export const ProjectDashboard: React.FC = () => {
                       </button>
                       <button 
                         onClick={handleCreateOrNext}
-                        disabled={!newTitle.trim()}
+                        disabled={!newTitle.trim() || isProcessing}
                         className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-500 disabled:opacity-50 transition-colors"
                       >
-                          {importedContent ? "Next: Review Chapters" : "Create Project"}
+                          {isProcessing ? "Working..." : importedContent ? "Next: Review Chapters" : "Create Project"}
                       </button>
                   </div>
               </div>

@@ -28,7 +28,7 @@ export const hashContent = (text: string): string => {
   let hash = 5381;
   for (let i = 0; i < text.length; i++) {
     hash = ((hash << 5) + hash) + text.charCodeAt(i);
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & 0xffffffff; // Convert to 32-bit integer
   }
   return hash.toString(16);
 };
@@ -230,8 +230,9 @@ export const detectNewPromises = (
   for (const change of changes) {
     if (change.changeType === 'insert' || change.changeType === 'modify') {
       const changedText = change.newText || '';
-      
+
       for (const pattern of promisePatterns) {
+        pattern.lastIndex = 0;
         const matches = changedText.match(pattern);
         if (matches) {
           for (const match of matches) {
@@ -268,6 +269,7 @@ export const detectResolvedPromises = (
       const changedText = change.newText || '';
       
       for (const pattern of resolutionPatterns) {
+        pattern.lastIndex = 0;
         if (pattern.test(changedText)) {
           // Check if any open promise might be resolved
           for (const promise of timeline.promises.filter(p => !p.resolved)) {

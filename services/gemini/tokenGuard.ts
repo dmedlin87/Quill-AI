@@ -9,6 +9,12 @@ import { TokenLimits, ModelId } from '../../config/models';
 import { ApiDefaults, estimateTokens } from '../../config/api';
 import { AnalysisWarning } from '../../types';
 
+function getTokenBudget(model: ModelId, reserveTokens: number) {
+  const limit = TokenLimits[model] ?? 32_000;
+  const availableTokens = Math.max(0, limit - reserveTokens);
+  return { limit, availableTokens };
+}
+
 export interface TokenCheckResult {
   valid: boolean;
   estimatedTokens: number;
@@ -26,9 +32,10 @@ export function checkTokenLimit(
   model: ModelId,
   reserveTokens: number = 4000 // Reserve for response
 ): TokenCheckResult {
-  const limit = TokenLimits[model] ?? 32_000;
-  const rawLimit = limit;
-  const availableTokens = Math.max(0, rawLimit - reserveTokens);
+  const { limit: rawLimit, availableTokens } = getTokenBudget(
+    model,
+    reserveTokens
+  );
   const estimatedTokens = estimateTokens(text);
   const overflow = Math.max(0, estimatedTokens - availableTokens);
   

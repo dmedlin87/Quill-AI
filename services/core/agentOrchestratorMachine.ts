@@ -1,5 +1,3 @@
-import type { ChatMessage } from '@/types';
-
 export type AgentMode = 'text' | 'voice';
 
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'speaking' | 'error';
@@ -54,11 +52,10 @@ export function agentOrchestratorReducer(
       };
     case 'TOOL_COMPLETE':
       if (action.success) {
-        const previousRequest = state.status === 'thinking' ? state.currentRequest : state.currentRequest;
         return {
           status: 'thinking',
           isReady: state.isReady,
-          currentRequest: previousRequest,
+          currentRequest: state.currentRequest,
           currentTool: undefined,
           lastToolCall: { name: action.tool, success: true },
           lastError: undefined,

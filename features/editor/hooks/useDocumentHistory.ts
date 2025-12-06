@@ -103,6 +103,8 @@ export function useDocumentHistory(
         newContent: newText
       };
       setHistory(prevHist => [...prevHist, newItem]);
+      // Any new commit invalidates the redo stack (new branch of history)
+      setRedoStack([]);
       return newText;
     });
     onSave(newText);
@@ -156,6 +158,7 @@ export function useDocumentHistory(
   const reset = useCallback((newText: string) => {
       setText(newText);
       setHistory([]);
+      setRedoStack([]);
       onSave(newText);
   }, [onSave]);
 
@@ -172,6 +175,6 @@ export function useDocumentHistory(
     clearHistory,
     canUndo: history.length > 0,
     canRedo: redoStack.length > 0,
-    hasUnsavedChanges: history.length > 0 
+    hasUnsavedChanges: history.length > 0 || redoStack.length > 0 
   };
 }

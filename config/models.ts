@@ -25,6 +25,8 @@ type ModelBuildKey = 'default' | 'cheap' | 'deepThinking';
 
 type ModelBuild = Record<ModelRole, ModelDefinition>;
 
+type Pricing = { inputPrice: number; outputPrice: number };
+
 const MODEL_BUILD_ENV = (process.env.VITE_MODEL_BUILD || process.env.MODEL_BUILD) as
   | ModelBuildKey
   | undefined;
@@ -173,26 +175,35 @@ export const ModelBuilds: Record<ModelBuildKey, ModelBuild> = {
   },
 };
 
-export const ModelPricing: Record<string, { inputPrice: number; outputPrice: number }> = {};
+const FALLBACK_PRICING: Record<string, Pricing> = {
+  // Legacy or external model IDs not represented in ModelBuilds
+  'gemini-1.5-pro': { inputPrice: 1.25, outputPrice: 5.0 },
+};
 
-for (const build of Object.values(ModelBuilds)) {
-  for (const def of Object.values(build)) {
-    if (
-      typeof def.inputPrice === 'number' &&
-      typeof def.outputPrice === 'number'
-    ) {
-      ModelPricing[def.id] = {
-        inputPrice: def.inputPrice,
-        outputPrice: def.outputPrice,
-      };
+const buildModelPricing = (
+  builds: Record<ModelBuildKey, ModelBuild>,
+  fallback: Record<string, Pricing>
+): Readonly<Record<string, Pricing>> => {
+  const pricing: Record<string, Pricing> = { ...fallback };
+
+  for (const build of Object.values(builds)) {
+    for (const def of Object.values(build)) {
+      if (
+        typeof def.inputPrice === 'number' &&
+        typeof def.outputPrice === 'number'
+      ) {
+        pricing[def.id] = {
+          inputPrice: def.inputPrice,
+          outputPrice: def.outputPrice,
+        };
+      }
     }
   }
-}
 
-// Fallback pricing for legacy or external model IDs not represented in ModelBuilds
-if (!ModelPricing['gemini-1.5-pro']) {
-  ModelPricing['gemini-1.5-pro'] = { inputPrice: 1.25, outputPrice: 5.0 };
-}
+  return Object.freeze(pricing);
+};
+
+export const ModelPricing = buildModelPricing(ModelBuilds, FALLBACK_PRICING);
 
 export const getModelPricing = (
   modelId: string

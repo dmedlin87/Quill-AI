@@ -257,7 +257,7 @@ export function useAgentService(
         });
       }).catch(console.error);
     }
-  }, [appendMessages, currentPersona]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [appendMessages, currentPersona, initSession]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -123,10 +123,6 @@ const detectArcPhases = (
     }];
   }
   
-  // Divide into phases based on climax position
-  // Traditional structure: climax at ~75% through
-  const climaxPosition = climaxIndex / totalScenes;
-  
   // Setup: First ~20% of scenes (introduction)
   const setupEnd = Math.max(1, Math.floor(totalScenes * 0.2));
   

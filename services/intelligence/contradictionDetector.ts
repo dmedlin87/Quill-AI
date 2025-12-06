@@ -567,7 +567,7 @@ export const detectContradictionsWithLore = (
   
   // Parse lore facts
   const loreFacts = loreMemories
-    .filter(m => m.type === 'fact' || m.topicTags.includes('lore'))
+    .filter(m => m.type === 'fact' || m.topicTags?.includes('lore'))
     .map(parseLoreFact)
     .filter((f): f is LoreFact => f !== null);
   

@@ -9,13 +9,13 @@
  */
 
 import {
+  Scene,
   TimelineEvent,
   CausalChain,
   PlotPromise,
   Timeline,
   TemporalRelation,
 } from '../../types/intelligence';
-import { Scene } from '../../types/intelligence';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMPORAL PATTERNS
@@ -120,10 +120,24 @@ const RESOLUTION_PATTERNS = [
 // UTILITY FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const generateId = (): string => Math.random().toString(36).substring(2, 11);
-const resetPattern = (pattern: RegExp) => {
-  pattern.lastIndex = 0;
-  return pattern;
+let idCounter = 0;
+const generateId = (): string => {
+  const randomUUID = (globalThis as any)?.crypto?.randomUUID;
+  if (typeof randomUUID === 'function') {
+    return randomUUID();
+  }
+  
+  // Fallback to deterministic, low-collision identifier
+  idCounter += 1;
+  return `tl_${Date.now().toString(36)}_${idCounter.toString(36)}`;
+};
+const clonePattern = (pattern: RegExp) => new RegExp(pattern.source, pattern.flags);
+const truncate = (value: string, limit: number): string =>
+  value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
+
+const getMatchedContent = (match: RegExpExecArray): string => {
+  const captured = match.slice(1).filter(Boolean).join(' ').trim();
+  return captured.length > 0 ? captured : match[0];
 };
 
 const extractSentence = (text: string, offset: number): string => {
@@ -154,30 +168,32 @@ export const extractTimelineEvents = (
   chapterId: string
 ): TimelineEvent[] => {
   const events: TimelineEvent[] = [];
-  let lastRelation: TemporalRelation = 'unknown';
+  const temporalMarkers = TEMPORAL_MARKERS.map(({ pattern, relation }) => ({
+    pattern: clonePattern(pattern),
+    relation,
+  }));
   
   // Extract events from temporal markers
-  for (const { pattern, relation } of TEMPORAL_MARKERS) {
+  for (const { pattern, relation } of temporalMarkers) {
     let match;
     while ((match = pattern.exec(text)) !== null) {
       const sentence = extractSentence(text, match.index);
       
       events.push({
         id: generateId(),
-        description: sentence.slice(0, 150),
+        description: truncate(sentence, 150),
         offset: match.index,
         chapterId,
         temporalMarker: match[0],
         relativePosition: relation,
         dependsOn: [],
       });
-      
-      lastRelation = relation;
     }
   }
   
   // Extract events from time-of-day markers
-  for (const pattern of TIME_OF_DAY_PATTERNS) {
+  for (const basePattern of TIME_OF_DAY_PATTERNS) {
+    const pattern = clonePattern(basePattern);
     let match;
     while ((match = pattern.exec(text)) !== null) {
       const sentence = extractSentence(text, match.index);
@@ -186,7 +202,7 @@ export const extractTimelineEvents = (
       if (!events.find(e => Math.abs(e.offset - match!.index) < 20)) {
         events.push({
           id: generateId(),
-          description: sentence.slice(0, 150),
+          description: truncate(sentence, 150),
           offset: match.index,
           chapterId,
           temporalMarker: match[0],
@@ -207,7 +223,10 @@ export const extractTimelineEvents = (
       if (!existingEvent) {
         events.push({
           id: generateId(),
-          description: `Scene: ${scene.type} at ${scene.location || 'unknown location'}`,
+          description: truncate(
+            `Scene: ${scene.type} at ${scene.location || 'unknown location'}`,
+            150
+          ),
           offset: scene.startOffset,
           chapterId,
           temporalMarker: scene.timeMarker,
@@ -241,7 +260,8 @@ export const extractCausalChains = (
 ): CausalChain[] => {
   const chains: CausalChain[] = [];
   
-  for (const { pattern, confidence } of CAUSAL_MARKERS) {
+  for (const { pattern: basePattern, confidence } of CAUSAL_MARKERS) {
+    const pattern = clonePattern(basePattern);
     let match;
     while ((match = pattern.exec(text)) !== null) {
       const offset = match.index;
@@ -254,7 +274,7 @@ export const extractCausalChains = (
       }
       
       const causeQuote = text.slice(causeSentenceStart, causeSentenceEnd).trim();
-      const effectQuote = match[1] || match[0];
+      const effectQuote = getMatchedContent(match);
       
       // Find related events
       const causeEvent = events.find(e => 
@@ -268,12 +288,12 @@ export const extractCausalChains = (
         id: generateId(),
         cause: {
           eventId: causeEvent?.id || '',
-          quote: causeQuote.slice(0, 100),
+          quote: truncate(causeQuote, 100),
           offset: causeSentenceStart,
         },
         effect: {
           eventId: effectEvent?.id || '',
-          quote: effectQuote.slice(0, 100),
+          quote: truncate(effectQuote, 100),
           offset: offset,
         },
         confidence,
@@ -296,17 +316,17 @@ export const extractPlotPromises = (
   const promises: PlotPromise[] = [];
   
   // Find promises/setups
-  for (const { pattern, type } of PROMISE_PATTERNS) {
+  for (const { pattern: basePattern, type } of PROMISE_PATTERNS) {
+    const pattern = clonePattern(basePattern);
     let match;
-    resetPattern(pattern);
     while ((match = pattern.exec(text)) !== null) {
       const sentence = extractSentence(text, match.index);
       
       promises.push({
         id: generateId(),
         type,
-        description: sentence.slice(0, 150),
-        quote: match[0],
+        description: truncate(sentence, 150),
+        quote: getMatchedContent(match),
         offset: match.index,
         chapterId,
         resolved: false,
@@ -315,9 +335,9 @@ export const extractPlotPromises = (
   }
   
   // Check for resolutions
-  for (const pattern of RESOLUTION_PATTERNS) {
+  for (const basePattern of RESOLUTION_PATTERNS) {
+    const pattern = clonePattern(basePattern);
     let match;
-    resetPattern(pattern);
     while ((match = pattern.exec(text)) !== null) {
       // Look for a promise that might be resolved here
       const nearbyPromise = promises.find(p => 

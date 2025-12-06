@@ -107,14 +107,19 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Emit events on state changes
   useEffect(() => {
-    if (editor.selectionRange !== prevSelectionRef.current && editor.selectionRange) {
-      emitSelectionChanged(
-        editor.selectionRange.text,
-        editor.selectionRange.start,
-        editor.selectionRange.end
-      );
+    const prev = prevSelectionRef.current;
+    const curr = editor.selectionRange;
+    const selectionChanged =
+      (!!curr || !!prev) &&
+      (!prev ||
+        curr?.text !== prev.text ||
+        curr?.start !== prev.start ||
+        curr?.end !== prev.end);
+
+    if (selectionChanged && curr) {
+      emitSelectionChanged(curr.text, curr.start, curr.end);
     }
-    prevSelectionRef.current = editor.selectionRange;
+    prevSelectionRef.current = curr;
   }, [editor.selectionRange]);
 
   useEffect(() => {

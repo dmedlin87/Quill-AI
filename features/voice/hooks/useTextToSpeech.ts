@@ -56,7 +56,9 @@ export function useTextToSpeech() {
         };
         source.start();
       } else {
-        throw new Error("Failed to generate audio");
+        setError("Could not read text aloud.");
+        setIsPlaying(false);
+        return;
       }
     } catch (e: any) {
       if (abortControllerRef.current?.signal.aborted) return;

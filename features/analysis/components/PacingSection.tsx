@@ -15,18 +15,28 @@ export const PacingSection: React.FC<Props> = ({ pacing, currentText }) => {
 
   const timelineSegments = useMemo(() => {
     if (!pacing || !currentText) return [];
-    
+
+    const currentTextLower = currentText.toLowerCase();
+
     const slow = pacing.slowSections.map(s => ({ text: s, type: 'slow' as const }));
     const fast = pacing.fastSections.map(s => ({ text: s, type: 'fast' as const }));
     
     const all = [...slow, ...fast];
     
+    const findIndex = (segmentText: string) => {
+      const lowerText = segmentText.toLowerCase();
+      let index = currentTextLower.indexOf(lowerText);
+
+      if (index === -1 && segmentText.length > 20) {
+        const snippet = lowerText.substring(0, Math.min(segmentText.length, 50));
+        index = currentTextLower.indexOf(snippet);
+      }
+
+      return index;
+    };
+
     return all.map(item => {
-        let index = currentText.indexOf(item.text);
-        if (index === -1 && item.text.length > 20) {
-             const snippet = item.text.substring(0, Math.min(item.text.length, 50));
-             index = currentText.indexOf(snippet);
-        }
+        const index = findIndex(item.text);
         
         if (index === -1) return null;
         

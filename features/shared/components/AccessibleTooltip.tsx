@@ -89,6 +89,9 @@ export const AccessibleTooltip: React.FC<AccessibleTooltipProps> = ({
   }, []);
 
   const show = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     timeoutRef.current = setTimeout(() => setIsVisible(true), showDelay);
   };
 

@@ -52,8 +52,10 @@ export const MainLayout: React.FC = () => {
 
   const activeChapter = getActiveChapter();
 
-  // Apply theme to document on mount and changes
+  // Apply theme to document on mount and changes (SSR-safe)
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 

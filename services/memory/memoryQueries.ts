@@ -1,8 +1,58 @@
+import { Collection, Table, type PromiseExtended } from 'dexie';
 import { db } from '../db';
-import type {
-  ListMemoryNotesParams,
-  MemoryNote,
-} from './types';
+import type { ListMemoryNotesParams, MemoryNote } from './types';
+
+type MemoryArrayLike = MemoryNote[] | { data?: MemoryNote[] };
+type MemoryTableLike = Table<MemoryNote, string> | MemoryArrayLike | undefined;
+type MemoryCollection = {
+  filter: (predicate: (note: MemoryNote) => boolean) => MemoryCollection;
+  toArray: () => PromiseExtended<MemoryNote[]>;
+};
+type MemoryCollectionLike = MemoryCollection | Collection<MemoryNote, string>;
+
+const sortByImportanceThenRecency = (a: MemoryNote, b: MemoryNote) => {
+  if (b.importance !== a.importance) {
+    return b.importance - a.importance;
+  }
+  return b.createdAt - a.createdAt;
+};
+
+const isDexieTable = (table: MemoryTableLike): table is Table<MemoryNote, string> =>
+  typeof (table as Table<MemoryNote, string>)?.toCollection === 'function';
+
+const hasDataArray = (value: MemoryTableLike): value is { data: MemoryNote[] } =>
+  !!value && !Array.isArray(value) && Array.isArray((value as { data?: MemoryNote[] }).data);
+
+const createCollection = (data: MemoryNote[]): MemoryCollection => ({
+  filter: (predicate: (note: MemoryNote) => boolean) =>
+    createCollection(data.filter(predicate)),
+  toArray: () => Promise.resolve([...data]) as PromiseExtended<MemoryNote[]>,
+});
+
+const extractArrayData = (table: MemoryTableLike): MemoryNote[] => {
+  if (!table) return [];
+  if (Array.isArray(table)) return table;
+
+  const maybeDataContainer = table as MemoryArrayLike;
+  if (
+    typeof table === 'object' &&
+    table !== null &&
+    'data' in maybeDataContainer &&
+    Array.isArray(maybeDataContainer.data)
+  ) {
+    return maybeDataContainer.data ?? [];
+  }
+
+  return [];
+};
+
+const getCollection = (table: MemoryTableLike): MemoryCollectionLike => {
+  if (isDexieTable(table)) {
+    return table.toCollection();
+  }
+
+  return createCollection(extractArrayData(table));
+};
 
 /**
  * Get memory notes with optional filters.
@@ -18,40 +68,25 @@ export async function getMemories(
 ): Promise<MemoryNote[]> {
   const { scope, projectId, type, topicTags, minImportance, limit } = params;
 
-  const table: any = (db as any).memories;
+  const table: MemoryTableLike = (db as any).memories;
+  let collection = getCollection(table);
 
-  // Some test environments mock db.memories as a plain array or a minimal stub.
-  // Fall back to an in-memory collection shape when toCollection isn't available.
-  const createCollection = (data: MemoryNote[]) => ({
-    filter: (predicate: (note: MemoryNote) => boolean) =>
-      createCollection(data.filter(predicate)),
-    toArray: () => Promise.resolve([...data]),
-  });
-
-  let collection =
-    typeof table?.toCollection === 'function'
-      ? table.toCollection()
-      : createCollection(
-          Array.isArray(table)
-            ? table
-            : Array.isArray(table?.data)
-            ? table.data
-            : []
-        );
-
-  const hasWhere = typeof table?.where === 'function';
-  if (scope === 'project' && projectId) {
-    collection = hasWhere
-      ? table.where('[scope+projectId]').equals([scope, projectId])
-      : collection.filter(note => note.scope === scope && note.projectId === projectId);
-  } else if (scope) {
-    collection = hasWhere
-      ? table.where('scope').equals(scope)
-      : collection.filter(note => note.scope === scope);
-  } else if (projectId) {
-    collection = hasWhere
-      ? table.where('projectId').equals(projectId)
-      : collection.filter(note => note.projectId === projectId);
+  if (isDexieTable(table)) {
+    if (scope === 'project' && projectId) {
+      collection = table.where('[scope+projectId]').equals([scope, projectId]);
+    } else if (scope) {
+      collection = table.where('scope').equals(scope);
+    } else if (projectId) {
+      collection = table.where('projectId').equals(projectId);
+    }
+  } else {
+    if (scope === 'project' && projectId) {
+      collection = collection.filter(note => note.scope === scope && note.projectId === projectId);
+    } else if (scope) {
+      collection = collection.filter(note => note.scope === scope);
+    } else if (projectId) {
+      collection = collection.filter(note => note.projectId === projectId);
+    }
   }
 
   if (type) {
@@ -70,12 +105,7 @@ export async function getMemories(
 
   let results = await collection.toArray();
 
-  results.sort((a, b) => {
-    if (b.importance !== a.importance) {
-      return b.importance - a.importance;
-    }
-    return b.createdAt - a.createdAt;
-  });
+  results.sort(sortByImportanceThenRecency);
 
   if (limit && limit > 0) {
     results = results.slice(0, limit);
@@ -200,12 +230,7 @@ export async function searchMemoriesByTags(
   }
 
   let results = Array.from(matchingNotes.values());
-  results.sort((a, b) => {
-    if (b.importance !== a.importance) {
-      return b.importance - a.importance;
-    }
-    return b.createdAt - a.createdAt;
-  });
+  results.sort(sortByImportanceThenRecency);
 
   if (limit > 0) {
     results = results.slice(0, limit);

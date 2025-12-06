@@ -8,7 +8,7 @@
  * - Bridges agent actions with editor state
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useAgentService, ToolActionHandler, AgentServiceResult } from './useAgentService';
 import { ChatMessage, AnalysisResult, EditorContext } from '@/types';
 import { Lore, Chapter } from '@/types/schema';
@@ -133,8 +133,8 @@ export function useAgenticEditor(
     }
   }, [editorActions, onPendingEdit]);
 
-  // Get current text for agent context
-  const currentText = useMemo(() => editorActions.getCurrentText(), [editorActions]);
+  // Always use the latest editor text when initializing the agent service
+  const currentText = editorActions.getCurrentText();
 
   // Use the base agent service
   const agentService = useAgentService(currentText, {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { HistoryItem } from '@/types';
 
 interface ActivityFeedProps {
@@ -8,6 +8,8 @@ interface ActivityFeedProps {
 }
 
 export const ActivityFeed: React.FC<ActivityFeedProps> = ({ history, onRestore, onInspect }) => {
+  const reversedHistory = useMemo(() => [...history].reverse(), [history]);
+
   return (
     <div className="h-full bg-white flex flex-col">
        <div className="p-4 border-b border-gray-100">
@@ -22,7 +24,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ history, onRestore, 
                </div>
            )}
 
-           {[...history].reverse().map((item, index) => (
+           {reversedHistory.map((item, index) => (
                <div key={item.id} className="relative pl-6 group">
                    {/* Timeline Line */}
                    <div className="absolute left-2 top-2 bottom-[-24px] w-px bg-gray-200 group-last:bottom-0"></div>
@@ -46,6 +48,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ history, onRestore, 
                        
                        <div className="flex items-center gap-3 mt-2">
                            <button 
+                             type="button"
                              onClick={() => onRestore(item.id)}
                              className="text-xs flex items-center gap-1 text-gray-400 hover:text-red-500 transition-colors"
                            >
@@ -56,6 +59,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ history, onRestore, 
                            </button>
                            <div className="w-px h-3 bg-gray-200"></div>
                            <button 
+                             type="button"
                              onClick={() => onInspect(item)}
                              className="text-xs flex items-center gap-1 text-gray-400 hover:text-indigo-600 transition-colors"
                            >

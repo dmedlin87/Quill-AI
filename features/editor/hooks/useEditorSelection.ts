@@ -53,6 +53,7 @@ export const useEditorSelection = ({
   const clearSelection = useCallback(() => {
     setSelectionRange(null);
     setSelectionPos(null);
+    setActiveHighlight(null);
     editor?.commands.focus();
   }, [editor]);
 

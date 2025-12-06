@@ -514,18 +514,24 @@ const detectAliases = (text: string, entities: EntityNode[]): void => {
   for (const pattern of aliasPatterns) {
     let match;
     while ((match = pattern.exec(text)) !== null) {
-      const name1 = normalizeEntityName(match[1]).toLowerCase();
-      const name2 = normalizeEntityName(match[2]).toLowerCase();
+      // Some patterns only provide a single capture group (e.g. "the knight commander").
+      // Ensure both captures exist before attempting to add aliases to avoid
+      // undefined lookups and accidental alias pollution.
+      const [capture1, capture2] = [match[1], match[2]];
+      if (!capture1 || !capture2) continue;
+
+      const name1 = normalizeEntityName(capture1).toLowerCase();
+      const name2 = normalizeEntityName(capture2).toLowerCase();
       
       // Find matching entity and add alias
       for (const entity of entities) {
         if (entity.name.toLowerCase() === name1) {
-          if (!entity.aliases.includes(match[2])) {
-            entity.aliases.push(match[2]);
+          if (!entity.aliases.includes(capture2)) {
+            entity.aliases.push(capture2);
           }
         } else if (entity.name.toLowerCase() === name2) {
-          if (!entity.aliases.includes(match[1])) {
-            entity.aliases.push(match[1]);
+          if (!entity.aliases.includes(capture1)) {
+            entity.aliases.push(capture1);
           }
         }
       }

@@ -8,17 +8,25 @@ export const buildUserContextPrompt = (
   editorContext: EditorContext,
   userText: string,
 ): string => {
-  const selectionLabel = editorContext.selection
-    ? `"${editorContext.selection.text}"`
+  const truncateText = (value: string, max = 120) =>
+    value.length <= max ? value : `${value.slice(0, max)}...`;
+
+  const selection = editorContext.selection;
+  const selectionLabel = selection ? `"${truncateText(selection.text)}"` : 'None';
+  const selectionRange = selection
+    ? `${selection.start}-${selection.end} (len ${selection.text.length})`
     : 'None';
+
+  const trimmedUserText = userText.trim();
 
   return `
 [USER CONTEXT]
 Cursor Index: ${editorContext.cursorPosition}
 Selection: ${selectionLabel}
+Selection Range: ${selectionRange}
 Total Text Length: ${editorContext.totalLength}
 
 [USER REQUEST]
-${userText}
+${trimmedUserText || '(No user input provided)'}
 `;
 };

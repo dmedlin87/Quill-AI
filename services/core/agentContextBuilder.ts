@@ -1,10 +1,12 @@
 import { EditorContext } from '@/types';
 
+type MicrophoneStatus = 'idle' | 'recording' | 'muted' | 'error' | string;
+type ActivePanel = 'analysis' | 'chat' | 'editor' | string;
 type UIStateSnapshot = {
   cursor: { position: number };
   selection?: { text: string };
-  activePanel?: string;
-  microphone?: { status: string; lastTranscript?: string | null };
+  activePanel?: ActivePanel;
+  microphone?: { status: MicrophoneStatus; lastTranscript?: string | null };
 };
 
 export interface AgentContextPromptInput {
@@ -47,42 +49,50 @@ export function buildAgentContextPrompt(input: AgentContextPromptInput): string 
     editorContext,
   } = input;
 
+  const truncateText = (value: string, max = 100) => {
+    if (value.length <= max) return value;
+    return `${Array.from(value).slice(0, max).join('')}...`;
+  };
+
   const baseContext = smartContext
-    ? `[CURRENT CONTEXT]\n${smartContext}`
+    ? `[CONTEXT]\nSource: Smart Context\n${smartContext}`
     : editorContext
-      ? `[USER CONTEXT]\nCursor Index: ${editorContext.cursorPosition}\nSelection: ${
+      ? `[CONTEXT]\nSource: Editor Fallback\nCursor Index: ${editorContext.cursorPosition}\nSelection: ${
           editorContext.selection ? `"${editorContext.selection.text}"` : 'None'
+        }\nSelection Range: ${
+          editorContext.selection
+            ? `${editorContext.selection.start}-${editorContext.selection.end} (len ${editorContext.selection.text.length})`
+            : 'None'
         }\nTotal Text Length: ${editorContext.totalLength}`
-      : '[CURRENT CONTEXT]\n(Unknown)';
+      : '[CONTEXT]\nSource: Unknown';
 
   const uiSection = uiState
     ? `[USER STATE]\nCursor: ${uiState.cursor.position}\nSelection: ${
-        uiState.selection
-          ? `"${uiState.selection.text.slice(0, 100)}${
-              uiState.selection.text.length > 100 ? '...' : ''
-            }"`
-          : 'None'
+        uiState.selection ? `"${truncateText(uiState.selection.text)}"` : 'None'
       }\nActive Panel: ${uiState.activePanel ?? 'unknown'}\nMicrophone: ${
         uiState.microphone
           ? `${uiState.microphone.status}${
               uiState.microphone.lastTranscript
-                ? ` (last transcript: "${uiState.microphone.lastTranscript}")`
+                ? ` (last transcript: "${truncateText(uiState.microphone.lastTranscript, 120)}")`
                 : ''
             }`
           : 'unknown'
       }`
     : undefined;
 
-  const eventsSection = recentEvents
-    ? `[RECENT EVENTS]\n${recentEvents}`
+  const trimmedEvents = recentEvents?.trim();
+  const eventsSection = trimmedEvents
+    ? `[RECENT EVENTS]\n${trimmedEvents}`
     : undefined;
+
+  const trimmedUserText = userText?.trim();
 
   return [
     baseContext,
     `[INPUT MODE]\nAgent mode: ${mode}.`,
     uiSection,
     eventsSection,
-    `[USER REQUEST]\n${userText}`,
+    `[USER REQUEST]\n${trimmedUserText || '(No user input provided)'}`,
   ]
     .filter(Boolean)
     .join('\n\n');

@@ -1,11 +1,7 @@
 import React from 'react';
+import { AnalysisResult } from '@/types';
 
-interface PlotIssue {
-    issue: string;
-    location: string;
-    suggestion: string;
-    quote?: string;
-}
+type PlotIssue = AnalysisResult['plotIssues'][number];
 
 interface Props {
     issues: PlotIssue[];
@@ -32,7 +28,7 @@ export const PlotIssuesSection: React.FC<Props> = ({ issues, onQuoteClick, onFix
         <div className="space-y-4">
             {issues.map((issue, idx) => (
                 <div 
-                  key={idx} 
+                  key={`${issue.location}-${issue.issue}-${issue.quote ?? idx}`} 
                   onClick={() => onQuoteClick(issue.quote)}
                   className={`bg-white p-4 rounded-lg border border-red-100 shadow-sm relative overflow-hidden group hover:border-red-200 transition-colors ${issue.quote ? 'cursor-pointer' : ''}`}
                 >

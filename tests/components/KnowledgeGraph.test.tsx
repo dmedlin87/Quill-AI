@@ -144,4 +144,33 @@ describe('KnowledgeGraph', () => {
     await waitFor(() => expect(onSelectCharacter).toHaveBeenCalled());
     expect(onSelectCharacter).toHaveBeenCalledWith(expect.objectContaining({ name: 'Alice' }));
   });
+
+  it('cleans up animation frame, resize/mouse listeners, and observers on unmount', async () => {
+    const disconnectSpy = vi.fn();
+    class ResizeObserverMock {
+      disconnect = disconnectSpy;
+      observe = vi.fn();
+    }
+    (globalThis as any).ResizeObserver = ResizeObserverMock;
+
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame');
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+
+    mockedUseProjectStore.mockReturnValue({
+      currentProject: { lore: { characters: [{ name: 'Alice' } as CharacterProfile], worldRules: [] } },
+      chapters: [],
+    } as any);
+
+    const { unmount } = render(<KnowledgeGraph onSelectCharacter={vi.fn()} />);
+    await waitFor(() => expect(mockContext.fillRect).toHaveBeenCalled());
+
+    unmount();
+
+    expect(cancelSpy).toHaveBeenCalled();
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('mouseup', expect.any(Function));
+    expect(disconnectSpy).toHaveBeenCalled();
+
+    delete globalThis.ResizeObserver;
+  });
 });

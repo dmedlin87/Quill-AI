@@ -39,33 +39,45 @@ function useViewportCollision(
   useEffect(() => {
     if (!cardRef.current) return;
 
-    const card = cardRef.current;
-    const rect = card.getBoundingClientRect();
-    const viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight,
+    const updatePosition = () => {
+      const card = cardRef.current;
+      if (!card) return;
+
+      const rect = card.getBoundingClientRect();
+      const viewport = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      };
+
+      let newTop = initialPos.top;
+      let newLeft = initialPos.left;
+      let placement: 'above' | 'below' = 'below';
+
+      // Vertical collision
+      if (initialPos.top + rect.height > viewport.height - 20) {
+        // Would overflow bottom, place above
+        newTop = initialPos.top - rect.height - 30;
+        placement = 'above';
+      }
+
+      // Horizontal collision
+      if (initialPos.left + rect.width > viewport.width - 20) {
+        newLeft = viewport.width - rect.width - 20;
+      }
+      if (newLeft < 20) {
+        newLeft = 20;
+      }
+
+      setPosition({ top: newTop, left: newLeft, placement });
     };
 
-    let newTop = initialPos.top;
-    let newLeft = initialPos.left;
-    let placement: 'above' | 'below' = 'below';
-
-    // Vertical collision
-    if (initialPos.top + rect.height > viewport.height - 20) {
-      // Would overflow bottom, place above
-      newTop = initialPos.top - rect.height - 30;
-      placement = 'above';
-    }
-
-    // Horizontal collision
-    if (initialPos.left + rect.width > viewport.width - 20) {
-      newLeft = viewport.width - rect.width - 20;
-    }
-    if (newLeft < 20) {
-      newLeft = 20;
-    }
-
-    setPosition({ top: newTop, left: newLeft, placement });
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, { passive: true });
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition);
+    };
   }, [initialPos, cardRef]);
 
   return position;

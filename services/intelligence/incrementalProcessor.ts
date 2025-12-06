@@ -12,10 +12,7 @@ import {
   StructuralFingerprint,
   EntityGraph,
   Timeline,
-  StyleFingerprint,
   Scene,
-  ClassifiedParagraph,
-  EntityNode,
   TextChange,
 } from '../../types/intelligence';
 
@@ -87,22 +84,6 @@ const computeAffectedRanges = (changes: TextChange[]): AffectedRange[] => {
 /**
  * Adjust an offset based on preceding changes
  */
-const adjustOffset = (offset: number, affectedRanges: AffectedRange[]): number => {
-  let adjustment = 0;
-  
-  for (const range of affectedRanges) {
-    if (range.end <= offset) {
-      // Change is entirely before this offset
-      adjustment += range.lengthDelta;
-    } else if (range.start < offset && range.end > offset) {
-      // Offset is within a changed range - can't reliably adjust
-      return -1; // Signal that this needs full reprocessing
-    }
-  }
-  
-  return offset + adjustment;
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 // STRUCTURAL PATCHING
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,7 +119,7 @@ const patchStructure = (
   newText: string,
   prevStructural: StructuralFingerprint,
   affectedRanges: AffectedRange[]
-): { structural: StructuralFingerprint; scenesReprocessed: number; scenesReused: number } => {
+): { structural: StructuralFingerprint; scenesReprocessed: number; scenesReused: number; fullReprocessReason?: string } => {
   // If more than 3 changes or large changes, do full reprocess
   const totalChangeSize = affectedRanges.reduce((sum, r) => 
     sum + Math.abs(r.lengthDelta) + (r.end - r.start), 0);
@@ -148,7 +129,8 @@ const patchStructure = (
     return { 
       structural, 
       scenesReprocessed: structural.scenes.length, 
-      scenesReused: 0 
+      scenesReused: 0,
+      fullReprocessReason: 'change-size-threshold',
     };
   }
   
@@ -161,7 +143,8 @@ const patchStructure = (
     return { 
       structural, 
       scenesReprocessed: structural.scenes.length, 
-      scenesReused: 0 
+      scenesReused: 0,
+      fullReprocessReason: 'majority-scenes-affected',
     };
   }
   
@@ -305,13 +288,14 @@ export const processManuscriptIncremental = (
   const affectedRanges = computeAffectedRanges(delta.changedRanges);
   
   // 1. Structural patching
-  const { structural, scenesReprocessed, scenesReused } = patchStructure(
+  const { structural, scenesReprocessed, scenesReused, fullReprocessReason } = patchStructure(
     newText,
     prevIntelligence.structural,
     affectedRanges
   );
   stats.scenesReprocessed = scenesReprocessed;
   stats.scenesReused = scenesReused;
+  if (fullReprocessReason) stats.fullReprocessReason = fullReprocessReason;
   
   // 2. Entity patching
   const { entities, entitiesUpdated, entitiesReused } = patchEntities(

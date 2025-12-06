@@ -187,13 +187,23 @@ const buildStyleAlerts = (
 // PRIORITIZED ISSUES
 // ─────────────────────────────────────────────────────────────────────────────
 
+type PrioritizedIssue = { type: RiskFlag; description: string; offset: number; severity: number };
 const buildPrioritizedIssues = (
   intelligence: ManuscriptIntelligence,
   cursorOffset: number
-): Array<{ type: RiskFlag; description: string; offset: number; severity: number }> => {
+): PrioritizedIssue[] => {
   const { heatmap, timeline, style } = intelligence;
-  const issues: Array<{ type: RiskFlag; description: string; offset: number; severity: number }> = [];
-  
+  const issues: PrioritizedIssue[] = [];
+  const seen = new Set<string>();
+
+  const addIssue = (issue: PrioritizedIssue) => {
+    const key = `${issue.type}:${issue.offset}:${issue.description}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      issues.push(issue);
+    }
+  };
+
   // Get issues from heatmap sections near cursor
   const nearbyStart = Math.max(0, cursorOffset - 2000);
   const nearbyEnd = cursorOffset + 2000;
@@ -202,7 +212,7 @@ const buildPrioritizedIssues = (
   for (const section of heatmap.sections) {
     if (section.offset >= nearbyStart && section.offset < nearbyEnd) {
       for (const flag of section.flags) {
-        issues.push({
+        addIssue({
           type: flag,
           description: section.suggestions[0] || `${flag} detected`,
           offset: section.offset,
@@ -216,7 +226,7 @@ const buildPrioritizedIssues = (
   const primarySection = getSectionAtOffset(heatmap, cursorOffset);
   if (primarySection) {
     for (const flag of primarySection.flags) {
-      issues.push({
+      addIssue({
         type: flag,
         description: primarySection.suggestions[0] || `${flag} detected`,
         offset: primarySection.offset,
@@ -227,18 +237,18 @@ const buildPrioritizedIssues = (
   
   // Add unresolved plot promises as issues
   for (const promise of timeline.promises.filter(p => !p.resolved)) {
-    issues.push({
+    addIssue({
       type: 'unresolved_promise',
       description: `Unresolved: ${promise.description.slice(0, 50)}...`,
       offset: promise.offset,
       severity: 0.6,
     });
   }
-  
+
   // Add clichés as issues
   for (const cliche of style.flags.clicheInstances) {
-    issues.push({
-      type: 'filter_words', // Using as proxy
+    addIssue({
+      type: 'filter_words', // Using existing flag as proxy for clichés
       description: `Cliché: "${cliche.phrase}"`,
       offset: cliche.offset,
       severity: 0.4,

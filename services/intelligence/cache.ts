@@ -46,14 +46,9 @@ class LRUCache<T> {
   }
 
   get(key: string): T | null {
+    this.cleanupExpired();
     const entry = this.cache.get(key);
     if (!entry) return null;
-
-    // Check TTL
-    if (Date.now() - entry.timestamp > this.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
 
     // Update access count for LRU
     entry.accessCount++;
@@ -61,6 +56,7 @@ class LRUCache<T> {
   }
 
   set(key: string, data: T): void {
+    this.cleanupExpired();
     // Evict if at capacity
     if (this.cache.size >= this.maxSize) {
       this.evictLRU();
@@ -74,16 +70,9 @@ class LRUCache<T> {
   }
 
   has(key: string): boolean {
+    this.cleanupExpired();
     const entry = this.cache.get(key);
-    if (!entry) return false;
-    
-    // Check TTL
-    if (Date.now() - entry.timestamp > this.ttl) {
-      this.cache.delete(key);
-      return false;
-    }
-    
-    return true;
+    return Boolean(entry);
   }
 
   private evictLRU(): void {
@@ -102,6 +91,15 @@ class LRUCache<T> {
     }
   }
 
+  private cleanupExpired(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache) {
+      if (now - entry.timestamp > this.ttl) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
   clear(): void {
     this.cache.clear();
   }
@@ -112,6 +110,7 @@ class LRUCache<T> {
 
   // Get cache stats for debugging
   getStats(): { size: number; maxSize: number; ttl: number } {
+    this.cleanupExpired();
     return {
       size: this.cache.size,
       maxSize: this.maxSize,

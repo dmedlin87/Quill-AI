@@ -9,7 +9,9 @@ describe('AccessibleTooltip', () => {
   });
 
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   describe('Basic Rendering', () => {

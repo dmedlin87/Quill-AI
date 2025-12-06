@@ -1,10 +1,13 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // Hoist store mock so vi.mock factories can reference it safely
-const { mockUseProjectStore } = vi.hoisted(() => ({
+const { mockUseProjectStore, mockInit, mockFlushPendingWrites, mockGetActiveChapter } = vi.hoisted(() => ({
   mockUseProjectStore: vi.fn(),
+  mockInit: vi.fn(),
+  mockFlushPendingWrites: vi.fn(),
+  mockGetActiveChapter: vi.fn(),
 }));
 
 // Mock feature providers and layout before importing App
@@ -46,6 +49,12 @@ vi.mock('@/features/layout', () => ({
   MainLayout: () => <div data-testid="main-layout">Main Layout</div>,
 }));
 
+vi.mock('@/features/core', () => ({
+  AppBrainProvider: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="app-brain-provider">{children}</div>
+  ),
+}));
+
 vi.mock('@/features/project', () => ({
   useProjectStore: mockUseProjectStore,
 }));
@@ -59,18 +68,24 @@ describe('App', () => {
   let store: any;
 
   beforeEach(() => {
-    const flushPendingWrites = vi.fn().mockResolvedValue({ pendingCount: 0, errors: [] });
+    mockInit.mockClear();
+    mockFlushPendingWrites.mockReset();
+    mockGetActiveChapter.mockReset();
+
+    mockFlushPendingWrites.mockResolvedValue({ pendingCount: 0, errors: [] });
+    mockGetActiveChapter.mockReturnValue(undefined);
+
     store = {
-      init: vi.fn(),
+      init: mockInit,
       isLoading: false,
-      flushPendingWrites,
+      flushPendingWrites: mockFlushPendingWrites,
       projects: [],
       currentProject: null,
       chapters: [],
       activeChapterId: null,
       selectChapter: vi.fn(),
       setActiveChapter: vi.fn(),
-      getActiveChapter: vi.fn(() => undefined),
+      getActiveChapter: mockGetActiveChapter,
     };
 
     mockUseProjectStore.mockReturnValue(store);

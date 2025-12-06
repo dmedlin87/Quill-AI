@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { cosineSimilarity, generateMemoryEmbedding } from './semanticDedup';
-import { BEDSIDE_NOTE_TAG, MemoryNote } from './types';
+import { cosineSimilarity } from './semanticDedup';
+import { BEDSIDE_NOTE_TAG, MemoryNote, type MemoryEmbedding } from './types';
 import { embedBedsideNoteText } from './bedsideEmbeddings';
 
 export interface SearchBedsideHistoryOptions {
@@ -37,16 +37,17 @@ export const searchBedsideHistory = async (
     .filter(note => matchesScope(note, projectId, options))
     .toArray();
 
-  const scored = candidateNotes
-    .map(note => {
-      const noteEmbedding = note.embedding ?? generateMemoryEmbedding(note.text);
+  const scored = (await Promise.all(
+    candidateNotes.map(async note => {
+      const noteEmbedding: MemoryEmbedding =
+        note.embedding ?? (await embedBedsideNoteText(note.text));
       const similarity = cosineSimilarity(queryEmbedding, noteEmbedding);
       return { note, similarity };
-    })
-    .sort((a, b) => {
-      if (b.similarity !== a.similarity) return b.similarity - a.similarity;
-      return b.note.createdAt - a.note.createdAt;
-    });
+    }),
+  )).sort((a, b) => {
+    if (b.similarity !== a.similarity) return b.similarity - a.similarity;
+    return b.note.createdAt - a.note.createdAt;
+  });
 
   return limit > 0 ? scored.slice(0, limit) : scored;
 };

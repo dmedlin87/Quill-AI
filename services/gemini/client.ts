@@ -8,7 +8,7 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
-import { getApiKey, validateApiKey } from '../../config/api';
+import { getApiKey, validateApiKey } from "../../config/api";
 
 // Initialize with environment key
 const apiKey = getApiKey();
@@ -29,7 +29,7 @@ if (validationError) {
  *
  * Tests may mock GoogleGenAI as a plain function; support both constructor and factory forms.
  */
-const createClient = (Ctor: any, options: { apiKey: string }) => {
+const createClient = (Ctor: any, options: { apiKey: string }): GoogleGenAI => {
   try {
     return new Ctor(options);
   } catch {
@@ -37,7 +37,23 @@ const createClient = (Ctor: any, options: { apiKey: string }) => {
   }
 };
 
-export const ai = createClient(GoogleGenAI as any, { apiKey });
+const buildClient = (): GoogleGenAI => {
+  if (validationError) {
+    const error = new Error(`[Quill AI API] ${validationError}`);
+    return new Proxy(
+      {},
+      {
+        get() {
+          throw error;
+        },
+      },
+    ) as GoogleGenAI;
+  }
+
+  return createClient(GoogleGenAI as any, { apiKey });
+};
+
+export const ai = buildClient();
 
 /**
  * Check if the API is properly configured.

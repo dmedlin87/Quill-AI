@@ -7,6 +7,14 @@
 
 import { Type, FunctionDeclaration } from '@google/genai';
 
+const getToolOrThrow = (tools: FunctionDeclaration[], name: string): FunctionDeclaration => {
+  const tool = tools.find(t => t.name === name);
+  if (!tool) {
+    throw new Error(`Tool "${name}" not found`);
+  }
+  return tool;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // NAVIGATION TOOLS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -774,11 +782,11 @@ export const VOICE_SAFE_TOOLS: FunctionDeclaration[] = [
 
 /** Minimal tool set for quick interactions */
 export const QUICK_TOOLS: FunctionDeclaration[] = [
-  NAVIGATION_TOOLS.find(t => t.name === 'navigate_to_text')!,
-  NAVIGATION_TOOLS.find(t => t.name === 'jump_to_chapter')!,
-  EDITING_TOOLS.find(t => t.name === 'update_manuscript')!,
-  EDITING_TOOLS.find(t => t.name === 'undo_last_change')!,
-  KNOWLEDGE_TOOLS.find(t => t.name === 'get_character_info')!,
+  getToolOrThrow(NAVIGATION_TOOLS, 'navigate_to_text'),
+  getToolOrThrow(NAVIGATION_TOOLS, 'jump_to_chapter'),
+  getToolOrThrow(EDITING_TOOLS, 'update_manuscript'),
+  getToolOrThrow(EDITING_TOOLS, 'undo_last_change'),
+  getToolOrThrow(KNOWLEDGE_TOOLS, 'get_character_info'),
 ];
 
 /**
@@ -793,5 +801,9 @@ export const getToolsByCategory = (category: 'navigation' | 'editing' | 'analysi
     case 'knowledge': return KNOWLEDGE_TOOLS;
     case 'generation': return GENERATION_TOOLS;
     case 'memory': return MEMORY_TOOLS;
+    default: {
+      const exhaustiveCheck: never = category;
+      return exhaustiveCheck;
+    }
   }
 };

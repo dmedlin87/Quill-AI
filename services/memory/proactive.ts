@@ -83,7 +83,18 @@ export function extractEntitiesFromText(text: string): string[] {
     }
   });
   
-  return Array.from(entities);
+  return normalizeEntities(Array.from(entities));
+}
+
+function normalizeEntities(entities: string[]): string[] {
+  const normalized = new Set<string>();
+  for (const entity of entities) {
+    const clean = entity?.trim().toLowerCase();
+    if (clean) {
+      normalized.add(clean);
+    }
+  }
+  return Array.from(normalized);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -101,17 +112,22 @@ export async function getWatchedEntitiesInChapter(
   const watchedEntities = await db.watchedEntities.where('projectId').equals(projectId).toArray();
   
   if (watchedEntities.length === 0) return [];
-  
+
+  // Respect disabled monitoring flags (default to true when unset)
+  const activeWatchedEntities = watchedEntities.filter(
+    entity => entity.monitoringEnabled ?? true
+  );
+
   // Get entities mentioned in chapter
   const mentionedEntities = chapterContext.mentionedEntities || 
     (chapterContext.content ? extractEntitiesFromText(chapterContext.content) : []);
   
-  if (mentionedEntities.length === 0) return [];
+  if (mentionedEntities.length === 0 || activeWatchedEntities.length === 0) return [];
   
   // Find matches (case-insensitive)
   const mentionedLower = new Set(mentionedEntities.map(e => e.toLowerCase()));
   
-  return watchedEntities.filter(entity => 
+  return activeWatchedEntities.filter(entity => 
     mentionedLower.has(entity.name.toLowerCase())
   );
 }
@@ -126,10 +142,11 @@ export async function getRelatedMemories(
 ): Promise<MemoryNote[]> {
   const { limit = 10 } = options;
   
-  if (entityNames.length === 0) return [];
+  const normalizedEntities = normalizeEntities(entityNames);
+  if (normalizedEntities.length === 0) return [];
   
   // Build character tags
-  const characterTags = entityNames.map(name => `character:${name.toLowerCase()}`);
+  const characterTags = normalizedEntities.map(name => `character:${name}`);
   
   // Search for memories with these tags
   const memories = await searchMemoriesByTags(characterTags, {
@@ -149,6 +166,9 @@ export async function generateSuggestionsForChapter(
 ): Promise<ProactiveSuggestion[]> {
   const suggestions: ProactiveSuggestion[] = [];
   const now = Date.now();
+  const mentionedEntities =
+    chapterContext.mentionedEntities ||
+    (chapterContext.content ? extractEntitiesFromText(chapterContext.content) : []);
   
   // 1. Check for watched entities
   const watchedInChapter = await getWatchedEntitiesInChapter(projectId, chapterContext);
@@ -172,10 +192,9 @@ export async function generateSuggestionsForChapter(
   }
   
   // 2. Get related memories for entities in chapter
-  const mentionedEntities = chapterContext.mentionedEntities || 
-    (chapterContext.content ? extractEntitiesFromText(chapterContext.content) : []);
+  const normalizedMentioned = normalizeEntities(mentionedEntities);
   
-  const relatedMemories = await getRelatedMemories(projectId, mentionedEntities, { limit: 5 });
+  const relatedMemories = await getRelatedMemories(projectId, normalizedMentioned, { limit: 5 });
   
   for (const memory of relatedMemories) {
     // Skip if this is a low-importance observation

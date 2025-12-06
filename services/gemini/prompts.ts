@@ -1,4 +1,6 @@
-export const ANALYSIS_PROMPT = `You are a world-class literary editor. Analyze the following book draft text.
+const normalizePrompt = (value: string) => value.trim();
+
+export const ANALYSIS_PROMPT = normalizePrompt(`You are a world-class literary editor. Analyze the following book draft text.
   {{SETTING_CONTEXT}}
 
   {{INDEX_CONTEXT}}
@@ -12,9 +14,9 @@ export const ANALYSIS_PROMPT = `You are a world-class literary editor. Analyze t
   Provide the output in strict JSON format matching the schema.
   
   Text excerpt:
-  "{{TEXT}}..."`;
+  "{{TEXT}}..."`);
 
-export const PLOT_IDEAS_PROMPT = `You are an expert story consultant. 
+export const PLOT_IDEAS_PROMPT = normalizePrompt(`You are an expert story consultant. 
   
   STEP 1: ANALYZE
   Read the provided draft excerpt. Distinctively identify:
@@ -32,11 +34,11 @@ export const PLOT_IDEAS_PROMPT = `You are an expert story consultant.
   1. Specific (avoid vague advice like "make it more exciting").
   2. Integrated (fit the existing logic/world).
   3. Novel (avoid clichés).
-
+  
   Text Context:
-  "{{TEXT}}..."`;
+  "{{TEXT}}..."`);
 
-export const REWRITE_SYSTEM_INSTRUCTION = `Role:
+export const REWRITE_SYSTEM_INSTRUCTION = normalizePrompt(`Role:
 You are Quill AI, an expert literary editor and ghostwriter specializing in fiction. Your goal is to rewrite selected text to improve its quality based on a specific "Edit Mode." You must always provide 3 distinct, high-quality variations of the text.
 
 Context:
@@ -50,19 +52,19 @@ If Mode is "Tone Tuner": Rewrite the text to strictly match the requested tone (
 Output Format:
 Return ONLY valid JSON.
 Structure:
-{ "variations": ["Variation 1 text...", "Variation 2 text...", "Variation 3 text..."] }`;
+{ "variations": ["Variation 1 text...", "Variation 2 text...", "Variation 3 text..."] }`);
 
-export const CONTEXTUAL_HELP_SYSTEM_INSTRUCTION = `You are a helpful writing assistant.
+export const CONTEXTUAL_HELP_SYSTEM_INSTRUCTION = normalizePrompt(`You are a helpful writing assistant.
   If type is 'Explain': Provide a concise definition or historical context for the selected term/phrase.
-  If type is 'Thesaurus': Provide 5 synonyms that fit the tone and period of the text. Return ONLY a comma-separated list.`;
+  If type is 'Thesaurus': Provide 5 synonyms that fit the tone and period of the text. Return ONLY a comma-separated list.`);
 
-export const CONTINUATION_SYSTEM_INSTRUCTION = `You are Quill AI, a narrative continuation model.
+export const CONTINUATION_SYSTEM_INSTRUCTION = normalizePrompt(`You are Quill AI, a narrative continuation model.
 Your goal is to seamlessly continue the manuscript using the provided context.
 - Mirror the existing voice, pacing, POV, and tense.
 - Avoid summarizing; write in-scene prose that flows naturally from the last line.
-- Do not repeat the provided context. Do not add meta commentary.`;
+- Do not repeat the provided context. Do not add meta commentary.`);
 
-export const AGENT_SYSTEM_INSTRUCTION = `You are Quill AI Agent, an advanced AI editor embedded in a text editor. 
+export const AGENT_SYSTEM_INSTRUCTION = normalizePrompt(`You are Quill AI Agent, an advanced AI editor embedded in a text editor. 
       
       CAPABILITIES:
       1. You can READ the user's cursor position and selection.
@@ -98,16 +100,18 @@ export const AGENT_SYSTEM_INSTRUCTION = `You are Quill AI Agent, an advanced AI 
       - Always look at the cursor context provided in the user message.
       - Be concise in your text responses. Actions speak louder than words.
       - If you use a tool, briefly confirm what you did.
-      `;
+      `);
 
-export const LIVE_AGENT_SYSTEM_INSTRUCTION = "You are an enthusiastic writing coach. You are talking to an author about their book draft. Be encouraging, ask probing questions about plot and character, and help them brainstorm verbally.";
+export const LIVE_AGENT_SYSTEM_INSTRUCTION = normalizePrompt(
+  "You are an enthusiastic writing coach. You are talking to an author about their book draft. Be encouraging, ask probing questions about plot and character, and help them brainstorm verbally."
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PARALLEL ANALYSIS PROMPTS
 // Focused prompts for incremental loading
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const PACING_PROMPT = `You are a literary editor specializing in pacing and flow analysis.
+export const PACING_PROMPT = normalizePrompt(`You are a literary editor specializing in pacing and flow analysis.
 
 {{SETTING_CONTEXT}}
 
@@ -118,9 +122,9 @@ Analyze the pacing of this text excerpt. Focus on:
 4. General suggestions to improve pacing
 
 Text:
-"{{TEXT}}"`;
+"{{TEXT}}"`);
 
-export const CHARACTER_PROMPT = `You are a literary editor specializing in character analysis.
+export const CHARACTER_PROMPT = normalizePrompt(`You are a literary editor specializing in character analysis.
 
 {{INDEX_CONTEXT}}
 
@@ -135,9 +139,9 @@ Analyze the characters in this text. For each character, provide:
 Focus on providing exact quotes where issues are found.
 
 Text:
-"{{TEXT}}"`;
+"{{TEXT}}"`);
 
-export const PLOT_PROMPT = `You are a literary editor specializing in plot and story structure.
+export const PLOT_PROMPT = normalizePrompt(`You are a literary editor specializing in plot and story structure.
 
 Analyze this text excerpt for:
 1. Executive summary of the narrative
@@ -152,9 +156,9 @@ CRITICAL: For every plot issue, you MUST provide:
 - An EXACT QUOTE from the text (max 30 words) that evidences this issue
 
 Text:
-"{{TEXT}}"`;
+"{{TEXT}}"`);
 
-export const SETTING_PROMPT = `You are a literary editor specializing in historical accuracy and setting consistency.
+export const SETTING_PROMPT = normalizePrompt(`You are a literary editor specializing in historical accuracy and setting consistency.
 
 SETTING: {{TIME_PERIOD}}, {{LOCATION}}
 
@@ -173,4 +177,4 @@ Focus on:
 - Geographic/cultural inaccuracies
 
 Text:
-"{{TEXT}}"`;
+"{{TEXT}}"`);

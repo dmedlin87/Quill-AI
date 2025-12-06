@@ -10,20 +10,40 @@
  * 3. Using restricted API keys with domain restrictions
  */
 
+let hasWarnedMissingKey = false;
+
+function getEnvVar(name: string): string | undefined {
+  if (typeof process !== 'undefined' && process.env?.[name]) {
+    return process.env[name];
+  }
+
+  // Support Vite-style injected env
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.[name]) {
+    return (import.meta as any).env[name] as string;
+  }
+
+  return undefined;
+}
+
 /**
  * Retrieves the API key from environment.
  * In production, this should be replaced with a secure key retrieval mechanism.
  */
 export function getApiKey(): string {
-  const key = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
-  
-  if (!key) {
+  const key =
+    getEnvVar('API_KEY') ||
+    getEnvVar('GEMINI_API_KEY') ||
+    getEnvVar('VITE_GEMINI_API_KEY') ||
+    '';
+
+  if (!key && !hasWarnedMissingKey) {
+    hasWarnedMissingKey = true;
     console.warn(
       '[Quill AI] No API key configured. Set GEMINI_API_KEY in your environment.'
     );
   }
-  
-  return key;
+
+  return key.trim();
 }
 
 /**

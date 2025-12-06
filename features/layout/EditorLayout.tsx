@@ -89,6 +89,11 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
     totalLength: currentText.length
   };
 
+  const wordCount = useMemo(
+    () => currentText.split(/\s+/).filter(w => w.length > 0).length,
+    [currentText]
+  );
+
   const persistedWarning = engineState.analysisWarning || activeChapter?.lastAnalysis?.warning || null;
 
   const handleInspectHistory = (item: HistoryItem) => {
@@ -200,7 +205,7 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
            
            <div className="flex items-center gap-4">
               <span className="text-[var(--text-sm)] text-[var(--text-tertiary)] font-medium">
-                 {currentText.split(/\s+/).filter(w => w.length > 0).length} words
+                 {wordCount} words
               </span>
               <NativeSpellcheckToggle />
               <button

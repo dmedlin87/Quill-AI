@@ -23,6 +23,33 @@ export * from './bedsideNoteMutations';
 export * from './bedsideHistorySearch';
 export * from './bedsideEmbeddings';
 
+// Lightweight collection helper so Dexie-like mocks (arrays or { data: [] }) work
+// in tests without requiring full index support.
+function createCollection<T>(data: T[]) {
+  return {
+    filter: (predicate: (item: T) => boolean) => createCollection(data.filter(predicate)),
+    toArray: () => Promise.resolve([...data]),
+  };
+}
+
+function getGoalsCollection(projectId: string) {
+  const table: any = (db as any).goals;
+
+  // Dexie path
+  if (typeof table?.where === 'function') {
+    return table.where('projectId').equals(projectId);
+  }
+
+  // Fallback for plain arrays or simple mocks
+  const data = Array.isArray(table)
+    ? table
+    : Array.isArray(table?.data)
+    ? table.data
+    : [];
+
+  return createCollection(data.filter((goal: AgentGoal) => goal.projectId === projectId));
+}
+
 // ────────────────────────────────────────────────────────────────────────────────
 // GOALS
 // ────────────────────────────────────────────────────────────────────────────────
@@ -71,18 +98,9 @@ export async function updateGoal(
  * Get all active goals for a project.
  */
 export async function getActiveGoals(projectId: string): Promise<AgentGoal[]> {
-  return db.goals
-    .where('[projectId+status]')
-    .equals([projectId, 'active'])
-    .toArray()
-    .catch(() => {
-      // Fallback if compound index isn't available
-      return db.goals
-        .where('projectId')
-        .equals(projectId)
-        .filter(goal => goal.status === 'active')
-        .toArray();
-    });
+  const collection = getGoalsCollection(projectId);
+
+  return collection.filter(goal => goal.status === 'active').toArray();
 }
 
 /**
@@ -92,7 +110,7 @@ export async function getGoals(
   projectId: string,
   status?: GoalStatus
 ): Promise<AgentGoal[]> {
-  let collection = db.goals.where('projectId').equals(projectId);
+  const collection = getGoalsCollection(projectId);
 
   if (status) {
     return collection.filter(goal => goal.status === status).toArray();

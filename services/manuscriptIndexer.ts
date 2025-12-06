@@ -1,8 +1,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ManuscriptIndex, Contradiction, CharacterIndex } from "../types/schema";
 
+// Support both constructible and factory-style mocks in tests
+const createClient = (Ctor: any, options: { apiKey: string }) => {
+  try {
+    return new Ctor(options);
+  } catch {
+    return Ctor(options);
+  }
+};
+
 const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+const ai = createClient(GoogleGenAI as any, { apiKey });
 
 interface ExtractionResult {
   characters: Array<{

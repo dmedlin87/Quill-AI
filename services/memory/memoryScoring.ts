@@ -14,9 +14,14 @@ export function scoreMemoryRelevance(
   note: MemoryNote,
   relevance: MemoryRelevanceOptions
 ): number {
-  const { activeEntityNames = [], selectionKeywords = [] } = relevance;
+  const {
+    activeEntityNames = [],
+    selectionKeywords = [],
+    activeChapterId,
+  } = relevance;
   const normalizedEntities = activeEntityNames.map(e => e.toLowerCase());
   const normalizedKeywords = selectionKeywords.map(k => k.toLowerCase());
+  const normalizedActiveChapter = activeChapterId?.toLowerCase();
 
   let relevanceScore = 0;
 
@@ -25,6 +30,14 @@ export function scoreMemoryRelevance(
     const tagName = normalizedTag.includes(':')
       ? normalizedTag.split(':')[1]
       : normalizedTag;
+
+    if (
+      normalizedActiveChapter &&
+      (tagName.includes(normalizedActiveChapter) ||
+        normalizedTag.includes(normalizedActiveChapter))
+    ) {
+      relevanceScore += 2.5;
+    }
 
     if (
       normalizedEntities.some(

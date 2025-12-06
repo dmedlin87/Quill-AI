@@ -5,7 +5,8 @@ export class AIError extends Error {
   public readonly cause: unknown;
 
   constructor(message: string, options?: { isRetryable?: boolean; cause?: unknown }) {
-    super(message);
+    super(message, { cause: options?.cause });
+    Object.setPrototypeOf(this, new.target.prototype);
     this.name = new.target.name;
     this.isRetryable = options?.isRetryable ?? false;
     this.cause = options?.cause;
@@ -40,7 +41,11 @@ export const normalizeAIError = (error: unknown, context?: Record<string, unknow
 
   const anyErr = error as any;
   const status: number | undefined =
-    anyErr?.status ?? anyErr?.code ?? anyErr?.cause?.status ?? anyErr?.cause?.code;
+    anyErr?.status ??
+    anyErr?.code ??
+    anyErr?.cause?.status ??
+    anyErr?.cause?.code ??
+    anyErr?.response?.status;
 
   const message: string =
     typeof anyErr?.message === "string"

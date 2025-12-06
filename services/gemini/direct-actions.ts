@@ -16,6 +16,10 @@ export const rewriteText = async (
   setting?: { timePeriod: string; location: string },
   _signal?: AbortSignal,
 ): Promise<{ result: string[]; usage?: UsageMetadata }> => {
+  if (_signal?.aborted) {
+    return { result: [] };
+  }
+
   const model = ModelConfig.analysis;
 
   const settingInstruction = setting
@@ -66,9 +70,19 @@ ${mode === "Tone Tuner" ? `Target Tone: ${tone}` : ""}`;
       result: data.variations ?? [],
       usage: response.usageMetadata,
     };
-  } catch (e) {
-    console.error("Rewrite failed", e);
-    return { result: [] };
+  } catch (error) {
+    if (_signal?.aborted) {
+      return { result: [] };
+    }
+
+    const normalized = normalizeAIError(error, {
+      mode,
+      tone,
+      textLength: text.length,
+      hasSetting: Boolean(setting),
+    });
+    console.error("[rewriteText] Failed", normalized);
+    throw normalized;
   }
 };
 

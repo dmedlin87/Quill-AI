@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { BrainstormingPanel } from '@/features/analysis/components/BrainstormingPanel';
 
@@ -21,17 +22,18 @@ describe('BrainstormingPanel', () => {
     });
   });
 
-  it('allows selecting suggestion type and generating ideas', () => {
+  it('allows selecting suggestion type and generating ideas', async () => {
+    const user = userEvent.setup();
     render(<BrainstormingPanel currentText="Story text" />);
 
     const input = screen.getByPlaceholderText(/shocking revelation/i);
-    fireEvent.change(input, { target: { value: 'A dark secret is revealed' } });
+    await user.type(input, 'A dark secret is revealed');
 
     const plotTwistButton = screen.getByText('Plot Twist');
-    fireEvent.click(plotTwistButton);
+    await user.click(plotTwistButton);
 
     const generateButton = screen.getByText('Generate');
-    fireEvent.click(generateButton);
+    await user.click(generateButton);
 
     expect(mockGenerate).toHaveBeenCalledWith('A dark secret is revealed', 'Plot Twist');
   });
@@ -84,13 +86,14 @@ describe('BrainstormingPanel', () => {
     expect(screen.getByText('Failed to generate ideas. Please try again.')).toBeInTheDocument();
   });
 
-  it('triggers generate when pressing Enter in the query input', () => {
+  it('triggers generate when pressing Enter in the query input', async () => {
+    const user = userEvent.setup();
     render(<BrainstormingPanel currentText="Story text" />);
 
     const input = screen.getByPlaceholderText(/shocking revelation/i);
-    fireEvent.change(input, { target: { value: 'A betrayal at the feast' } });
+    await user.type(input, 'A betrayal at the feast');
 
-    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    await user.type(input, '{enter}');
 
     expect(mockGenerate).toHaveBeenCalledWith('A betrayal at the feast', 'General');
   });

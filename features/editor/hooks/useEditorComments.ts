@@ -14,7 +14,7 @@ export const useEditorComments = (
   activeChapter: Chapter | undefined,
 ): UseEditorCommentsResult => {
   const [inlineComments, setInlineCommentsState] = useState<InlineComment[]>(
-    activeChapter?.comments || [],
+    () => activeChapter?.comments || [],
   );
 
   const critiqueIntensity = useSettingsStore((state) => state.critiqueIntensity);
@@ -41,26 +41,25 @@ export const useEditorComments = (
     setInlineCommentsState([]);
   }, []);
 
-  const visibleComments = useMemo(() => {
-    let allowedSeverities: InlineComment['severity'][];
-
+  const allowedSeverities = useMemo(() => {
     switch (critiqueIntensity) {
       case 'developmental':
-        allowedSeverities = ['error'];
-        break;
+        return new Set<InlineComment['severity']>(['error']);
       case 'standard':
-        allowedSeverities = ['error', 'warning'];
-        break;
+        return new Set<InlineComment['severity']>(['error', 'warning']);
       case 'intensive':
       default:
-        allowedSeverities = ['error', 'warning', 'info'];
-        break;
+        return new Set<InlineComment['severity']>(['error', 'warning', 'info']);
     }
+  }, [critiqueIntensity]);
 
-    return inlineComments.filter(
-      (comment) => !comment.dismissed && allowedSeverities.includes(comment.severity),
-    );
-  }, [inlineComments, critiqueIntensity]);
+  const visibleComments = useMemo(
+    () =>
+      inlineComments.filter(
+        (comment) => !comment.dismissed && allowedSeverities.has(comment.severity),
+      ),
+    [inlineComments, allowedSeverities],
+  );
 
   return {
     inlineComments,

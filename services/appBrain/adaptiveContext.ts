@@ -47,6 +47,8 @@ export interface ContextSection {
   tokenCount: number;
   priority: number; // 1 = highest
   truncatable: boolean;
+  /** Indicates the section was truncated to fit its own budget before aggregation. */
+  wasTruncated?: boolean;
 }
 
 export interface AdaptiveContextResult {
@@ -347,6 +349,28 @@ const truncateToTokens = (text: string, maxTokens: number): string => {
   return truncated + '...[truncated]';
 };
 
+/**
+ * Finalize a section by applying truncation and consistent token counting.
+ * Ensures downstream aggregation uses accurate token counts.
+ */
+const finalizeSection = (
+  name: ContextSection['name'],
+  content: string,
+  maxTokens: number,
+  priority: ContextSection['priority'],
+  truncatable: ContextSection['truncatable'],
+): ContextSection => {
+  const truncated = truncateToTokens(content, maxTokens);
+  return {
+    name,
+    content: truncated,
+    tokenCount: estimateTokens(truncated),
+    priority,
+    truncatable,
+    wasTruncated: truncated !== content,
+  };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION BUILDERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -378,7 +402,7 @@ const buildManuscriptSection = (state: AppBrainState, maxTokens: number): Contex
   
   // Include surrounding context if budget allows
   const currentTokens = estimateTokens(content);
-  if (currentTokens < maxTokens * 0.7 && manuscript.currentText) {
+  if (currentTokens < maxTokens * 0.7 && typeof manuscript.currentText === 'string') {
     const contextSize = Math.min(500, (maxTokens - currentTokens) * 4);
     const start = Math.max(0, ui.cursor.position - contextSize / 2);
     const end = Math.min(manuscript.currentText.length, ui.cursor.position + contextSize / 2);
@@ -386,13 +410,7 @@ const buildManuscriptSection = (state: AppBrainState, maxTokens: number): Contex
     content += `\nContext around cursor:\n"${surroundingText}"\n`;
   }
   
-  return {
-    name: 'manuscript',
-    content: truncateToTokens(content, maxTokens),
-    tokenCount: estimateTokens(content),
-    priority: 1,
-    truncatable: true,
-  };
+  return finalizeSection('manuscript', content, maxTokens, 1, true);
 };
 
 const buildIntelligenceSection = (state: AppBrainState, maxTokens: number): ContextSection => {
@@ -401,13 +419,7 @@ const buildIntelligenceSection = (state: AppBrainState, maxTokens: number): Cont
   
   if (!intelligence.hud) {
     content += 'Intelligence not yet processed.\n';
-    return {
-      name: 'intelligence',
-      content,
-      tokenCount: estimateTokens(content),
-      priority: 2,
-      truncatable: false,
-    };
+    return finalizeSection('intelligence', content, maxTokens, 2, false);
   }
   
   const hud = intelligence.hud;
@@ -453,13 +465,7 @@ const buildIntelligenceSection = (state: AppBrainState, maxTokens: number): Cont
   // Stats
   content += `\nStats: ${hud.stats.wordCount.toLocaleString()} words, ${hud.stats.dialoguePercent}% dialogue\n`;
   
-  return {
-    name: 'intelligence',
-    content: truncateToTokens(content, maxTokens),
-    tokenCount: estimateTokens(content),
-    priority: 2,
-    truncatable: true,
-  };
+  return finalizeSection('intelligence', content, maxTokens, 2, true);
 };
 
 const buildAnalysisSection = (state: AppBrainState, maxTokens: number): ContextSection => {
@@ -468,13 +474,7 @@ const buildAnalysisSection = (state: AppBrainState, maxTokens: number): ContextS
   
   if (!analysis.result) {
     content += 'No analysis available.\n';
-    return {
-      name: 'analysis',
-      content,
-      tokenCount: estimateTokens(content),
-      priority: 3,
-      truncatable: false,
-    };
+    return finalizeSection('analysis', content, maxTokens, 3, false);
   }
   
   const result = analysis.result;
@@ -498,13 +498,7 @@ const buildAnalysisSection = (state: AppBrainState, maxTokens: number): ContextS
     }
   }
   
-  return {
-    name: 'analysis',
-    content: truncateToTokens(content, maxTokens),
-    tokenCount: estimateTokens(content),
-    priority: 3,
-    truncatable: true,
-  };
+  return finalizeSection('analysis', content, maxTokens, 3, true);
 };
 
 export const DEFAULT_BEDSIDE_NOTE_STALENESS_MS = 1000 * 60 * 60 * 6; // 6 hours
@@ -569,11 +563,15 @@ const ensureBedsideNoteExists = async (projectId: string): Promise<void> => {
     type: 'plan',
     text:
       'Project planning notes for this manuscript. This note will be updated over time with key goals, concerns, and constraints.',
-    topicTags: BEDSIDE_NOTE_DEFAULT_TAGS,
+    topicTags: [...BEDSIDE_NOTE_DEFAULT_TAGS],
     importance: 0.85,
   });
 };
 
+/**
+ * Build the memory section with bedside-note maintenance and relevance-driven retrieval.
+ * Handles stale bedside notes by evolving them with refreshed analysis and goals data.
+ */
 const buildMemorySection = async (
   state: AppBrainState,
   projectId: string | null,
@@ -585,13 +583,7 @@ const buildMemorySection = async (
   
   if (!projectId) {
     content += 'No project context for memory.\n';
-    return {
-      name: 'memory',
-      content,
-      tokenCount: estimateTokens(content),
-      priority: 2,
-      truncatable: false,
-    };
+    return finalizeSection('memory', content, maxTokens, 2, false);
   }
   
   try {
@@ -663,9 +655,10 @@ const buildMemorySection = async (
     const chapterNames = Object.fromEntries(
       (state.manuscript.chapters || []).map(ch => [ch.id, ch.title])
     );
-    const arcNames = Object.fromEntries(
-      ((state.manuscript as any).arcs || []).map((arc: any) => [arc.id, arc.title])
-    );
+    const arcs = Array.isArray((state.manuscript as { arcs?: { id: string; title: string }[] }).arcs)
+      ? (state.manuscript as { arcs?: { id: string; title: string }[] }).arcs
+      : [];
+    const arcNames = Object.fromEntries(arcs.map(arc => [arc.id, arc.title]));
 
     const orderedBedsideNotes = [...refreshedBedsideNotes].sort((a, b) => {
       const tagPriority = (note: typeof a) => {
@@ -709,13 +702,7 @@ const buildMemorySection = async (
     content += 'Memory unavailable.\n';
   }
   
-  return {
-    name: 'memory',
-    content: truncateToTokens(content, maxTokens),
-    tokenCount: estimateTokens(content),
-    priority: 2,
-    truncatable: true,
-  };
+  return finalizeSection('memory', content, maxTokens, 2, true);
 };
 
 const buildLoreSection = (state: AppBrainState, maxTokens: number): ContextSection => {
@@ -724,13 +711,7 @@ const buildLoreSection = (state: AppBrainState, maxTokens: number): ContextSecti
   
   if (lore.characters.length === 0 && lore.worldRules.length === 0) {
     content += 'No lore defined.\n';
-    return {
-      name: 'lore',
-      content,
-      tokenCount: estimateTokens(content),
-      priority: 4,
-      truncatable: false,
-    };
+    return finalizeSection('lore', content, maxTokens, 4, false);
   }
   
   if (lore.characters.length > 0) {
@@ -748,13 +729,7 @@ const buildLoreSection = (state: AppBrainState, maxTokens: number): ContextSecti
     }
   }
   
-  return {
-    name: 'lore',
-    content: truncateToTokens(content, maxTokens),
-    tokenCount: estimateTokens(content),
-    priority: 4,
-    truncatable: true,
-  };
+  return finalizeSection('lore', content, maxTokens, 4, true);
 };
 
 const buildHistorySection = (state: AppBrainState, maxTokens: number): ContextSection => {
@@ -773,13 +748,7 @@ const buildHistorySection = (state: AppBrainState, maxTokens: number): ContextSe
     content += `Result: ${action.success ? 'Success' : 'Failed'}\n`;
   }
   
-  return {
-    name: 'history',
-    content: truncateToTokens(content, maxTokens),
-    tokenCount: estimateTokens(content),
-    priority: 5,
-    truncatable: true,
-  };
+  return finalizeSection('history', content, maxTokens, 5, true);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -801,7 +770,8 @@ export interface AdaptiveContextOptions {
 }
 
 /**
- * Build context with adaptive token budgeting
+ * Build context with adaptive token budgeting and scene-aware relevance.
+ * Ensures each section is truncated consistently and tracks truncation/omission decisions.
  */
 export const buildAdaptiveContext = async (
   state: AppBrainState,
@@ -874,6 +844,9 @@ export const buildAdaptiveContext = async (
       context += section.content + '\n';
       totalTokens += section.tokenCount;
       sectionsIncluded.push(section.name);
+      if (section.wasTruncated) {
+        sectionsTruncated.push(section.name);
+      }
     } else if (section.truncatable && totalTokens < budget.totalTokens * 0.9) {
       // Truncate section to fit remaining budget
       const remainingTokens = budget.totalTokens - totalTokens;

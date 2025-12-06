@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExitIcon } from '@/features/shared/components/Icons';
 import { useLayoutStore } from './store/useLayoutStore';
@@ -21,6 +21,17 @@ export const ZenModeOverlay: React.FC<ZenModeOverlayProps> = ({
     setExitZenHovered: state.setExitZenHovered,
     setHeaderHovered: state.setHeaderHovered,
   }));
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        toggleZenMode();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleZenMode]);
 
   if (!isZenMode) return null;
 

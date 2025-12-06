@@ -58,6 +58,16 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const pluginsInstalledRef = useRef(false);
   const nativeSpellcheckEnabled = useSettingsStore((state) => state.nativeSpellcheckEnabled);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const isZenModeRef = useRef(isZenMode);
+
+  useEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
+
+  useEffect(() => {
+    isZenModeRef.current = isZenMode;
+  }, [isZenMode]);
 
   // Use optimized hook for Tiptap sync (replaces 3 separate useEffect hooks)
   const { installPlugins, refreshDecorations } = useTiptapSync({
@@ -91,7 +101,7 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
     onSelectionUpdate: ({ editor }) => {
       const { from, to, empty } = editor.state.selection;
       if (empty) {
-        onSelectionChange(null, null);
+        onSelectionChangeRef.current?.(null, null);
         return;
       }
       const text = editor.state.doc.textBetween(from, to, ' ');
@@ -99,11 +109,11 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
       const endPos = editor.view.coordsAtPos(to);
       const top = startPos.top;
       const left = (startPos.left + endPos.left) / 2;
-      onSelectionChange({ start: from, end: to, text }, { top, left });
+      onSelectionChangeRef.current?.({ start: from, end: to, text }, { top, left });
     },
     onTransaction: ({ editor, transaction }) => {
       // Typewriter scrolling in Zen Mode - keep cursor centered
-      if (isZenMode && transaction.selectionSet && !transaction.getMeta('preventTypewriterScroll')) {
+      if (isZenModeRef.current && transaction.selectionSet && !transaction.getMeta('preventTypewriterScroll')) {
         const { from } = editor.state.selection;
         const coords = editor.view.coordsAtPos(from);
         const scrollContainer = editorContainerRef.current?.closest('.overflow-y-auto');

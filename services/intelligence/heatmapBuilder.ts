@@ -324,7 +324,11 @@ export const getSuggestionsForRange = (
   const suggestions: string[] = [];
   
   for (const section of heatmap.sections) {
-    if (section.offset >= startOffset && section.offset < endOffset) {
+    const overlapsRange =
+      section.offset < endOffset &&
+      section.offset + section.length > startOffset;
+
+    if (overlapsRange) {
       suggestions.push(...section.suggestions);
     }
   }

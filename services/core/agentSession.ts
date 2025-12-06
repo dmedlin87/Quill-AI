@@ -45,26 +45,31 @@ export const buildMemoryContext = async (
  * Kept here so AgentController consumers can share the logic.
  */
 export const fetchMemoryContext = async (projectId: string): Promise<string> => {
-  const [memories, goals] = await Promise.all([
-    getMemoriesForContext(projectId, { limit: 25 }),
-    getActiveGoals(projectId),
-  ]);
+  try {
+    const [memories, goals] = await Promise.all([
+      getMemoriesForContext(projectId, { limit: 25 }),
+      getActiveGoals(projectId),
+    ]);
 
-  let memorySection = '[AGENT MEMORY]\n';
+    let memorySection = '[AGENT MEMORY]\n';
 
-  const formattedMemories = formatMemoriesForPrompt(memories, { maxLength: 3000 });
-  if (formattedMemories) {
-    memorySection += formattedMemories + '\n';
-  } else {
-    memorySection += '(No stored memories yet.)\n';
+    const formattedMemories = formatMemoriesForPrompt(memories, { maxLength: 3000 });
+    if (formattedMemories) {
+      memorySection += formattedMemories + '\n';
+    } else {
+      memorySection += '(No stored memories yet.)\n';
+    }
+
+    const formattedGoals = formatGoalsForPrompt(goals);
+    if (formattedGoals) {
+      memorySection += '\n' + formattedGoals + '\n';
+    }
+
+    return memorySection;
+  } catch (error) {
+    console.warn('[AgentSession] Failed to fetch default memory context:', error);
+    return '';
   }
-
-  const formattedGoals = formatGoalsForPrompt(goals);
-  if (formattedGoals) {
-    memorySection += '\n' + formattedGoals + '\n';
-  }
-
-  return memorySection;
 };
 
 export const buildInitializationMessage = ({
@@ -95,10 +100,12 @@ export const createChatSessionFromContext = async ({
   projectId?: string | null;
 }): Promise<{ chat: Chat; memoryContext: string }> => {
   const fullManuscriptContext = buildManuscriptContext(context.chapters, context.fullText);
-  const memoryContext = await buildMemoryContext(
-    memoryProvider,
-    projectId ?? context.projectId ?? null,
-  );
+  const resolvedProjectId = projectId ?? context.projectId ?? null;
+  const memoryContext = memoryProvider
+    ? await buildMemoryContext(memoryProvider, resolvedProjectId)
+    : resolvedProjectId
+      ? await fetchMemoryContext(resolvedProjectId)
+      : '';
 
   const chat = createAgentSession({
     lore: context.lore,

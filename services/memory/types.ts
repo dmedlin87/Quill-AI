@@ -51,6 +51,16 @@ export interface BedsideNoteContent {
   conflicts?: BedsideNoteConflict[];
 }
 
+export type BedsideNoteSectionKey = keyof BedsideNoteContent;
+export type BedsideNoteListSectionKey = Extract<
+  BedsideNoteSectionKey,
+  'warnings' | 'nextSteps' | 'openQuestions' | 'recentDiscoveries'
+>;
+export type BedsideNoteInputSectionKey = Extract<
+  BedsideNoteSectionKey,
+  'currentFocus' | 'warnings' | 'nextSteps' | 'openQuestions' | 'recentDiscoveries'
+>;
+
 export interface BedsideNoteConflict {
   /** Statement from the previous bedside note version */
   previous: string;
@@ -70,6 +80,8 @@ export interface BedsideNoteConflict {
  * Project-scoped notes track story-specific information (characters, plot decisions).
  * Author-scoped notes track user preferences that apply across all projects.
  */
+export type MemoryEmbedding = readonly number[];
+
 export interface MemoryNote {
   /** Unique identifier */
   id: string;
@@ -107,7 +119,7 @@ export interface MemoryNote {
    * Optional embedding vector for semantic search.
    * Added when vector search is enabled (Phase 2).
    */
-  embedding?: number[];
+  embedding?: MemoryEmbedding;
 
   /** Optional structured content for prompt-aware memories (e.g., bedside note) */
   structuredContent?: Record<string, unknown>;
@@ -217,4 +229,4 @@ export const BEDSIDE_NOTE_DEFAULT_TAGS = [
   BEDSIDE_NOTE_TAG,
   'planner:global',
   'arc:story',
-];
+] as const;

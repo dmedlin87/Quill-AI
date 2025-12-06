@@ -67,6 +67,35 @@ const scoreGoal = (goal: BedsideNoteGoalSummary): number => {
   return statusBoost + progressScore + recency / 1000; // small recency weight
 };
 
+const normalizeLines = (items: string[]): string[] => {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const item of items) {
+    const value = item.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    normalized.push(value);
+  }
+
+  return normalized;
+};
+
+const normalizeGoals = (goals: BedsideNoteGoalSummary[]): BedsideNoteGoalSummary[] => {
+  const seenTitles = new Set<string>();
+  const normalized: BedsideNoteGoalSummary[] = [];
+
+  for (const goal of goals) {
+    const title = goal.title?.trim();
+    if (!title || seenTitles.has(title)) continue;
+    seenTitles.add(title);
+    const note = goal.note?.trim() || undefined;
+    normalized.push({ ...goal, title, note });
+  }
+
+  return normalized;
+};
+
 const enforceListBudget = (
   title: string,
   lines: string[],
@@ -119,7 +148,9 @@ export function serializeBedsideNote(
       }
       case 'activeGoals': {
         if (!content.activeGoals || content.activeGoals.length === 0) break;
-        const sortedGoals = [...content.activeGoals].sort((a, b) => scoreGoal(b) - scoreGoal(a));
+        const normalizedGoals = normalizeGoals(content.activeGoals);
+        if (normalizedGoals.length === 0) break;
+        const sortedGoals = [...normalizedGoals].sort((a, b) => scoreGoal(b) - scoreGoal(a));
         const goals = sortedGoals.slice(0, limit);
         const lines = goals.map(goal => formatGoalLine(goal));
         if (lines.length > 0) {
@@ -129,25 +160,27 @@ export function serializeBedsideNote(
       }
       case 'warnings': {
         if (!content.warnings || content.warnings.length === 0) break;
-        const warnings = content.warnings.slice(0, limit).map(warning => `- ${warning}`);
+        const warnings = normalizeLines(content.warnings.slice(0, limit)).map(warning => `- ${warning}`);
         sections.push(enforceListBudget(section.title, warnings, budget));
         break;
       }
       case 'nextSteps': {
         if (!content.nextSteps || content.nextSteps.length === 0) break;
-        const steps = content.nextSteps.slice(0, limit).map(step => `- ${step}`);
+        const steps = normalizeLines(content.nextSteps.slice(0, limit)).map(step => `- ${step}`);
         sections.push(enforceListBudget(section.title, steps, budget));
         break;
       }
       case 'openQuestions': {
         if (!content.openQuestions || content.openQuestions.length === 0) break;
-        const questions = content.openQuestions.slice(0, limit).map(question => `- ${question}`);
+        const questions = normalizeLines(content.openQuestions.slice(0, limit)).map(question => `- ${question}`);
         sections.push(enforceListBudget(section.title, questions, budget));
         break;
       }
       case 'recentDiscoveries': {
         if (!content.recentDiscoveries || content.recentDiscoveries.length === 0) break;
-        const discoveries = content.recentDiscoveries.slice(0, limit).map(discovery => `- ${discovery}`);
+        const discoveries = normalizeLines(content.recentDiscoveries.slice(0, limit)).map(
+          discovery => `- ${discovery}`,
+        );
         sections.push(enforceListBudget(section.title, discoveries, budget));
         break;
       }

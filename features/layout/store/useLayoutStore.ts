@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { SidebarTab, MainView, CharacterProfile } from '@/types';
 import { emitPanelSwitched } from '@/services/appBrain';
 
+type Theme = 'light' | 'dark';
+
 interface LayoutState {
   // Sidebar & Panel State
   activeTab: SidebarTab;
@@ -10,7 +12,7 @@ interface LayoutState {
   isToolsCollapsed: boolean;
   
   // Theme
-  theme: 'light' | 'dark';
+  theme: Theme;
   
   // Chat State
   chatInitialMessage: string | undefined;
@@ -68,9 +70,16 @@ interface LayoutActions {
 
 type LayoutStore = LayoutState & LayoutActions;
 
-const getInitialTheme = (): 'light' | 'dark' => {
+const applyTheme = (theme: Theme) => {
   if (typeof window !== 'undefined') {
-    return (localStorage.getItem('quillai-theme') as 'light' | 'dark') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('quillai-theme', theme);
+  }
+};
+
+const getInitialTheme = (): Theme => {
+  if (typeof window !== 'undefined') {
+    return (localStorage.getItem('quillai-theme') as Theme) || 'light';
   }
   return 'light';
 };
@@ -81,7 +90,10 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
   activeView: MainView.EDITOR,
   isSidebarCollapsed: false,
   isToolsCollapsed: false,
-  theme: getInitialTheme(),
+  theme: ((initialTheme) => {
+    applyTheme(initialTheme);
+    return initialTheme;
+  })(getInitialTheme()),
   chatInitialMessage: undefined,
   interviewTarget: null,
   selectedGraphCharacter: null,
@@ -107,10 +119,7 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
   // Theme Actions
   toggleTheme: () => set((state) => {
     const newTheme = state.theme === 'light' ? 'dark' : 'light';
-    if (typeof window !== 'undefined') {
-      document.documentElement.setAttribute('data-theme', newTheme);
-      localStorage.setItem('quillai-theme', newTheme);
-    }
+    applyTheme(newTheme);
     return { theme: newTheme };
   }),
 

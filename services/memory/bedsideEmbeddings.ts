@@ -1,14 +1,17 @@
 import { generateMemoryEmbedding } from './semanticDedup';
+import type { MemoryEmbedding } from './types';
 
-export type BedsideEmbeddingGenerator = (text: string) => Promise<number[]> | number[];
+export type BedsideEmbeddingGenerator = (text: string) => Promise<MemoryEmbedding> | MemoryEmbedding;
 
-let embeddingGenerator: BedsideEmbeddingGenerator = (text: string) => generateMemoryEmbedding(text);
+const defaultEmbeddingGenerator: BedsideEmbeddingGenerator = (text: string) =>
+  generateMemoryEmbedding(text) as MemoryEmbedding;
+
+let embeddingGenerator: BedsideEmbeddingGenerator = defaultEmbeddingGenerator;
 
 export function setBedsideEmbeddingGenerator(generator: BedsideEmbeddingGenerator | null): void {
-  embeddingGenerator = generator ?? ((text: string) => generateMemoryEmbedding(text));
+  embeddingGenerator = generator ?? defaultEmbeddingGenerator;
 }
 
-export async function embedBedsideNoteText(text: string): Promise<number[]> {
-  const result = embeddingGenerator(text);
-  return Array.isArray(result) ? result : await result;
+export async function embedBedsideNoteText(text: string): Promise<MemoryEmbedding> {
+  return Promise.resolve(embeddingGenerator(text));
 }

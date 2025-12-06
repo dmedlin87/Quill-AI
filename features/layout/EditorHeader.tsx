@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { UsageBadge } from '@/features/shared';
 import { useLayoutStore } from './store/useLayoutStore';
 import { VoiceCommandButton } from '@/features/voice';
@@ -17,6 +17,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ isZenMode }) => {
     isHeaderHovered: state.isHeaderHovered,
     setHeaderHovered: state.setHeaderHovered,
   }));
+  const prefersReducedMotion = useReducedMotion();
 
   const shouldHide = isZenMode && !isHeaderHovered;
 
@@ -27,7 +28,11 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ isZenMode }) => {
         y: shouldHide ? -60 : 0,
         opacity: shouldHide ? 0 : 1,
       }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      transition={
+        prefersReducedMotion
+          ? { duration: 0 }
+          : { type: 'spring', stiffness: 300, damping: 30 }
+      }
       className="flex items-center justify-between px-6 py-2 bg-[var(--surface-primary)] border-b border-[var(--border-primary)] shrink-0"
       style={{
         position: isZenMode ? 'fixed' : 'relative',

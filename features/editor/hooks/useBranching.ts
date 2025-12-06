@@ -1,10 +1,10 @@
 /**
  * useBranching - Hook for chapter branching (multiverse editing)
- * 
+ *
  * Manages creation, switching, and merging of content branches.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Branch } from '@/types/schema';
 
 export interface UseBranchingOptions {
@@ -44,6 +44,11 @@ export function useBranching(options: UseBranchingOptions): UseBranchingResult {
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [mainText, setMainText] = useState(mainContent);
 
+  // Keep main content in sync with upstream changes
+  useEffect(() => {
+    setMainText(mainContent);
+  }, [mainContent]);
+
   // Update branches with callback
   const updateBranches = useCallback((newBranches: Branch[]) => {
     setBranches(newBranches);
@@ -51,13 +56,12 @@ export function useBranching(options: UseBranchingOptions): UseBranchingResult {
   }, [onBranchesChange]);
 
   // Get current content based on active branch
-  const currentContent = activeBranchId
-    ? branches.find(b => b.id === activeBranchId)?.content || mainText
-    : mainText;
+  const activeBranch = useMemo(() => {
+    if (!activeBranchId) return null;
+    return branches.find(b => b.id === activeBranchId) || null;
+  }, [activeBranchId, branches]);
 
-  const activeBranch = activeBranchId
-    ? branches.find(b => b.id === activeBranchId) || null
-    : null;
+  const currentContent = activeBranch?.content ?? mainText;
 
   const createBranch = useCallback((name: string, content?: string): string => {
     const id = crypto.randomUUID();

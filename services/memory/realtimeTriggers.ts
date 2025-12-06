@@ -200,42 +200,49 @@ export const checkTriggers = async (
     ? defaultTriggers
     : defaultTriggers.filter(t => t.priority === priorityFilter);
   
-  const results: TriggerResult[] = [];
-  
-  for (const trigger of triggers) {
-    const match = text.match(trigger.pattern);
-    if (match) {
-      try {
-        const memories = await trigger.memoryQuery(match, projectId);
-        
-        if (memories.length > 0) {
+  const matched = triggers
+    .map((trigger, index) => {
+      const match = text.match(trigger.pattern);
+      return match ? { trigger, match, index } : null;
+    })
+    .filter((entry): entry is { trigger: MemoryTrigger; match: RegExpMatchArray; index: number } => Boolean(entry));
+
+  const results = (
+    await Promise.all(
+      matched.map(async ({ trigger, match, index }) => {
+        try {
+          const memories = await trigger.memoryQuery(match, projectId);
+          if (memories.length === 0) return null;
+
           const suggestion = trigger.formatSuggestion(memories, match);
-          
-          if (suggestion) {
-            results.push({
-              triggerId: trigger.id,
-              triggerName: trigger.name,
-              matchedText: match[0],
-              memories,
-              suggestion,
-              priority: trigger.priority,
-            });
-          }
+          if (!suggestion) return null;
+
+          return {
+            triggerId: trigger.id,
+            triggerName: trigger.name,
+            matchedText: match[0],
+            memories,
+            suggestion,
+            priority: trigger.priority,
+            order: index,
+          };
+        } catch (error) {
+          console.warn(`[realtimeTriggers] Trigger ${trigger.id} failed:`, error);
+          return null;
         }
-      } catch (error) {
-        console.warn(`[realtimeTriggers] Trigger ${trigger.id} failed:`, error);
-      }
-    }
-    
-    if (results.length >= maxResults) break;
-  }
-  
-  // Sort by priority (immediate first)
-  return results.sort((a, b) => {
-    if (a.priority === 'immediate' && b.priority !== 'immediate') return -1;
-    if (b.priority === 'immediate' && a.priority !== 'immediate') return 1;
-    return 0;
-  });
+      })
+    )
+  ).filter((result): result is TriggerResult & { order: number } => Boolean(result));
+
+  // Sort by priority (immediate first) then original order, and enforce maxResults
+  return results
+    .sort((a, b) => {
+      if (a.priority === 'immediate' && b.priority !== 'immediate') return -1;
+      if (b.priority === 'immediate' && a.priority !== 'immediate') return 1;
+      return a.order - b.order;
+    })
+    .slice(0, maxResults)
+    .map(({ order: _order, ...rest }) => rest);
 };
 
 /**

@@ -62,6 +62,9 @@ const TagBadge: React.FC<{ label: string }> = ({ label }) => (
   <span className="px-2 py-1 bg-[var(--interactive-bg)] text-[var(--text-secondary)] rounded-full text-xs">{label}</span>
 );
 
+const clampImportance = (value: number) => Math.max(0, Math.min(1, value));
+const normalizeImportance = (value: number) => (Number.isFinite(value) ? clampImportance(value) : 0.5);
+
 export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
   const [projectMemories, setProjectMemories] = useState<MemoryNote[]>([]);
   const [authorMemories, setAuthorMemories] = useState<MemoryNote[]>([]);
@@ -121,7 +124,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       text: memoryForm.text.trim(),
       type: memoryForm.type,
       topicTags,
-      importance: Math.max(0, Math.min(1, memoryForm.importance)),
+      importance: normalizeImportance(memoryForm.importance),
       scope: memoryForm.scope,
       projectId: memoryForm.scope === 'project' ? projectId ?? undefined : undefined,
     };
@@ -345,7 +348,9 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
                 max={1}
                 step={0.1}
                 value={memoryForm.importance}
-                onChange={(e) => setMemoryForm((prev) => ({ ...prev, importance: parseFloat(e.target.value) }))}
+                onChange={(e) =>
+                  setMemoryForm((prev) => ({ ...prev, importance: normalizeImportance(parseFloat(e.target.value)) }))
+                }
                 className="w-full px-3 py-2 bg-[var(--surface-tertiary)] border border-[var(--border-primary)] rounded text-sm"
               />
             </div>

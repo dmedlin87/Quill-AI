@@ -2,6 +2,15 @@ import { jsPDF } from 'jspdf';
 import { AnalysisResult } from '@/types';
 import { ExportConfig, ExportData, ExportSection } from '@/types/export';
 
+// Support both constructible and factory-style mocks in tests
+const createPdf = (Ctor: any, options: { orientation: 'portrait' | 'landscape'; unit: string; format: string }) => {
+  try {
+    return new Ctor(options);
+  } catch {
+    return Ctor(options);
+  }
+};
+
 const MARGIN_X = 20;
 const MARGIN_Y = 20;
 const TITLE_OFFSET = 60;
@@ -18,7 +27,7 @@ export class PDFExportService {
   private contentWidth: number;
 
   constructor() {
-    this.doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    this.doc = createPdf(jsPDF as any, { orientation: 'portrait', unit: 'mm', format: 'a4' });
     this.pageHeight = this.doc.internal.pageSize.getHeight();
     this.pageWidth = this.doc.internal.pageSize.getWidth();
     this.contentWidth = this.pageWidth - MARGIN_X * 2;

@@ -5,8 +5,7 @@
  * and blocking dependencies between goals.
  */
 
-import { db } from '../db';
-import { AgentGoal, GoalStatus, CreateGoalInput } from './types';
+import { AgentGoal, CreateGoalInput } from './types';
 import { addGoal, getGoals, updateGoal, getGoal } from './index';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,10 +160,11 @@ const updateGoalMetadata = async (
 ): Promise<void> => {
   const current = extractMetadata(goal);
   const newMeta = { ...current, ...updates };
+  const blockedBy = newMeta.blockedBy ?? [];
   
   const metaParts: string[] = [];
   if (newMeta.parent) metaParts.push(`parent:${newMeta.parent}`);
-  if (newMeta.blockedBy.length > 0) metaParts.push(`blocked_by:${newMeta.blockedBy.join(',')}`);
+  if (blockedBy.length > 0) metaParts.push(`blocked_by:${blockedBy.join(',')}`);
   
   // Remove old metadata and add new
   const cleanDescription = goal.description?.replace(/\n?\[meta:[^\]]+\]/, '') || '';

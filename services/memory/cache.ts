@@ -70,6 +70,8 @@ class MemoryLRUCache {
     projectId: string,
     options: { limit?: number; forceRefresh?: boolean } = {}
   ): Promise<MemoryNote[]> {
+    this.pruneExpired(this.memoriesCache);
+
     const { limit = 50, forceRefresh = false } = options;
     const cacheKey = `${projectId}:${limit}`;
     
@@ -128,6 +130,8 @@ class MemoryLRUCache {
     projectId: string,
     options: { forceRefresh?: boolean } = {}
   ): Promise<AgentGoal[]> {
+    this.pruneExpired(this.goalsCache);
+
     const { forceRefresh = false } = options;
     
     const cached = this.goalsCache.get(projectId);
@@ -174,6 +178,8 @@ class MemoryLRUCache {
     projectId: string,
     options: { forceRefresh?: boolean } = {}
   ): Promise<WatchedEntity[]> {
+    this.pruneExpired(this.watchedCache);
+
     const { forceRefresh = false } = options;
     
     const cached = this.watchedCache.get(projectId);
@@ -266,6 +272,10 @@ class MemoryLRUCache {
    * Get cache statistics
    */
   getStats(): CacheStats {
+    this.pruneExpired(this.memoriesCache);
+    this.pruneExpired(this.goalsCache);
+    this.pruneExpired(this.watchedCache);
+
     const totalEntries = 
       this.memoriesCache.size + 
       this.goalsCache.size + 
@@ -318,6 +328,19 @@ class MemoryLRUCache {
     
     if (lruKey) {
       cache.delete(lruKey);
+    }
+  }
+
+  /**
+   * Drop expired entries to avoid stale data growth
+   */
+  private pruneExpired<T>(cache: Map<string, CacheEntry<T>>): void {
+    if (cache.size === 0) return;
+    const now = Date.now();
+    for (const [key, entry] of cache) {
+      if (now - entry.fetchedAt >= this.config.ttlMs) {
+        cache.delete(key);
+      }
     }
   }
 }

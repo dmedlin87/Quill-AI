@@ -396,7 +396,7 @@ Second paragraph.`;
       // Offsets should be increasing
       for (let i = 1; i < sections.length; i++) {
         expect(sections[i].offset).toBeGreaterThanOrEqual(sections[i - 1].offset);
-      });
+      }
     });
 
     it('should handle single paragraph', () => {

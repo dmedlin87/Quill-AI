@@ -42,7 +42,8 @@ export async function runAgentToolLoop<TResponse extends AgentToolLoopModelResul
       return result;
     }
 
-    const functionResponses = await processToolCalls(result.functionCalls);
+    const functionCalls = [...result.functionCalls];
+    const functionResponses = await processToolCalls(functionCalls);
 
     if (abortSignal?.aborted) {
       return result;
@@ -53,6 +54,10 @@ export async function runAgentToolLoop<TResponse extends AgentToolLoopModelResul
     result = (await chat.sendMessage({
       message: functionResponses.map(resp => ({ functionResponse: resp })),
     })) as unknown as TResponse;
+
+    if (abortSignal?.aborted) {
+      return result;
+    }
   }
 
   return result;

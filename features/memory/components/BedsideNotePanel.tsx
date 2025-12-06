@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { diffLines } from 'diff';
-import { BedsideNoteContent, BedsideNoteSectionKey, MemoryNote, AgentGoal } from '@/services/memory/types';
+import {
+  BedsideNoteContent,
+  BedsideNoteSectionKey,
+  BedsideNoteListSectionKey,
+  MemoryNote,
+  AgentGoal,
+} from '@/services/memory/types';
 import { applyBedsideNoteMutation } from '@/services/memory/bedsideNoteMutations';
 import { ChainedMemory, getMemoryChain, getOrCreateBedsideNote } from '@/services/memory/chains';
 import { BedsideNoteHistory } from './BedsideNoteHistory';
@@ -16,7 +22,7 @@ const SECTION_LABELS: Record<BedsideNoteSectionKey, string> = {
   conflicts: 'Conflicts',
 };
 
-const LIST_SECTIONS: BedsideNoteSectionKey[] = [
+const LIST_SECTIONS: BedsideNoteListSectionKey[] = [
   'warnings',
   'nextSteps',
   'openQuestions',
@@ -106,23 +112,35 @@ export const BedsideNotePanel: React.FC<BedsideNotePanelProps> = ({ projectId, g
       return;
     }
 
+    let cancelled = false;
+
     const load = async () => {
       setIsLoading(true);
       setError(null);
       try {
         const latest = await getOrCreateBedsideNote(projectId);
+        if (cancelled) return;
         setNote(latest);
         setListInputs(prev => ({ ...prev, currentFocus: (latest.structuredContent as BedsideNoteContent | undefined)?.currentFocus || '' }));
         const chain = await getMemoryChain(latest.id);
+        if (cancelled) return;
         setHistory(chain);
       } catch (e: any) {
-        setError(e?.message || 'Unable to load bedside note');
+        if (!cancelled) {
+          setError(e?.message || 'Unable to load bedside note');
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   const toggleSection = (section: BedsideNoteSectionKey) => {
@@ -152,7 +170,7 @@ export const BedsideNotePanel: React.FC<BedsideNotePanelProps> = ({ projectId, g
     }
   };
 
-  const handleAddListItem = async (section: BedsideNoteSectionKey) => {
+  const handleAddListItem = async (section: BedsideNoteListSectionKey) => {
     if (!projectId) return;
     const value = listInputs[section];
     if (!value.trim()) return;
@@ -172,7 +190,7 @@ export const BedsideNotePanel: React.FC<BedsideNotePanelProps> = ({ projectId, g
     }
   };
 
-  const handleRemoveListItem = async (section: BedsideNoteSectionKey, value: string) => {
+  const handleRemoveListItem = async (section: BedsideNoteListSectionKey, value: string) => {
     if (!projectId) return;
     setIsLoading(true);
     try {

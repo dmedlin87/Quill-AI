@@ -12,25 +12,27 @@ export interface ToolCallAdapter {
   handleToolEnd(name: string, result: ToolResult): void;
 }
 
+function makeModelMessage(text: string): ChatMessage {
+  return {
+    role: 'model',
+    text,
+    timestamp: new Date(),
+  };
+}
+
 export function createToolCallAdapter(ui: ToolCallUI): ToolCallAdapter {
   return {
     handleToolStart: (name: string) => {
       ui.onToolStart?.({ name });
-      ui.onMessage?.({
-        role: 'model',
-        text: `🛠️ ${name}...`,
-        timestamp: new Date(),
-      });
+      ui.onMessage?.(makeModelMessage(`🛠️ ${name}...`));
     },
     handleToolEnd: (name: string, result: ToolResult) => {
       ui.onToolEnd?.({ name, result });
-      ui.onMessage?.({
-        role: 'model',
-        text: result.success
-          ? `✅ ${name}: ${result.message}`
-          : `⚠️ ${name} failed: ${result.error ?? result.message}`,
-        timestamp: new Date(),
-      });
+      const text = result.success
+        ? `✅ ${name}: ${result.message || 'Done.'}`
+        : `⚠️ ${name} failed: ${result.error || result.message || 'Unknown error'}`;
+
+      ui.onMessage?.(makeModelMessage(text));
     },
   };
 }

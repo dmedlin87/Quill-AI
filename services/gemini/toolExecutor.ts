@@ -10,6 +10,8 @@ import {
   formatMemoriesForPrompt,
   applyBedsideNoteMutation,
 } from '@/services/memory';
+import { BedsideNoteGoalSummary } from '@/services/memory/types';
+import { BedsideNoteAction, BedsideNoteMutationRequest } from '@/services/memory/bedside/schema';
 import { CommandRegistry } from '@/services/commands/registry';
 import { getCommandHistory } from '@/services/commands/history';
 
@@ -336,16 +338,52 @@ export async function executeMemoryToolCall(
         }
 
         const section = args.section as string;
-        const action = args.action as string;
+        const action = args.action as BedsideNoteAction;
         if (!section || !action || typeof args.content === 'undefined') {
           throw new Error('Missing required fields for update_bedside_note');
         }
 
-        const updated = await applyBedsideNoteMutation(projectId, {
-          section: section as any,
-          action: action as any,
-          content: args.content,
-        });
+        let mutation: BedsideNoteMutationRequest;
+
+        if (section === 'currentFocus') {
+          const content = String(args.content ?? '').trim();
+          if (!content) {
+            throw new Error('currentFocus content must be a non-empty string');
+          }
+          mutation = { section: 'currentFocus', action, content };
+        } else if (['warnings', 'nextSteps', 'openQuestions', 'recentDiscoveries'].includes(section)) {
+          const raw = Array.isArray(args.content) ? args.content : [args.content];
+          const list = raw.map(item => String(item ?? '').trim()).filter(Boolean);
+          if (!list.length) {
+            throw new Error(`${section} content must include at least one item`);
+          }
+          mutation = {
+            section: section as 'warnings' | 'nextSteps' | 'openQuestions' | 'recentDiscoveries',
+            action,
+            content: list,
+          };
+        } else if (section === 'activeGoals') {
+          const raw = Array.isArray(args.content) ? args.content : [args.content];
+          const goals = raw
+            .map(item => {
+              if (!item) return null;
+              if (typeof item === 'string') {
+                const title = item.trim();
+                return title ? { title } : null;
+              }
+              const maybeGoal = item as Partial<BedsideNoteGoalSummary>;
+              return maybeGoal.title ? maybeGoal as BedsideNoteGoalSummary : null;
+            })
+            .filter((g): g is BedsideNoteGoalSummary => Boolean(g));
+          if (!goals.length) {
+            throw new Error('activeGoals content must include at least one goal with a title');
+          }
+          mutation = { section: 'activeGoals', action, content: goals };
+        } else {
+          throw new Error(`Unknown bedside note section: ${section}`);
+        }
+
+        const updated = await applyBedsideNoteMutation(projectId, mutation);
 
         message = `Bedside note ${action} applied to ${section}. New text: ${updated.text}`;
         break;

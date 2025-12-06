@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Editor } from '@tiptap/react';
 
 interface FindReplaceModalProps {
@@ -20,12 +20,13 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
   const [replaceTerm, setReplaceTerm] = useState('');
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [isCaseSensitive, setIsCaseSensitive] = useState(false);
+  const findInputRef = useRef<HTMLInputElement>(null);
 
   // Focus input on open
   useEffect(() => {
     if (isOpen) {
-      document.getElementById('find-input')?.focus();
-      (document.getElementById('find-input') as HTMLInputElement)?.select();
+      findInputRef.current?.focus();
+      findInputRef.current?.select();
     }
   }, [isOpen]);
 
@@ -146,7 +147,7 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
         {/* Find Input */}
         <div className="relative">
           <input
-            id="find-input"
+            ref={findInputRef}
             type="text"
             className="w-full border border-gray-300 rounded-md py-1.5 pl-3 pr-20 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             placeholder="Find..."

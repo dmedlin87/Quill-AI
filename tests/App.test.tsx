@@ -1,10 +1,25 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach, type Mock } from 'vitest';
 
-vi.mock('@/features/project', () => ({
-  useProjectStore: vi.fn(),
-}));
+const mockInit = vi.fn();
+const mockFlushPendingWrites = vi.fn();
+const mockGetActiveChapter = vi.fn();
+const baseStore = {
+  init: mockInit,
+  isLoading: false,
+  flushPendingWrites: mockFlushPendingWrites,
+  projects: [],
+  currentProject: null,
+  chapters: [],
+  activeChapterId: null,
+  getActiveChapter: mockGetActiveChapter,
+};
+
+vi.mock('@/features/project', () => {
+  const useProjectStore = vi.fn(() => baseStore);
+  return { useProjectStore };
+});
 
 vi.mock('@/features/shared', () => ({
   EditorProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="editor-provider">{children}</div>,
@@ -25,26 +40,30 @@ vi.mock('@/features/layout', () => ({
   MainLayout: () => <div data-testid="main-layout">Main</div>,
 }));
 
+vi.mock('@/features/core', () => ({
+  AppBrainProvider: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="app-brain-provider">{children}</div>
+  ),
+}));
+
 import App from '@/App';
 import { useProjectStore } from '@/features/project';
 
-const mockUseProjectStore = useProjectStore as unknown as ReturnType<typeof vi.fn>;
+const mockUseProjectStore = useProjectStore as unknown as Mock;
 
 describe('App', () => {
   let store: ReturnType<typeof mockUseProjectStore>;
 
   beforeEach(() => {
-    const flushPendingWrites = vi.fn().mockResolvedValue({ pendingCount: 0, errors: [] });
+    mockInit.mockReset();
+    mockFlushPendingWrites.mockReset();
+    mockGetActiveChapter.mockReset();
+
     store = {
-      init: vi.fn(),
-      isLoading: false,
-      flushPendingWrites,
-      projects: [],
-      currentProject: null,
-      chapters: [],
-      activeChapterId: null,
-      getActiveChapter: vi.fn(),
+      ...baseStore,
+      flushPendingWrites: mockFlushPendingWrites.mockResolvedValue({ pendingCount: 0, errors: [] }),
     } as any;
+
     mockUseProjectStore.mockReturnValue(store);
   });
 
@@ -61,15 +80,9 @@ describe('App', () => {
 
   it('shows loading state while store initializes', () => {
     mockUseProjectStore.mockReturnValue({
-      init: vi.fn(),
+      ...baseStore,
       isLoading: true,
-      flushPendingWrites: vi.fn(),
-      projects: [],
-      currentProject: null,
-      chapters: [],
-      activeChapterId: null,
-      getActiveChapter: vi.fn(),
-    });
+    } as any);
 
     render(<App />);
 
@@ -79,15 +92,9 @@ describe('App', () => {
   it('flushes pending writes on visibility change and unload', async () => {
     const flushPendingWrites = vi.fn();
     mockUseProjectStore.mockReturnValue({
-      init: vi.fn(),
-      isLoading: false,
+      ...baseStore,
       flushPendingWrites,
-      projects: [],
-      currentProject: null,
-      chapters: [],
-      activeChapterId: null,
-      getActiveChapter: vi.fn(),
-    });
+    } as any);
 
     render(<App />);
 

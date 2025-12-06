@@ -11,27 +11,53 @@ export const setErrorReporter = (reporter: Reporter) => {
   customReporter = reporter;
 };
 
+const formatUnknownErrorMessage = (error: unknown): string => {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error && typeof (error as any).message === "string") {
+    return (error as any).message;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+};
+
+const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(formatUnknownErrorMessage(error)));
+
+const tryReporter = (label: string, fn: () => void): boolean => {
+  try {
+    fn();
+    return true;
+  } catch (reporterError) {
+    console.error(`[Telemetry] ${label} reporter failed`, reporterError);
+    return false;
+  }
+};
+
 /**
  * Reports errors with optional context.
- * Falls back to console logging when no reporter is configured.
+ * Falls back to console logging when reporters are unavailable or fail.
  */
 export const reportError = (error: unknown, context?: ErrorContext) => {
-  const normalizedError =
-    error instanceof Error
-      ? error
-      : new Error(typeof error === 'string' ? error : 'Unknown error');
-
+  const normalizedError = toError(error);
   const sentry = (globalThis as any)?.Sentry;
 
-  try {
-    if (customReporter) {
-      customReporter(normalizedError, context);
-    } else if (sentry?.captureException) {
-      sentry.captureException(normalizedError, { extra: context });
-    } else {
-      console.error('[Telemetry] Error captured', normalizedError, context);
-    }
-  } catch (reporterError) {
-    console.error('[Telemetry] Reporter failed', reporterError);
+  const reporters: Array<() => boolean> = [];
+
+  if (customReporter) {
+    reporters.push(() => tryReporter("Custom", () => customReporter!(normalizedError, context)));
   }
+
+  if (sentry?.captureException) {
+    reporters.push(() => tryReporter("Sentry", () => sentry.captureException(normalizedError, { extra: context })));
+  }
+
+  for (const reporter of reporters) {
+    if (reporter()) {
+      return;
+    }
+  }
+
+  console.error("[Telemetry] Error captured", normalizedError, context);
 };

@@ -7,21 +7,40 @@ import {
   parseBedsideNoteMutation,
 } from './bedside/schema';
 
+const normalizeText = (value: string): string => value.trim().toLowerCase();
+
 const mergeUnique = (existing: string[] = [], additions: string[]): string[] => {
-  const set = new Set(existing);
-  additions.forEach(item => set.add(item));
-  return Array.from(set);
+  const normalized = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const item of existing) {
+    const normalizedItem = normalizeText(item);
+    if (!normalized.has(normalizedItem)) {
+      normalized.add(normalizedItem);
+      deduped.push(item.trim());
+    }
+  }
+
+  for (const item of additions) {
+    const normalizedItem = normalizeText(item);
+    if (!normalized.has(normalizedItem)) {
+      normalized.add(normalizedItem);
+      deduped.push(item.trim());
+    }
+  }
+
+  return deduped;
 };
 
 const mergeGoals = (
   current: BedsideNoteGoalSummary[],
   additions: BedsideNoteGoalSummary[],
 ): BedsideNoteGoalSummary[] => {
-  const titles = new Set(current.map(goal => goal.title.toLowerCase()));
+  const titles = new Set(current.map(goal => normalizeText(goal.title)));
   const merged = [...current];
   for (const goal of additions) {
-    if (!titles.has(goal.title.toLowerCase())) {
-      merged.push(goal);
+    if (!titles.has(normalizeText(goal.title))) {
+      merged.push({ ...goal, title: goal.title.trim() });
     }
   }
   return merged;
@@ -31,8 +50,8 @@ const removeGoals = (
   current: BedsideNoteGoalSummary[],
   removals: BedsideNoteGoalSummary[],
 ): BedsideNoteGoalSummary[] => {
-  const titlesToRemove = new Set(removals.map(goal => goal.title.toLowerCase()));
-  return current.filter(goal => !titlesToRemove.has(goal.title.toLowerCase()));
+  const titlesToRemove = new Set(removals.map(goal => normalizeText(goal.title)));
+  return current.filter(goal => !titlesToRemove.has(normalizeText(goal.title)));
 };
 
 const applyMutation = (

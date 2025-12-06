@@ -303,6 +303,19 @@ export class PromptBuilder {
   }
 }
 
+const formatPreview = (value: string, limit = 120) => {
+  if (value.length <= limit) return value;
+  return `${value.slice(0, limit)}...`;
+};
+
+const timeFormatter = new Intl.DateTimeFormat("en-US", {
+  hour12: false,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZone: "UTC",
+});
+
 export const buildAgentMessageContext = (options: {
   smartContext: string;
   mode: "text" | "voice";
@@ -314,19 +327,18 @@ export const buildAgentMessageContext = (options: {
   const { smartContext, mode, microphone, ui, recentEvents, userMessage } = options;
   const eventsText =
     recentEvents.length > 0
-      ? recentEvents
+      ? [...recentEvents]
+          .sort((a, b) => a.timestamp - b.timestamp)
           .slice(-5)
           .map(
             (ev) =>
-              `${new Date(ev.timestamp).toLocaleTimeString()}: ${ev.type}`
+              `${timeFormatter.format(ev.timestamp)} UTC: ${ev.type}`
           )
           .join("\n")
       : "None";
 
   const selectionPreview = ui.selection
-    ? `"${ui.selection.text.slice(0, 100)}${
-        ui.selection.text.length > 100 ? "..." : ""
-      }"`
+    ? `"${formatPreview(ui.selection.text, 100)}"`
     : "None";
 
   return `
@@ -335,7 +347,9 @@ ${smartContext}
 
 [INPUT MODE]
 Agent mode: ${mode}. Microphone: ${microphone.status}${
-    microphone.lastTranscript ? ` (last transcript: "${microphone.lastTranscript}")` : ""
+    microphone.lastTranscript
+      ? ` (last transcript: "${formatPreview(microphone.lastTranscript)}")`
+      : ""
   }.
 
 [USER STATE]

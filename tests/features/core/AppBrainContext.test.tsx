@@ -1,19 +1,35 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { AppBrainProvider, useAppBrain } from '@/features/core/context/AppBrainContext';
+import { type UpdateManuscriptParams } from '@/services/appBrain';
 
+type MockAnalysisStatus = 'idle' | 'loading' | 'error' | 'success';
+
+/**
+ * Hoisted command and store mocks to allow module factory hoisting while keeping
+ * stable references for assertions across tests.
+ */
 const {
   mockNavigate,
+  mockJumpToChapter,
+  mockJumpToScene,
+  mockUpdateManuscript,
+  mockAppendText,
   mockAnalysis,
   mockProject,
   mockIntelligenceHook,
 } = vi.hoisted(() => {
   const mockNavigate = vi.fn();
+  const mockJumpToChapter = vi.fn().mockResolvedValue('jumped');
+  const mockJumpToScene = vi.fn().mockResolvedValue('scene');
+  const mockUpdateManuscript = vi.fn().mockResolvedValue('updated');
+  const mockAppendText = vi.fn().mockResolvedValue('appended');
+
   const mockAnalysis = {
     analysis: { score: 1 },
-    analysisStatus: 'idle',
-  } as any;
+    analysisStatus: 'idle' as MockAnalysisStatus,
+  } satisfies { analysis: { score: number }; analysisStatus: MockAnalysisStatus };
 
   const mockProject = {
     activeChapterId: 'ch1',
@@ -23,14 +39,24 @@ const {
       { id: 'ch2', title: 'Two', content: 'Next chapter', order: 1, updatedAt: Date.now() },
     ],
     getActiveChapter: vi.fn(() => ({ id: 'ch1', title: 'One' })),
-  } as any;
+    selectChapter: vi.fn(),
+  };
 
   const mockIntelligenceHook = vi.fn(() => ({
     intelligence: { entities: [], hud: { situational: {} } },
     hud: { situational: {} },
   }));
 
-  return { mockNavigate, mockAnalysis, mockProject, mockIntelligenceHook };
+  return {
+    mockNavigate,
+    mockJumpToChapter,
+    mockJumpToScene,
+    mockUpdateManuscript,
+    mockAppendText,
+    mockAnalysis,
+    mockProject,
+    mockIntelligenceHook,
+  };
 });
 
 vi.mock('@/features/core/context/EditorContext', () => ({
@@ -54,16 +80,16 @@ vi.mock('@/features/shared/hooks/useManuscriptIntelligence', () => ({
 }));
 
 vi.mock('@/services/commands/navigation', () => ({
-  NavigateToTextCommand: vi.fn().mockImplementation(() => ({
-    execute: mockNavigate,
-  })),
-  JumpToChapterCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('jumped') })),
-  JumpToSceneCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('scene') })),
+  NavigateToTextCommand: vi.fn().mockImplementation(function () {
+    this.execute = mockNavigate;
+  }),
+  JumpToChapterCommand: vi.fn().mockImplementation(() => ({ execute: mockJumpToChapter })),
+  JumpToSceneCommand: vi.fn().mockImplementation(() => ({ execute: mockJumpToScene })),
 }));
 
 vi.mock('@/services/commands/editing', () => ({
-  UpdateManuscriptCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('updated') })),
-  AppendTextCommand: vi.fn().mockImplementation(() => ({ execute: vi.fn().mockResolvedValue('appended') })),
+  UpdateManuscriptCommand: vi.fn().mockImplementation(() => ({ execute: mockUpdateManuscript })),
+  AppendTextCommand: vi.fn().mockImplementation(() => ({ execute: mockAppendText })),
 }));
 
 vi.mock('@/services/commands/analysis', () => ({
@@ -90,9 +116,7 @@ vi.mock('@/services/commands/generation', () => ({
 
 vi.mock('@/services/gemini/agent', () => ({ rewriteText: vi.fn(), generateContinuation: vi.fn() }));
 
-const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <AppBrainProvider>{children}</AppBrainProvider>
-);
+const wrapper = ({ children }: { children: ReactNode }) => <AppBrainProvider>{children}</AppBrainProvider>;
 
 describe('AppBrainContext', () => {
   beforeEach(() => {
@@ -106,7 +130,7 @@ describe('AppBrainContext', () => {
     expect(result.current.state.intelligence.hud).not.toBeNull();
 
     await act(async () => {
-      await result.current.actions.navigateToText({ query: 'Hello', searchType: 'exact' } as any);
+      await result.current.actions.navigateToText({ query: 'Hello', searchType: 'exact' });
     });
 
     expect(mockNavigate).toHaveBeenCalledWith(
@@ -114,5 +138,34 @@ describe('AppBrainContext', () => {
       expect.objectContaining({ currentText: 'Hello world' }),
     );
     expect(result.current.subscribe).toBeTypeOf('function');
+  });
+
+  it('delegates jump and edit actions to command implementations', async () => {
+    const { result } = renderHook(() => useAppBrain(), { wrapper });
+
+    await act(async () => {
+      await result.current.actions.jumpToChapter('ch2');
+      await result.current.actions.jumpToScene('scene', 'next');
+      await result.current.actions.updateManuscript({
+        searchText: 'old',
+        replacementText: 'new',
+        description: 'desc',
+      } satisfies UpdateManuscriptParams);
+      await result.current.actions.appendText('more', 'desc2');
+    });
+
+    expect(mockJumpToChapter).toHaveBeenCalledWith('ch2', expect.objectContaining({ currentText: 'Hello world' }));
+    expect(mockJumpToScene).toHaveBeenCalledWith(
+      { sceneType: 'scene', direction: 'next' },
+      expect.objectContaining({ activeChapterId: 'ch1' }),
+    );
+    expect(mockUpdateManuscript).toHaveBeenCalledWith(
+      { searchText: 'old', replacementText: 'new', description: 'desc' },
+      expect.objectContaining({ currentText: 'Hello world' }),
+    );
+    expect(mockAppendText).toHaveBeenCalledWith(
+      { text: 'more', description: 'desc2' },
+      expect.objectContaining({ currentText: 'Hello world' }),
+    );
   });
 });

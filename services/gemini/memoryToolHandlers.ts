@@ -26,6 +26,7 @@ import {
   trackSessionGoal,
   hasRecentSimilarMemory,
   getSessionMemoryCount,
+  getSessionMemorySummary,
 } from '../memory/sessionTracker';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +41,15 @@ export type MemoryToolHandler = (
   args: Record<string, unknown>,
   context: MemoryToolContext
 ) => Promise<string>;
+
+const formatWithSessionSummary = (message: string): string => {
+  const summary = getSessionMemorySummary();
+  if (!summary) {
+    return message;
+  }
+
+  return `${message}\n\nSession summary:\n${summary}`;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOOL HANDLERS
@@ -84,7 +94,9 @@ const handleWriteMemoryNote: MemoryToolHandler = async (args, context) => {
     const sessionCount = getSessionMemoryCount();
     const sessionNote = sessionCount > 1 ? ` (${sessionCount} memories saved this session)` : '';
 
-    return `✓ Memory saved (ID: ${memory.id.slice(0, 8)}...)${sessionNote}\nType: ${type}\nScope: ${scope}\nTags: ${(tags || []).join(', ') || 'none'}\nContent: "${text.slice(0, 80)}${text.length > 80 ? '...' : ''}"`;
+    const response = `✓ Memory saved (ID: ${memory.id.slice(0, 8)}...)${sessionNote}\nType: ${type}\nScope: ${scope}\nTags: ${(tags || []).join(', ') || 'none'}\nContent: "${text.slice(0, 80)}${text.length > 80 ? '...' : ''}"`;
+
+    return formatWithSessionSummary(response);
   } catch (error) {
     console.error('[memoryToolHandlers] write_memory_note error:', error);
     return `Error saving memory: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -179,7 +191,9 @@ const handleUpdateMemoryNote: MemoryToolHandler = async (args) => {
     // FIX: Track session update
     trackSessionMemoryUpdate(id, Object.keys(updates).join(', '));
 
-    return `✓ Memory updated (ID: ${id.slice(0, 8)}...)\nUpdated fields: ${Object.keys(updates).join(', ')}`;
+    const response = `✓ Memory updated (ID: ${id.slice(0, 8)}...)\nUpdated fields: ${Object.keys(updates).join(', ')}`;
+
+    return formatWithSessionSummary(response);
   } catch (error) {
     console.error('[memoryToolHandlers] update_memory_note error:', error);
     return `Error updating memory: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -202,7 +216,9 @@ const handleDeleteMemoryNote: MemoryToolHandler = async (args) => {
     // FIX: Track session deletion
     trackSessionMemoryDelete(id);
 
-    return `✓ Memory deleted (ID: ${id.slice(0, 8)}...)`;
+    const response = `✓ Memory deleted (ID: ${id.slice(0, 8)}...)`;
+
+    return formatWithSessionSummary(response);
   } catch (error) {
     console.error('[memoryToolHandlers] delete_memory_note error:', error);
     return `Error deleting memory: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -233,7 +249,9 @@ const handleCreateGoal: MemoryToolHandler = async (args, context) => {
     // FIX: Track session goal creation
     trackSessionGoal(goal.id);
 
-    return `✓ Goal created (ID: ${goal.id.slice(0, 8)}...)\nTitle: "${title}"\nStatus: active\nProgress: 0%`;
+    const response = `✓ Goal created (ID: ${goal.id.slice(0, 8)}...)\nTitle: "${title}"\nStatus: active\nProgress: 0%`;
+
+    return formatWithSessionSummary(response);
   } catch (error) {
     console.error('[memoryToolHandlers] create_goal error:', error);
     return `Error creating goal: ${error instanceof Error ? error.message : 'Unknown error'}`;

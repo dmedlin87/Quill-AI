@@ -95,7 +95,7 @@ export function useTiptapSync(options: UseTiptapSyncOptions) {
           const highlights = analysisHighlightsRef.current;
 
           for (const h of highlights) {
-            if (h.start < h.end && h.end <= doc.content.size) {
+            if (h.start >= 0 && h.start < h.end && h.end <= doc.content.size) {
               decorations.push(
                 Decoration.inline(h.start, h.end, {
                   class: getDecorationClass(h.color, h.severity),
@@ -123,7 +123,11 @@ export function useTiptapSync(options: UseTiptapSyncOptions) {
 
           for (const comment of comments) {
             if (comment.dismissed) continue;
-            if (comment.startIndex < comment.endIndex && comment.endIndex <= doc.content.size) {
+            if (
+              comment.startIndex >= 0 &&
+              comment.startIndex < comment.endIndex &&
+              comment.endIndex <= doc.content.size
+            ) {
               decorations.push(
                 Decoration.inline(comment.startIndex, comment.endIndex, {
                   class: getCommentDecorationClass(comment.severity),
@@ -136,8 +140,8 @@ export function useTiptapSync(options: UseTiptapSyncOptions) {
           return DecorationSet.create(doc, decorations);
         },
         handleClick(view, pos, event) {
-          const target = event.target as HTMLElement;
-          const commentId = target.getAttribute('data-comment-id');
+          const target = (event.target as HTMLElement | null)?.closest('[data-comment-id]') as HTMLElement | null;
+          const commentId = target?.getAttribute('data-comment-id');
           if (commentId) {
             const comments = inlineCommentsRef.current;
             const onClick = onCommentClickRef.current;

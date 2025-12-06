@@ -281,6 +281,7 @@ export class ChunkIndex {
     if (this.dirtyQueue.length === 0) return null;
     
     // Sort by priority: scenes first (smaller units), then by position in queue
+    const queueOrder = new Map(this.dirtyQueue.map((id, index) => [id, index]));
     const sorted = [...this.dirtyQueue].sort((a, b) => {
       const chunkA = this.chunks.get(a);
       const chunkB = this.chunks.get(b);
@@ -295,7 +296,13 @@ export class ChunkIndex {
         book: 3,
       };
       
-      return levelOrder[chunkA.level] - levelOrder[chunkB.level];
+      const levelDifference = levelOrder[chunkA.level] - levelOrder[chunkB.level];
+      if (levelDifference !== 0) return levelDifference;
+      
+      // Stable FIFO ordering within the same level
+      const positionA = queueOrder.get(a) ?? 0;
+      const positionB = queueOrder.get(b) ?? 0;
+      return positionA - positionB;
     });
     
     const nextId = sorted[0];

@@ -27,15 +27,25 @@ vi.mock('@/features/settings/store/useSettingsStore', () => ({
 describe('CritiqueIntensitySelector', () => {
   const presets = Object.values(CRITIQUE_PRESETS);
 
+  const setupStore = (overrides?: Partial<ReturnType<typeof mockUseSettingsStore>>) => {
+    const setCritiqueIntensity = vi.fn();
+    mockUseSettingsStore.mockReturnValue({
+      critiqueIntensity: presets[0].id,
+      setCritiqueIntensity,
+      ...overrides,
+    });
+    return { setCritiqueIntensity };
+  };
+
+  const getCompactButtonByPreset = (preset: (typeof presets)[number]) =>
+    screen.getByTitle(preset.description);
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('renders all presets in compact mode using titles', () => {
-    mockUseSettingsStore.mockReturnValue({
-      critiqueIntensity: presets[1].id,
-      setCritiqueIntensity: vi.fn(),
-    });
+    setupStore({ critiqueIntensity: presets[1].id });
 
     render(<CritiqueIntensitySelector compact />);
 
@@ -52,17 +62,13 @@ describe('CritiqueIntensitySelector', () => {
   it('clicking a non-active compact preset calls setCritiqueIntensity with the correct id', () => {
     const active = presets[0];
     const target = presets[1];
-    const setCritiqueIntensity = vi.fn();
-
-    mockUseSettingsStore.mockReturnValue({
+    const { setCritiqueIntensity } = setupStore({
       critiqueIntensity: active.id,
-      setCritiqueIntensity,
     });
 
     render(<CritiqueIntensitySelector compact />);
 
-    const button = screen.getByTitle(target.description);
-    fireEvent.click(button);
+    fireEvent.click(getCompactButtonByPreset(target));
 
     expect(setCritiqueIntensity).toHaveBeenCalledWith(target.id as CritiqueIntensity);
   });
@@ -71,25 +77,19 @@ describe('CritiqueIntensitySelector', () => {
     const active = presets[0];
     const inactive = presets[1];
 
-    mockUseSettingsStore.mockReturnValue({
-      critiqueIntensity: active.id,
-      setCritiqueIntensity: vi.fn(),
-    });
+    setupStore({ critiqueIntensity: active.id });
 
     render(<CritiqueIntensitySelector compact />);
 
-    const activeButton = screen.getByTitle(active.description);
-    const inactiveButton = screen.getByTitle(inactive.description);
+    const activeButton = getCompactButtonByPreset(active);
+    const inactiveButton = getCompactButtonByPreset(inactive);
 
-    expect(activeButton.className).toContain('text-white');
-    expect(inactiveButton.className).toContain('text-slate-400');
+    expect(activeButton).toHaveClass('text-white');
+    expect(inactiveButton).toHaveClass('text-slate-400');
   });
 
   it('renders labels and descriptions in full mode', () => {
-    mockUseSettingsStore.mockReturnValue({
-      critiqueIntensity: presets[0].id,
-      setCritiqueIntensity: vi.fn(),
-    });
+    setupStore();
 
     render(<CritiqueIntensitySelector />);
 
@@ -102,11 +102,8 @@ describe('CritiqueIntensitySelector', () => {
   it('clicking a non-active full mode preset updates the store', () => {
     const active = presets[0];
     const target = presets[1];
-    const setCritiqueIntensity = vi.fn();
-
-    mockUseSettingsStore.mockReturnValue({
+    const { setCritiqueIntensity } = setupStore({
       critiqueIntensity: active.id,
-      setCritiqueIntensity,
     });
 
     render(<CritiqueIntensitySelector />);

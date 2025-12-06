@@ -536,6 +536,18 @@ export async function getMemoryHealthStats(
   const memories = await getMemories({ scope: 'project', projectId, limit: sampleSize });
   const goals = await db.goals.where('projectId').equals(projectId).toArray();
   
+  // Guard against empty samples to avoid divide-by-zero errors when counts exist
+  if (memories.length === 0) {
+    return {
+      totalMemories,
+      avgImportance: 0,
+      lowImportanceCount: 0,
+      oldMemoriesCount: 0,
+      activeGoals: goals.filter(g => g.status === 'active').length,
+      completedGoals: goals.filter(g => g.status === 'completed').length,
+    };
+  }
+
   const now = Date.now();
   const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
 

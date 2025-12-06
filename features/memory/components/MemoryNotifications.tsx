@@ -22,9 +22,12 @@ export const MemoryNotifications: React.FC<{ notifications: MemoryNotification[]
   return (
     <div className="flex gap-2 flex-wrap">
       {notifications.map((notification, index) => (
+        // Include description via title/aria for quick context without changing layout
         <span
           key={`${notification.title}-${index}`}
           className={`text-xs px-2 py-1 rounded border border-[var(--border-primary)] ${typeStyles[notification.type]}`}
+          title={notification.description}
+          aria-label={`${notification.title}: ${notification.description}`}
         >
           {notification.title}
         </span>

@@ -137,7 +137,11 @@ export const useEditorBranching = (
 
   useEffect(() => {
     if (activeBranchId === null) {
-      setMainContent(prev => (prev === currentText ? prev : currentText));
+      setMainContent(prev => {
+        if (prev === currentText) return prev;
+        void persistBranchState(branches, null, currentText);
+        return currentText;
+      });
       return;
     }
 
@@ -153,12 +157,12 @@ export const useEditorBranching = (
       });
 
       if (hasChanges) {
-        persistBranchState(nextBranches, activeBranchId);
+        void persistBranchState(nextBranches, activeBranchId);
       }
 
       return hasChanges ? nextBranches : prev;
     });
-  }, [activeBranchId, currentText, persistBranchState]);
+  }, [activeBranchId, branches, currentText, persistBranchState]);
 
   const isOnMain = !activeBranchId;
 

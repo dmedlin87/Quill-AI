@@ -64,10 +64,10 @@ const buildVoiceMetrics = (lines: DialogueLine[]): VoiceMetrics => {
   const avgSentenceLength = sentenceCount
     ? sentenceLengths.reduce((sum, current) => sum + current, 0) / sentenceCount
     : 0;
-  const varianceBase = sentenceCount
+  const sentenceVariance = sentenceCount
     ? sentenceLengths.reduce((sum, current) => sum + Math.pow(current - avgSentenceLength, 2), 0) / sentenceCount
     : 0;
-  const sentenceStdDev = Math.sqrt(varianceBase);
+  const sentenceStdDev = Math.sqrt(sentenceVariance);
 
   const safeTotalWords = Math.max(totalWords, 1);
   const questionRatio = sentenceCount ? questionSentences / sentenceCount : 0;
@@ -77,7 +77,7 @@ const buildVoiceMetrics = (lines: DialogueLine[]): VoiceMetrics => {
 
   return {
     avgSentenceLength,
-    sentenceVariance: sentenceStdDev,
+    sentenceVariance,
     contractionRatio,
     questionRatio,
     exclamationRatio,
@@ -168,7 +168,7 @@ export const analyzeVoices = (dialogues: DialogueLine[]): VoiceFingerprint => {
     }
     linesBySpeaker[normalizedKey].push(line);
 
-    const words = tokenizeWords(line.quote);
+    const words = tokenizeWords(line.quote ?? '');
     for (const word of words) {
       speakerWordCounts[normalizedKey][word] = (speakerWordCounts[normalizedKey][word] ?? 0) + 1;
       globalWordCounts[word] = (globalWordCounts[word] ?? 0) + 1;

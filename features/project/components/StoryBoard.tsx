@@ -79,6 +79,14 @@ const SceneCard: React.FC<SceneCardProps> = ({
         layout
         layoutId={chapter.id}
         onClick={onSelect}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onSelect();
+          }
+        }}
         whileHover={{ scale: 1.02, y: -4, rotate: isActive ? 0 : 0.5 }}
         whileTap={{ scale: 0.98 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}

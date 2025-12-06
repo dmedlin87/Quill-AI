@@ -5,6 +5,15 @@ import type {
   UpdateMemoryNoteInput,
 } from './types';
 
+function assertProjectScope(
+  scope: MemoryNote['scope'],
+  projectId: string | undefined
+): void {
+  if (scope === 'project' && !projectId) {
+    throw new Error('projectId is required for project-scoped memories');
+  }
+}
+
 /**
  * Create a new memory note.
  *
@@ -13,9 +22,7 @@ import type {
 export async function createMemory(
   input: CreateMemoryNoteInput
 ): Promise<MemoryNote> {
-  if (input.scope === 'project' && !input.projectId) {
-    throw new Error('projectId is required for project-scoped memories');
-  }
+  assertProjectScope(input.scope, input.projectId);
 
   const note: MemoryNote = {
     id: crypto.randomUUID(),
@@ -40,6 +47,11 @@ export async function updateMemory(
   if (!existing) {
     throw new Error(`Memory note not found: ${id}`);
   }
+
+  // Validate the effective scope/project after applying updates.
+  const scope = updates.scope ?? existing.scope;
+  const projectId = updates.projectId ?? existing.projectId;
+  assertProjectScope(scope, projectId);
 
   const updated: MemoryNote = {
     ...existing,

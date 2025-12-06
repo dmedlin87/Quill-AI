@@ -154,14 +154,20 @@ export function useInlineComments(options: UseInlineCommentsOptions): UseInlineC
   const [comments, setComments] = useState<InlineComment[]>([]);
   const [activeComment, setActiveComment] = useState<InlineComment | null>(null);
 
-  const updateComments = useCallback((newComments: InlineComment[]) => {
-    setComments(newComments);
-    onCommentsChange?.(newComments);
-  }, [onCommentsChange]);
+  const updateComments = useCallback(
+    (updater: (prev: InlineComment[]) => InlineComment[]) => {
+      setComments(prev => {
+        const next = updater(prev);
+        onCommentsChange?.(next);
+        return next;
+      });
+    },
+    [onCommentsChange],
+  );
 
   const injectFromAnalysis = useCallback((analysis: AnalysisResult) => {
     const newComments = analysisToComments(analysis, currentText);
-    updateComments(newComments);
+    updateComments(() => newComments);
   }, [currentText, updateComments]);
 
   const addComment = useCallback((comment: Omit<InlineComment, 'id' | 'createdAt' | 'dismissed'>) => {
@@ -171,22 +177,22 @@ export function useInlineComments(options: UseInlineCommentsOptions): UseInlineC
       createdAt: Date.now(),
       dismissed: false,
     };
-    updateComments([...comments, newComment]);
-  }, [comments, updateComments]);
+    updateComments(prev => [...prev, newComment]);
+  }, [updateComments]);
 
   const dismissComment = useCallback((commentId: string) => {
-    updateComments(
-      comments.map(c => 
+    updateComments(prev =>
+      prev.map(c =>
         c.id === commentId ? { ...c, dismissed: true } : c
       )
     );
     if (activeComment?.id === commentId) {
       setActiveComment(null);
     }
-  }, [comments, activeComment, updateComments]);
+  }, [activeComment, updateComments]);
 
   const clearAllComments = useCallback(() => {
-    updateComments([]);
+    updateComments(() => []);
     setActiveComment(null);
   }, [updateComments]);
 

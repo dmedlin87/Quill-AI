@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { rewriteText, getContextualHelp } from '@/services/gemini/agent';
 import { fetchGrammarSuggestions } from '@/services/gemini/grammar';
 import { useUsage } from '@/features/shared';
@@ -204,6 +204,12 @@ export function useMagicEditor({
     resetMagicState();
     operationSelectionRef.current = null;
     // Note: caller should decide whether to clear selection
+  }, [abortMagicOperation, resetMagicState]);
+
+  // Ensure we don't leave pending requests hanging on unmount
+  useEffect(() => () => {
+    abortMagicOperation();
+    resetMagicState();
   }, [abortMagicOperation, resetMagicState]);
 
   const applyGrammarSuggestion = useCallback((id: string | null = null) => {

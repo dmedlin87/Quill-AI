@@ -28,10 +28,10 @@ export const ToolsPanelContainer: React.FC<ToolsPanelContainerProps> = ({ isZenM
 
   // 4. Derived Context (Memoized)
   const editorContext = useMemo(() => ({
-    cursorPosition: editor?.state.selection.from || 0,
+    cursorPosition: selectionRange?.end ?? 0,
     selection: selectionRange,
     totalLength: currentText.length
-  }), [editor?.state.selection.from, selectionRange, currentText.length]);
+  }), [selectionRange, currentText.length]);
 
   return (
     <ToolsPanel

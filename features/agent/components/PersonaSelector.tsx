@@ -21,25 +21,31 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close on click outside
+  // Close on click outside (only when compact dropdown is open)
   useEffect(() => {
+    if (!compact || !isOpen) return;
+
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [compact, isOpen]);
 
-  // Close on escape
+  // Close on escape (only when compact dropdown is open)
   useEffect(() => {
+    if (!compact || !isOpen) return;
+
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsOpen(false);
     };
+
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, []);
+  }, [compact, isOpen]);
 
   if (compact) {
     return (

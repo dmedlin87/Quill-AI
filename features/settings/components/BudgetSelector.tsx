@@ -1,9 +1,9 @@
-import React from 'react';
 import { useSettingsStore } from '../store/useSettingsStore';
 
-export const BudgetSelector: React.FC = () => {
+const PRESET_AMOUNTS: readonly number[] = [0.5, 1.0, 5.0, 10.0];
+
+export function BudgetSelector(): JSX.Element {
   const { budgetThreshold, setBudgetThreshold } = useSettingsStore();
-  const presets = [0.5, 1.0, 5.0, 10.0];
 
   return (
     <div className="flex flex-col gap-2 bg-[var(--parchment-50)] border border-[var(--ink-100)] rounded-lg p-3">
@@ -11,11 +11,10 @@ export const BudgetSelector: React.FC = () => {
         Session Warning Threshold
       </label>
       <p className="text-[10px] text-[var(--ink-400)] mb-1">
-        When your session cost exceeds this amount, the usage
-        badge will highlight activity as "high".
+        When your session cost exceeds this amount, the usage badge will highlight activity as "high".
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        {presets.map((amount) => (
+        {PRESET_AMOUNTS.map((amount) => (
           <button
             key={amount}
             type="button"
@@ -32,4 +31,4 @@ export const BudgetSelector: React.FC = () => {
       </div>
     </div>
   );
-};
+}

@@ -5,7 +5,7 @@
 
 import { CritiqueIntensity } from '../../types/critiqueSettings';
 
-export const INTENSITY_MODIFIERS: Record<CritiqueIntensity, string> = {
+export const INTENSITY_MODIFIERS: Readonly<Record<CritiqueIntensity, string>> = Object.freeze({
   developmental: `[CRITIQUE INTENSITY: DEVELOPMENTAL]
 You are providing a developmental edit. Focus ONLY on:
 - Major plot holes and logic breaks
@@ -47,11 +47,11 @@ You are providing a rigorous, publication-ready critique. Apply professional edi
 Be precise and demanding. The author wants to know everything that could be improved.
 Don't soften feedback—clarity is kindness. Cite specific passages.
 This writer is preparing for submission or publication and needs professional-grade critique.`
-};
+});
 
 /**
  * Get the intensity modifier for injection into prompts
  */
 export function getIntensityModifier(intensity: CritiqueIntensity): string {
-  return INTENSITY_MODIFIERS[intensity] || INTENSITY_MODIFIERS.standard;
+  return INTENSITY_MODIFIERS[intensity] ?? INTENSITY_MODIFIERS.standard;
 }

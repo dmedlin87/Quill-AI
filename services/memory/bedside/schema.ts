@@ -20,7 +20,8 @@ const StringListContentSchema = z
   .transform(value => {
     if (Array.isArray(value)) return value.map(v => v.trim()).filter(Boolean);
     return typeof value === 'string' ? [value.trim()].filter(Boolean) : [];
-  });
+  })
+  .refine(list => list.length > 0, { message: 'At least one item is required' });
 
 const GoalContentSchema = z
   .union([
@@ -31,7 +32,8 @@ const GoalContentSchema = z
   .transform(value => {
     if (Array.isArray(value)) return value;
     return [value];
-  });
+  })
+  .refine(goals => goals.length > 0, { message: 'At least one goal is required' });
 
 const CurrentFocusMutationSchema = z.object({
   section: z.literal('currentFocus'),

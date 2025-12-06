@@ -169,6 +169,7 @@ export class QuillAgent {
    * Must be called before sendMessage.
    */
   async initialize(): Promise<void> {
+    if (this.session) return;
     try {
       this.session = await createAgentSession(this.options);
     } catch (error) {
@@ -187,14 +188,10 @@ export class QuillAgent {
   async sendMessage(
     payload: Parameters<Chat["sendMessage"]>[0],
   ): Promise<Awaited<ReturnType<Chat["sendMessage"]>>> {
-    if (!this.session) {
-      throw new AIError(
-        "Agent session is not initialized. Call initialize() before sendMessage().",
-      );
-    }
+    const session = this.getSessionOrThrow();
 
     try {
-      const result = await this.session.sendMessage(payload as any);
+      const result = await session.sendMessage(payload);
       return result as Awaited<ReturnType<Chat["sendMessage"]>>;
     } catch (error) {
       throw normalizeAIError(error, {
@@ -209,7 +206,16 @@ export class QuillAgent {
    * Convenience helper for plain-text prompts.
    */
   async sendText(message: string): Promise<string> {
-    const result = await this.sendMessage({ message } as any);
+    const result = await this.sendMessage({ message });
     return (result as any)?.text ?? "";
+  }
+
+  private getSessionOrThrow(): Chat {
+    if (!this.session) {
+      throw new AIError(
+        "Agent session is not initialized. Call initialize() before sendMessage().",
+      );
+    }
+    return this.session;
   }
 }

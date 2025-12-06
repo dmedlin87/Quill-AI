@@ -353,6 +353,7 @@ const extractTimeMarker = (text: string): string | null => {
 
 const extractLocation = (text: string): string | null => {
   for (const pattern of LOCATION_PATTERNS) {
+    pattern.lastIndex = 0; // reset to avoid statefulness from /g
     const match = pattern.exec(text);
     if (match) return match[2] || match[1];
   }

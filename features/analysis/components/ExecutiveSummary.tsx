@@ -1,16 +1,25 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useTextToSpeech } from '@/features/voice';
 
 export const ExecutiveSummary: React.FC<{ summary: string }> = ({ summary }) => {
   const { isPlaying, play, stop } = useTextToSpeech();
+  const trimmedSummary = summary?.trim();
+  const canPlay = Boolean(trimmedSummary);
+
+  const buttonLabel = useMemo(
+    () => (isPlaying ? 'Stop reading' : 'Read aloud'),
+    [isPlaying]
+  );
+  const buttonTitle = canPlay ? buttonLabel : 'No summary available';
 
   const handleReadAloud = useCallback(() => {
+    if (!canPlay) return;
     if (isPlaying) {
       stop();
     } else {
-      play(summary);
+      play(trimmedSummary as string);
     }
-  }, [isPlaying, play, stop, summary]);
+  }, [canPlay, isPlaying, play, stop, trimmedSummary]);
 
   return (
     <div className="bg-indigo-50 rounded-xl p-6 border border-indigo-100">
@@ -18,8 +27,12 @@ export const ExecutiveSummary: React.FC<{ summary: string }> = ({ summary }) => 
         <h3 className="text-xl font-serif font-bold text-indigo-900">Executive Summary</h3>
         <button 
           onClick={handleReadAloud}
-          className={`p-2 rounded-full transition-colors ${isPlaying ? 'text-indigo-600 bg-indigo-200 animate-pulse' : 'text-indigo-600 hover:bg-indigo-200'}`}
-          title={isPlaying ? "Stop Reading" : "Read Aloud"}
+          type="button"
+          disabled={!canPlay}
+          aria-pressed={isPlaying}
+          aria-label={buttonLabel}
+          className={`p-2 rounded-full transition-colors ${isPlaying ? 'text-indigo-600 bg-indigo-200 animate-pulse' : 'text-indigo-600 hover:bg-indigo-200'} ${!canPlay ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={buttonTitle}
         >
           {isPlaying ? (
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -32,7 +45,9 @@ export const ExecutiveSummary: React.FC<{ summary: string }> = ({ summary }) => 
           )}
         </button>
       </div>
-      <p className="text-indigo-800 leading-relaxed text-sm">{summary}</p>
+      <p className="text-indigo-800 leading-relaxed text-sm">
+        {trimmedSummary || <span className="italic text-indigo-500">No summary available.</span>}
+      </p>
     </div>
   );
 };

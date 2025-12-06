@@ -208,14 +208,18 @@ export const analyzeDraft = async (
     return {
       result: EMPTY_ANALYSIS,
       usage: response.usageMetadata,
-      warning: 'AI response failed validation - using default analysis',
+      warning: {
+        message: 'AI response failed validation - using default analysis',
+      },
     };
   }
 
   return {
     result: zodResult.data as AnalysisResult,
     usage: response.usageMetadata,
-    warning: warning || (parseResult.sanitized ? 'AI response needed cleanup; results may be incomplete.' : undefined),
+    warning: warning || (parseResult.sanitized
+      ? { message: 'AI response needed cleanup; results may be incomplete.' }
+      : undefined),
   };
 };
 
@@ -481,7 +485,11 @@ export const fetchSettingAnalysis = async (
 // PLOT IDEAS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const generatePlotIdeas = async (text: string, userInstruction?: string, suggestionType: string = 'General'): Promise<{ result: PlotSuggestion[]; usage?: UsageMetadata; warning?: string }> => {
+export const generatePlotIdeas = async (
+  text: string,
+  userInstruction?: string,
+  suggestionType: string = 'General'
+): Promise<{ result: PlotSuggestion[]; usage?: UsageMetadata; warning?: AnalysisWarning }> => {
   const model = ModelConfig.analysis;
   
   // Prepare text with token guard
@@ -523,6 +531,8 @@ export const generatePlotIdeas = async (text: string, userInstruction?: string, 
   return {
     result: parseResult.data!,
     usage: response.usageMetadata,
-    warning: warning || (parseResult.sanitized ? 'Response required sanitization' : undefined),
+    warning: warning || (parseResult.sanitized
+      ? { message: 'Response required sanitization' }
+      : undefined),
   };
 };

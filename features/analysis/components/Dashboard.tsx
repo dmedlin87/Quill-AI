@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { AnalysisResult, AnalysisWarning } from '@/types';
 import { AnalysisPanel } from './AnalysisPanel';
 import { useEditorActions } from '@/features/core/context/EditorContext';
@@ -19,7 +19,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ isLoading, analysis, currentText, onFixRequest, warning, onAnalyzeSelection, hasSelection, contradictions, derivedLore, onNavigateToText }) => {
     const { handleNavigateToIssue } = useEditorActions();
-    const navigate = onNavigateToText || handleNavigateToIssue;
+    const navigate = useMemo(() => onNavigateToText ?? handleNavigateToIssue, [onNavigateToText, handleNavigateToIssue]);
 
     return (
         <AnalysisPanel
@@ -36,3 +36,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ isLoading, analysis, curre
         />
     );
 };
+
+Dashboard.displayName = 'Dashboard';
+
+export default memo(Dashboard);

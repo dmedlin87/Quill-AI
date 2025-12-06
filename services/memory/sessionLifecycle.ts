@@ -18,7 +18,7 @@ const eventCooldownHit = (tracker: Map<string, number>, projectId: string): bool
   return false;
 };
 
-const formatSessionSummary = (): string => {
+const formatSessionSummary = (): string | null => {
   const session = getSessionState();
   const lines: string[] = [];
 
@@ -45,7 +45,7 @@ const formatSessionSummary = (): string => {
   }
 
   if (lines.length === 0) {
-    return 'Session ended — no notable memory changes.';
+    return null;
   }
 
   return ['Session ended — key changes:', ...lines].join('\n');
@@ -80,6 +80,9 @@ export const handleSessionEnd = async (projectId: string): Promise<MemoryNote> =
   }
 
   const summary = formatSessionSummary();
+  if (!summary) {
+    return getOrCreateBedsideNote(projectId);
+  }
   return evolveBedsideNote(projectId, summary, { changeReason: 'session_boundary' });
 };
 

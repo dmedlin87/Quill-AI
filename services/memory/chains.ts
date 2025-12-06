@@ -419,7 +419,8 @@ export const evolveBedsideNote = async (
   });
 
   const conflicts = await detectBedsideNoteConflicts(newText, base.text);
-  const resolution = conflicts.length > 0 ? options.conflictResolution ?? 'unresolved' : undefined;
+  const resolution: BedsideNoteConflict['resolution'] | undefined =
+    conflicts.length > 0 ? options.conflictResolution ?? 'unresolved' : undefined;
 
   const structuredContent: BedsideNoteContent = {
     ...(base.structuredContent as BedsideNoteContent | undefined),
@@ -478,7 +479,7 @@ export const evolveBedsideNote = async (
           changeType: 'update',
           changeReason: 'roll_up',
           keepOriginal: true,
-          structuredContent,
+          structuredContent: structuredContent as Record<string, unknown>,
         });
       }
 
@@ -487,7 +488,7 @@ export const evolveBedsideNote = async (
         changeType: 'update',
         changeReason: 'roll_up',
         keepOriginal: true,
-        structuredContent,
+        structuredContent: structuredContent as Record<string, unknown>,
       });
     } else if (rollupText && options.arcId) {
       const projectBase = await getOrCreateBedsideNote(projectId);
@@ -495,7 +496,7 @@ export const evolveBedsideNote = async (
         changeType: 'update',
         changeReason: 'roll_up',
         keepOriginal: true,
-        structuredContent,
+        structuredContent: structuredContent as Record<string, unknown>,
       });
     }
   }
@@ -560,7 +561,7 @@ export const recordProjectRetrospective = async (
 
   let evolved = await evolveMemory(authorBedside.id, summary, {
     changeReason: 'project_retrospective',
-    structuredContent,
+    structuredContent: structuredContent as Record<string, unknown>,
     keepOriginal: true,
     embedding,
   });

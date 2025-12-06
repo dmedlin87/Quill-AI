@@ -15,6 +15,39 @@ export interface CommentMarkAttributes {
   severity: 'error' | 'warning' | 'info';
 }
 
+type CommentType = CommentMarkAttributes['type'];
+type CommentSeverity = CommentMarkAttributes['severity'];
+
+const COLOR_MAP: Record<CommentSeverity, Record<CommentType, string>> = {
+  error: {
+    plot: 'rgba(239, 68, 68, 0.2)', // Red
+    setting: 'rgba(239, 68, 68, 0.2)',
+    character: 'rgba(239, 68, 68, 0.2)',
+    pacing: 'rgba(239, 68, 68, 0.2)',
+    prose: 'rgba(239, 68, 68, 0.2)',
+  },
+  warning: {
+    plot: 'rgba(245, 158, 11, 0.2)', // Amber
+    setting: 'rgba(168, 85, 247, 0.2)', // Purple
+    character: 'rgba(59, 130, 246, 0.2)', // Blue
+    pacing: 'rgba(16, 185, 129, 0.2)', // Green
+    prose: 'rgba(236, 72, 153, 0.2)', // Pink
+  },
+  info: {
+    plot: 'rgba(99, 102, 241, 0.15)', // Indigo (lighter)
+    setting: 'rgba(168, 85, 247, 0.15)',
+    character: 'rgba(59, 130, 246, 0.15)',
+    pacing: 'rgba(16, 185, 129, 0.15)',
+    prose: 'rgba(236, 72, 153, 0.15)',
+  },
+};
+
+const BORDER_COLOR_MAP: Record<CommentSeverity, string> = {
+  error: 'rgb(239, 68, 68)',
+  warning: 'rgb(245, 158, 11)',
+  info: 'rgb(99, 102, 241)',
+};
+
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     commentMark: {
@@ -97,40 +130,8 @@ export const CommentMark = Mark.create({
   renderHTML({ HTMLAttributes }) {
     const severity = HTMLAttributes['data-comment-severity'] || 'warning';
     const type = HTMLAttributes['data-comment-type'] || 'plot';
-    
-    // Color coding based on severity and type
-    const colorMap: Record<string, Record<string, string>> = {
-      error: {
-        plot: 'rgba(239, 68, 68, 0.2)',      // Red
-        setting: 'rgba(239, 68, 68, 0.2)',
-        character: 'rgba(239, 68, 68, 0.2)',
-        pacing: 'rgba(239, 68, 68, 0.2)',
-        prose: 'rgba(239, 68, 68, 0.2)',
-      },
-      warning: {
-        plot: 'rgba(245, 158, 11, 0.2)',     // Amber
-        setting: 'rgba(168, 85, 247, 0.2)',  // Purple
-        character: 'rgba(59, 130, 246, 0.2)', // Blue
-        pacing: 'rgba(16, 185, 129, 0.2)',   // Green
-        prose: 'rgba(236, 72, 153, 0.2)',    // Pink
-      },
-      info: {
-        plot: 'rgba(99, 102, 241, 0.15)',    // Indigo (lighter)
-        setting: 'rgba(168, 85, 247, 0.15)',
-        character: 'rgba(59, 130, 246, 0.15)',
-        pacing: 'rgba(16, 185, 129, 0.15)',
-        prose: 'rgba(236, 72, 153, 0.15)',
-      },
-    };
-    
-    const borderColorMap: Record<string, string> = {
-      error: 'rgb(239, 68, 68)',
-      warning: 'rgb(245, 158, 11)',
-      info: 'rgb(99, 102, 241)',
-    };
-    
-    const bgColor = colorMap[severity]?.[type] || colorMap.warning.plot;
-    const borderColor = borderColorMap[severity] || borderColorMap.warning;
+    const bgColor = COLOR_MAP[severity]?.[type] || COLOR_MAP.warning.plot;
+    const borderColor = BORDER_COLOR_MAP[severity] || BORDER_COLOR_MAP.warning;
     
     return [
       'span',

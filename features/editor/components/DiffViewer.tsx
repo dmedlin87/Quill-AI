@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import * as Diff from 'diff';
+import { diffWords } from 'diff';
 
 interface DiffViewerProps {
   oldText: string;
@@ -17,7 +17,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   description 
 }) => {
   const diff = useMemo(() => {
-    return Diff.diffWords(oldText, newText);
+    return diffWords(oldText, newText);
   }, [oldText, newText]);
 
   return (
@@ -42,6 +42,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       
       <div className="flex border-t border-gray-100 divide-x divide-gray-100">
         <button 
+          type="button"
           onClick={onReject}
           className="flex-1 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-red-600 transition-colors flex items-center justify-center gap-2"
         >
@@ -51,6 +52,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           Reject
         </button>
         <button 
+          type="button"
           onClick={onAccept}
           className="flex-1 py-3 text-sm font-bold text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
         >

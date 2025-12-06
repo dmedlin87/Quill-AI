@@ -1,32 +1,31 @@
 /**
  * Agent Orchestrator Hook
- * 
+ *
  * Unified agent interface that uses AppBrain for complete app awareness.
  * Handles both text and voice modes with the same underlying architecture.
- * 
+ *
  * This is the NEW way to interact with the agent - replaces manual context passing.
  */
 
-import { useState, useRef, useCallback, useEffect, useReducer } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Chat } from '@google/genai';
 import { createAgentSession } from '@/services/gemini/agent';
-import { ALL_AGENT_TOOLS, VOICE_SAFE_TOOLS } from '@/services/gemini/agentTools';
 import { executeAgentToolCall } from '@/services/gemini/toolExecutor';
 import { useAppBrain } from '@/features/core';
-import { ChatMessage } from '@/types';
-import { Persona, DEFAULT_PERSONAS } from '@/types/personas';
+import { ChatMessage, EditorContext } from '@/types';
+import { DEFAULT_PERSONAS, Persona } from '@/types/personas';
 import { useSettingsStore } from '@/features/settings';
 import { emitToolExecuted, eventBus, getSmartAgentContext } from '@/services/appBrain';
 import type { AppEvent } from '@/services/appBrain';
-import { runAgentToolLoop, AgentToolLoopModelResult } from '@/services/core/agentToolLoop';
+import { AgentToolLoopModelResult, runAgentToolLoop } from '@/services/core/agentToolLoop';
 import { buildAgentContextPrompt } from '@/services/core/agentContextBuilder';
 import { createToolCallAdapter } from '@/services/core/toolCallAdapter';
 import type { ToolResult } from '@/services/gemini/toolExecutor';
 import {
-  agentOrchestratorReducer,
-  initialAgentMachineState,
   AgentMachineAction,
   AgentMachineState,
+  agentOrchestratorReducer,
+  initialAgentMachineState,
 } from '@/services/core/agentOrchestratorMachine';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,7 +80,7 @@ export interface AgentOrchestratorResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useAgentOrchestrator(
-  options: UseAgentOrchestratorOptions = {}
+  options: UseAgentOrchestratorOptions = {},
 ): AgentOrchestratorResult {
   const { mode = 'text', persona: initialPersona, autoReinit = true } = options;
 
@@ -122,22 +121,24 @@ export function useAgentOrchestrator(
   const autonomyMode = useSettingsStore(s => s.autonomyMode);
   const manuscriptProjectId = brain.state.manuscript.projectId;
 
-  const appendMessages = useCallback((newMessages: ChatMessage | ChatMessage[]) => {
-    const additions = Array.isArray(newMessages) ? newMessages : [newMessages];
-    setMessages(prev => {
-      const next = [...prev, ...additions];
-      return next.length > messageLimit ? next.slice(-messageLimit) : next;
-    });
-  }, [messageLimit]);
+  const appendMessages = useCallback(
+    (newMessages: ChatMessage | ChatMessage[]): void => {
+      const additions = Array.isArray(newMessages) ? newMessages : [newMessages];
+      setMessages(prev => {
+        const next = [...prev, ...additions];
+        return next.length > messageLimit ? next.slice(-messageLimit) : next;
+      });
+    },
+    [messageLimit],
+  );
 
   // Keep a ref to the latest brain state so callbacks can read fresh context without re-registering
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     latestStateRef.current = brain.state;
-  });
+  }, [brain.state]);
 
   useEffect(() => {
-    const unsubscribe = eventBus.subscribeForOrchestrator((event) => {
+    const unsubscribe = eventBus.subscribeForOrchestrator(event => {
       orchestratorEventLogRef.current = [
         ...orchestratorEventLogRef.current.slice(-9),
         event,
@@ -156,14 +157,14 @@ export function useAgentOrchestrator(
 
   const initSession = useCallback(async () => {
     const { manuscript, lore, analysis, intelligence } = latestStateRef.current;
-    
-    // Build full manuscript context
-    const fullManuscript = manuscript.chapters.map(c => {
-      const isActive = c.id === manuscript.activeChapterId;
-      return `[CHAPTER: ${c.title}]${isActive ? " (ACTIVE - You can edit this)" : " (READ ONLY)"}\n${c.content}\n`;
-    }).join('\n-------------------\n');
 
-    // Create session with full context
+    const fullManuscript = manuscript.chapters
+      .map(chapter => {
+        const isActive = chapter.id === manuscript.activeChapterId;
+        return `[CHAPTER: ${chapter.title}]${isActive ? ' (ACTIVE - You can edit this)' : ' (READ ONLY)'}\n${chapter.content}\n`;
+      })
+      .join('\n-------------------\n');
+
     chatRef.current = createAgentSession({
       lore: lore.characters.length > 0 ? { characters: lore.characters, worldRules: lore.worldRules } : undefined,
       analysis: analysis.result || undefined,
@@ -182,20 +183,21 @@ export function useAgentOrchestrator(
       if (session && typeof session.sendMessage === 'function') {
         await session.sendMessage({
           message: `Session initialized. Project: "${manuscript.projectTitle}". Chapters: ${manuscript.chapters.length}. Active: "${manuscript.chapters.find(c => c.id === manuscript.activeChapterId)?.title}". I am ${currentPersona.name}, ready to assist.`,
-        } as any);
+        });
       }
     } catch (error) {
       console.error(error);
     }
 
     dispatch({ type: 'SESSION_READY' });
-  }, [currentPersona, critiqueIntensity, experienceLevel, autonomyMode, mode]);
+  }, [autonomyMode, critiqueIntensity, currentPersona, experienceLevel, mode]);
 
   // Initialize on mount
   useEffect(() => {
-    initSession();
+    void initSession();
     return () => {
       abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
     };
     // We deliberately initialize only once. Context-based reinitialization is
     // handled by a dedicated effect below.
@@ -229,10 +231,10 @@ export function useAgentOrchestrator(
       appendMessages({
         role: 'model',
         text: `${currentPersona.icon} Switched to ${currentPersona.name}. ${currentPersona.role}.`,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     }
-  }, [appendMessages, currentPersona]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [appendMessages, currentPersona, isReady]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // TOOL EXECUTION
@@ -266,6 +268,9 @@ export function useAgentOrchestrator(
   // MESSAGE HANDLING
   // ─────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Send a message to the agent, assembling smart context, running tool loops, and handling aborts.
+   */
   const sendMessage = useCallback(async (messageText: string) => {
     if (!messageText.trim() || !chatRef.current) return;
 
@@ -278,7 +283,7 @@ export function useAgentOrchestrator(
     const userMsg: ChatMessage = {
       role: 'user',
       text: messageText,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
     appendMessages(userMsg);
     dispatch({ type: 'START_THINKING', request: messageText });
@@ -302,13 +307,36 @@ export function useAgentOrchestrator(
           ? 'analysis'
           : 'general';
 
-      const smartContext = await getSmartAgentContext(state, manuscript.projectId, {
-        mode,
-        queryType,
-      });
+      let smartContext: Awaited<ReturnType<typeof getSmartAgentContext>> | null = null;
+      let editorContextFallback: EditorContext | undefined;
+
+      try {
+        smartContext = await getSmartAgentContext(state, manuscript.projectId, {
+          mode,
+          queryType,
+        });
+      } catch (err) {
+        console.warn('[AgentOrchestrator] Smart context unavailable, using editor fallback:', err);
+        const activeChapter =
+          manuscript.chapters.find(chapter => chapter.id === manuscript.activeChapterId) ?? manuscript.chapters[0];
+
+        editorContextFallback = {
+          cursorPosition: ui.cursor.position,
+          selection:
+            ui.selection && typeof ui.selection === 'object' && 'start' in ui.selection && 'end' in ui.selection
+              ? {
+                  start: Number(ui.selection.start),
+                  end: Number(ui.selection.end),
+                  text: ui.selection.text ?? '',
+                }
+              : undefined,
+          totalLength: activeChapter?.content?.length ?? 0,
+        };
+      }
 
       const contextPrompt = buildAgentContextPrompt({
-        smartContext: smartContext.context,
+        smartContext: smartContext?.context,
+        editorContext: editorContextFallback,
         userText: messageText,
         mode,
         uiState: {
@@ -393,7 +421,7 @@ export function useAgentOrchestrator(
       appendMessages({
         role: 'model',
         text: finalResult.text || 'Done.',
-        timestamp: new Date()
+        timestamp: new Date(),
       });
       dispatch({ type: 'FINISH' });
 
@@ -407,12 +435,14 @@ export function useAgentOrchestrator(
       appendMessages({
         role: 'model',
         text: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     } finally {
-      // isProcessing is derived from reducer state; no manual reset here
+      if (abortControllerRef.current?.signal === signal) {
+        abortControllerRef.current = null;
+      }
     }
-  }, [appendMessages, brain.context, executeToolCall, mode]);
+  }, [appendMessages, executeToolCall, mode]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // CONTROL METHODS

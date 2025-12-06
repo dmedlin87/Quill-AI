@@ -112,11 +112,20 @@ const tokenize = (text: string): string[] => {
  */
 const calculateTF = (tokens: string[]): Map<string, number> => {
   const tf = new Map<string, number>();
+  let max = 0;
+
   for (const token of tokens) {
-    tf.set(token, (tf.get(token) || 0) + 1);
+    const nextCount = (tf.get(token) || 0) + 1;
+    tf.set(token, nextCount);
+    if (nextCount > max) {
+      max = nextCount;
+    }
   }
-  // Normalize
-  const max = Math.max(...tf.values());
+
+  if (max === 0) {
+    return tf;
+  }
+
   for (const [term, count] of tf) {
     tf.set(term, count / max);
   }

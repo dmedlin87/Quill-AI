@@ -1,25 +1,47 @@
-import React from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { EXPERIENCE_PRESETS, AUTONOMY_PRESETS, ExperienceLevel, AutonomyMode } from '@/types/experienceSettings';
+import { EXPERIENCE_PRESETS, AUTONOMY_PRESETS } from '@/types/experienceSettings';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { shallow } from 'zustand/shallow';
 
 interface ExperienceSelectorProps {
   compact?: boolean;
   showLabels?: boolean;
 }
 
-export const ExperienceSelector: React.FC<ExperienceSelectorProps> = ({ 
+type PresetRecord<T extends string, V> = Record<T, V>;
+const objectValues = <T extends string, V>(record: PresetRecord<T, V>): V[] =>
+  Object.values(record);
+
+export function ExperienceSelector({
   compact = false,
-  showLabels = true 
-}) => {
-  const { experienceLevel, autonomyMode, setExperienceLevel, setAutonomyMode } = useSettingsStore();
+  showLabels = true,
+}: ExperienceSelectorProps) {
+  const { experienceLevel, autonomyMode, setExperienceLevel, setAutonomyMode } = useSettingsStore(
+    (state) => ({
+      experienceLevel: state.experienceLevel,
+      autonomyMode: state.autonomyMode,
+      setExperienceLevel: state.setExperienceLevel,
+      setAutonomyMode: state.setAutonomyMode,
+    }),
+    shallow,
+  );
+
+  const experiencePresets = useMemo(
+    () => objectValues(EXPERIENCE_PRESETS),
+    [],
+  );
+  const autonomyPresets = useMemo(
+    () => objectValues(AUTONOMY_PRESETS),
+    [],
+  );
 
   if (compact) {
     return (
       <div className="flex items-center gap-2">
         {/* Experience Level Toggle */}
         <div className="flex items-center gap-1 bg-slate-800/50 rounded-lg p-1">
-          {Object.values(EXPERIENCE_PRESETS).map((preset) => (
+          {experiencePresets.map((preset) => (
             <button
               key={preset.id}
               onClick={() => setExperienceLevel(preset.id)}
@@ -50,7 +72,7 @@ export const ExperienceSelector: React.FC<ExperienceSelectorProps> = ({
 
         {/* Autonomy Mode Toggle */}
         <div className="flex items-center gap-1 bg-slate-800/50 rounded-lg p-1">
-          {Object.values(AUTONOMY_PRESETS).map((preset) => (
+          {autonomyPresets.map((preset) => (
             <button
               key={preset.id}
               onClick={() => setAutonomyMode(preset.id)}
@@ -94,7 +116,7 @@ export const ExperienceSelector: React.FC<ExperienceSelectorProps> = ({
           </>
         )}
         <div className="grid grid-cols-3 gap-2">
-          {Object.values(EXPERIENCE_PRESETS).map((preset) => {
+          {experiencePresets.map((preset) => {
             const isActive = experienceLevel === preset.id;
             return (
               <motion.button
@@ -137,7 +159,7 @@ export const ExperienceSelector: React.FC<ExperienceSelectorProps> = ({
           </>
         )}
         <div className="grid grid-cols-3 gap-2">
-          {Object.values(AUTONOMY_PRESETS).map((preset) => {
+          {autonomyPresets.map((preset) => {
             const isActive = autonomyMode === preset.id;
             return (
               <motion.button
@@ -168,13 +190,23 @@ export const ExperienceSelector: React.FC<ExperienceSelectorProps> = ({
       </div>
     </div>
   );
-};
+}
 
 /**
  * Compact badges showing current experience & autonomy - for use in headers
  */
-export const ExperienceBadge: React.FC<{ className?: string }> = ({ className = '' }) => {
-  const { experienceLevel, autonomyMode } = useSettingsStore();
+interface ExperienceBadgeProps {
+  className?: string;
+}
+
+export function ExperienceBadge({ className = '' }: ExperienceBadgeProps) {
+  const { experienceLevel, autonomyMode } = useSettingsStore(
+    (state) => ({
+      experienceLevel: state.experienceLevel,
+      autonomyMode: state.autonomyMode,
+    }),
+    shallow,
+  );
   const expPreset = EXPERIENCE_PRESETS[experienceLevel];
   const autoPreset = AUTONOMY_PRESETS[autonomyMode];
 
@@ -196,4 +228,4 @@ export const ExperienceBadge: React.FC<{ className?: string }> = ({ className = 
       </span>
     </div>
   );
-};
+}

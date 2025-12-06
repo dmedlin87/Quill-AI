@@ -3,30 +3,34 @@ import { motion } from 'framer-motion';
 import { CRITIQUE_PRESETS, CritiqueIntensity } from '@/types/critiqueSettings';
 import { useSettingsStore } from '../store/useSettingsStore';
 
+type CritiquePreset = (typeof CRITIQUE_PRESETS)[CritiqueIntensity];
+
 interface CritiqueIntensitySelectorProps {
   compact?: boolean;
 }
 
-export const CritiqueIntensitySelector: React.FC<CritiqueIntensitySelectorProps> = ({ 
-  compact = false 
-}) => {
-  const { critiqueIntensity, setCritiqueIntensity } = useSettingsStore();
+const presets: CritiquePreset[] = Object.values(CRITIQUE_PRESETS);
+
+export function CritiqueIntensitySelector({ compact = false }: CritiqueIntensitySelectorProps) {
+  const critiqueIntensity = useSettingsStore((state) => state.critiqueIntensity);
+  const setCritiqueIntensity = useSettingsStore((state) => state.setCritiqueIntensity);
 
   if (compact) {
     return (
       <div className="flex items-center gap-1 bg-slate-800/50 rounded-lg p-1">
-        {Object.values(CRITIQUE_PRESETS).map((preset) => (
+        {presets.map((preset) => (
           <button
             key={preset.id}
             onClick={() => setCritiqueIntensity(preset.id)}
             className={`
               relative px-2 py-1 rounded text-xs font-medium transition-all
-              ${critiqueIntensity === preset.id 
-                ? 'text-white' 
+              ${critiqueIntensity === preset.id
+                ? 'text-white'
                 : 'text-slate-400 hover:text-slate-300'
               }
             `}
             title={preset.description}
+            type="button"
           >
             {critiqueIntensity === preset.id && (
               <motion.div
@@ -52,7 +56,7 @@ export const CritiqueIntensitySelector: React.FC<CritiqueIntensitySelectorProps>
         Controls how rigorous the AI feedback is
       </p>
       <div className="grid grid-cols-1 gap-2">
-        {Object.values(CRITIQUE_PRESETS).map((preset) => {
+        {presets.map((preset) => {
           const isActive = critiqueIntensity === preset.id;
           return (
             <motion.button
@@ -62,8 +66,8 @@ export const CritiqueIntensitySelector: React.FC<CritiqueIntensitySelectorProps>
               whileTap={{ scale: 0.99 }}
               className={`
                 relative p-3 rounded-lg border-2 transition-all text-left
-                ${isActive 
-                  ? 'border-opacity-100 bg-opacity-10' 
+                ${isActive
+                  ? 'border-opacity-100 bg-opacity-10'
                   : 'border-slate-700 hover:border-slate-600 bg-transparent'
                 }
               `}
@@ -71,6 +75,7 @@ export const CritiqueIntensitySelector: React.FC<CritiqueIntensitySelectorProps>
                 borderColor: isActive ? preset.color : undefined,
                 backgroundColor: isActive ? `${preset.color}15` : undefined,
               }}
+              type="button"
             >
               <div className="flex items-start gap-3">
                 <span className="text-2xl">{preset.icon}</span>
@@ -78,7 +83,7 @@ export const CritiqueIntensitySelector: React.FC<CritiqueIntensitySelectorProps>
                   <div className="font-medium text-slate-200 flex items-center gap-2">
                     {preset.label}
                     {isActive && (
-                      <span 
+                      <span
                         className="text-xs px-1.5 py-0.5 rounded"
                         style={{ backgroundColor: preset.color, color: 'white' }}
                       >
@@ -97,17 +102,21 @@ export const CritiqueIntensitySelector: React.FC<CritiqueIntensitySelectorProps>
       </div>
     </div>
   );
-};
+}
+
+interface IntensityBadgeProps {
+  className?: string;
+}
 
 /**
  * Small badge showing current intensity - for use in headers
  */
-export const IntensityBadge: React.FC<{ className?: string }> = ({ className = '' }) => {
-  const { critiqueIntensity } = useSettingsStore();
+export function IntensityBadge({ className = '' }: IntensityBadgeProps) {
+  const critiqueIntensity = useSettingsStore((state) => state.critiqueIntensity);
   const preset = CRITIQUE_PRESETS[critiqueIntensity];
 
   return (
-    <div 
+    <div
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${className}`}
       style={{ backgroundColor: `${preset.color}20`, color: preset.color }}
       title={`Critique mode: ${preset.label} - ${preset.description}`}
@@ -116,4 +125,4 @@ export const IntensityBadge: React.FC<{ className?: string }> = ({ className = '
       <span>{preset.label}</span>
     </div>
   );
-};
+}

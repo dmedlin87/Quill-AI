@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { useEditor } from './EditorContext';
 
 import { useProjectStore } from '@/features/project';
@@ -92,11 +92,14 @@ export const EngineProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useManuscriptIndexer(currentText, activeChapterId, handleContradictions);
 
-  const value: EngineContextValue = {
-    state: engine.state,
-    actions: engine.actions,
-    contradictions
-  };
+  const value: EngineContextValue = useMemo(
+    () => ({
+      state: engine.state,
+      actions: engine.actions,
+      contradictions,
+    }),
+    [engine.state, engine.actions, contradictions],
+  );
 
   return (
     <EngineContext.Provider value={value}>

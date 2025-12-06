@@ -48,7 +48,8 @@ export function useProactiveSuggestions(
   } = options;
 
   const [suggestions, setSuggestions] = useState<ProactiveSuggestion[]>([]);
-  const dismissTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const dismissTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const isMountedRef = useRef(true);
 
   // Dismiss a single suggestion
   const dismissSuggestion = useCallback((id: string) => {
@@ -88,7 +89,7 @@ export function useProactiveSuggestions(
     chapterTitle: string, 
     content?: string
   ) => {
-    if (!projectId || !enabled) return;
+    if (!projectId || !enabled || !isMountedRef.current) return;
     
     try {
       const newSuggestions = await generateSuggestionsForChapter(projectId, {
@@ -100,6 +101,8 @@ export function useProactiveSuggestions(
       if (newSuggestions.length > 0) {
         // Merge with existing (avoid duplicates by source ID)
         setSuggestions(prev => {
+          if (!isMountedRef.current) return prev;
+          
           const existing = new Set(prev.map(s => s.source.id));
           const unique = newSuggestions.filter(s => !existing.has(s.source.id));
           const merged = [...prev, ...unique].slice(0, maxSuggestions);
@@ -140,6 +143,7 @@ export function useProactiveSuggestions(
     });
     
     return () => {
+      isMountedRef.current = false;
       unsubscribe();
       // Clean up all timers
       dismissTimersRef.current.forEach(timer => clearTimeout(timer));

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+
 import { useViewportCollision } from '@/features/shared';
 import { GrammarSuggestion } from '@/types';
 import { AccessibleTooltip } from '@/features/shared/components/AccessibleTooltip';
@@ -99,6 +100,7 @@ const MagicBarComponent: React.FC<MagicBarProps> = ({
 }) => {
   const [activeView, setActiveView] = useState<'menu' | 'tone' | 'variations' | 'help' | 'grammar'>('menu');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const copyTimeoutRef = useRef<number | null>(null);
 
   // Determine element dimensions based on current view for collision detection
   const elementDimensions = useMemo(() => {
@@ -130,10 +132,24 @@ const MagicBarComponent: React.FC<MagicBarProps> = ({
   }, [variations, helpResult, isLoading, grammarSuggestions.length, activeView]);
 
   const handleCopy = (text: string, index: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
+    if (!navigator?.clipboard?.writeText) return;
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIndex(index);
+      if (copyTimeoutRef.current) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = window.setTimeout(() => setCopiedIndex(null), 2000);
+    });
   };
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const menuButtonClass = "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:bg-[var(--interactive-bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:scale-105 active:scale-95";
   const primaryButtonClass = "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)] hover:bg-[var(--interactive-bg-hover)] hover:text-[var(--interactive-accent-hover)] shadow-sm hover:shadow-md border border-[var(--glass-border)]";

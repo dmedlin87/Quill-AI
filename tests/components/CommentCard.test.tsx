@@ -14,21 +14,34 @@ const baseComment: CommentMarkAttributes & { quote?: string } = {
   quote: 'Highlighted text',
 };
 
+const defaultPosition = { top: 10, left: 10 };
+
+const renderCommentCard = (
+  overrides: Partial<React.ComponentProps<typeof CommentCard>> = {},
+) => {
+  const onClose = overrides.onClose ?? vi.fn();
+  const onFixWithAgent = overrides.onFixWithAgent ?? vi.fn();
+  const onDismiss = overrides.onDismiss ?? vi.fn();
+
+  const { comment = baseComment, position = defaultPosition, ...rest } = overrides;
+
+  const utils = render(
+    <CommentCard
+      comment={comment}
+      position={position}
+      onClose={onClose}
+      onFixWithAgent={onFixWithAgent}
+      onDismiss={onDismiss}
+      {...rest}
+    />,
+  );
+
+  return { onClose, onFixWithAgent, onDismiss, ...utils };
+};
+
 describe('CommentCard', () => {
   it('renders issue, suggestion and highlighted quote', () => {
-    const onClose = vi.fn();
-    const onFixWithAgent = vi.fn();
-    const onDismiss = vi.fn();
-
-    render(
-      <CommentCard
-        comment={baseComment}
-        position={{ top: 100, left: 120 }}
-        onClose={onClose}
-        onFixWithAgent={onFixWithAgent}
-        onDismiss={onDismiss}
-      />
-    );
+    renderCommentCard({ position: { top: 100, left: 120 } });
 
     expect(screen.getByText('Issue')).toBeInTheDocument();
     expect(screen.getByText(baseComment.issue)).toBeInTheDocument();
@@ -41,19 +54,7 @@ describe('CommentCard', () => {
   });
 
   it('calls onFixWithAgent with comment details', () => {
-    const onClose = vi.fn();
-    const onFixWithAgent = vi.fn();
-    const onDismiss = vi.fn();
-
-    render(
-      <CommentCard
-        comment={baseComment}
-        position={{ top: 50, left: 60 }}
-        onClose={onClose}
-        onFixWithAgent={onFixWithAgent}
-        onDismiss={onDismiss}
-      />
-    );
+    const { onFixWithAgent } = renderCommentCard({ position: { top: 50, left: 60 } });
 
     fireEvent.click(screen.getByRole('button', { name: /fix with agent/i }));
 
@@ -65,19 +66,7 @@ describe('CommentCard', () => {
   });
 
   it('calls onDismiss with the comment id', () => {
-    const onClose = vi.fn();
-    const onFixWithAgent = vi.fn();
-    const onDismiss = vi.fn();
-
-    render(
-      <CommentCard
-        comment={baseComment}
-        position={{ top: 10, left: 10 }}
-        onClose={onClose}
-        onFixWithAgent={onFixWithAgent}
-        onDismiss={onDismiss}
-      />
-    );
+    const { onDismiss } = renderCommentCard();
 
     fireEvent.click(screen.getByRole('button', { name: /dismiss/i }));
 
@@ -85,17 +74,7 @@ describe('CommentCard', () => {
   });
 
   it('closes when Escape is pressed', () => {
-    const onClose = vi.fn();
-
-    render(
-      <CommentCard
-        comment={baseComment}
-        position={{ top: 10, left: 10 }}
-        onClose={onClose}
-        onFixWithAgent={vi.fn()}
-        onDismiss={vi.fn()}
-      />
-    );
+    const { onClose } = renderCommentCard();
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
@@ -103,10 +82,6 @@ describe('CommentCard', () => {
   });
 
   it('repositions when near viewport edges', async () => {
-    const onClose = vi.fn();
-    const onFixWithAgent = vi.fn();
-    const onDismiss = vi.fn();
-
     const getBoundingClientRectMock = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockReturnValue({
@@ -128,15 +103,7 @@ describe('CommentCard', () => {
       .spyOn(window, 'innerHeight', 'get')
       .mockReturnValue(400);
 
-    const { container } = render(
-      <CommentCard
-        comment={baseComment}
-        position={{ top: 300, left: 200 }}
-        onClose={onClose}
-        onFixWithAgent={onFixWithAgent}
-        onDismiss={onDismiss}
-      />
-    );
+    const { container } = renderCommentCard({ position: { top: 300, left: 200 } });
 
     const card = container.firstChild as HTMLDivElement;
 
@@ -153,8 +120,6 @@ describe('CommentCard', () => {
   });
 
   it('clamps left position when too close to the edge', async () => {
-    const onClose = vi.fn();
-
     const getBoundingClientRectMock = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockReturnValue({
@@ -176,15 +141,7 @@ describe('CommentCard', () => {
       .spyOn(window, 'innerHeight', 'get')
       .mockReturnValue(400);
 
-    const { container } = render(
-      <CommentCard
-        comment={baseComment}
-        position={{ top: 10, left: 0 }}
-        onClose={onClose}
-        onFixWithAgent={vi.fn()}
-        onDismiss={vi.fn()}
-      />
-    );
+    const { container } = renderCommentCard({ position: { top: 10, left: 0 } });
 
     const card = container.firstChild as HTMLDivElement;
 

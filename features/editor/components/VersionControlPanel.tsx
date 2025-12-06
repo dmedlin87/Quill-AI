@@ -4,7 +4,7 @@
  * Multiverse editing: create, switch, and merge content branches.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Branch } from '@/types/schema';
 
 interface VersionControlPanelProps {
@@ -68,6 +68,14 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [showMergePreview, setShowMergePreview] = useState<string | null>(null);
+  const diffStatsByBranch = useMemo(
+    () =>
+      branches.reduce<Record<string, DiffStats>>((acc, branch) => {
+        acc[branch.id] = calculateDiffStats(mainContent, branch.content);
+        return acc;
+      }, {}),
+    [branches, mainContent]
+  );
 
   const handleCreateBranch = useCallback(() => {
     if (!newBranchName.trim()) return;
@@ -143,7 +151,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
         {branches.map(branch => {
           const isActive = branch.id === activeBranchId;
-          const stats = calculateDiffStats(mainContent, branch.content);
+          const stats = diffStatsByBranch[branch.id];
           const showPreview = showMergePreview === branch.id;
 
           return (

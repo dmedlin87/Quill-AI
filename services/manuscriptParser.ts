@@ -17,6 +17,7 @@ export function parseManuscript(rawText: string): ParsedChapter[] {
   return splitChapters(cleanText);
 }
 
+
 /**
  * Removes common page headers/footers often found in text dumps.
  */
@@ -114,12 +115,15 @@ function splitChapters(text: string): ParsedChapter[] {
 
       // Extract raw section including the header line
       const fullSection = text.substring(start, end);
-      const lines = fullSection.split('\n').filter(l => l.trim().length > 0);
-      
-      if (lines.length === 0) continue;
+      const lines = fullSection.split('\n');
 
-      let rawTitle = lines[0].trim().replace(/^#{1,6}\s+/, ''); // Clean MD
-      let content = lines.slice(1).join('\n').trim();
+      // Locate the first non-empty line as header without discarding the body’s blank lines
+      const headerIndex = lines.findIndex(l => l.trim().length > 0);
+      if (headerIndex === -1) continue;
+
+      let rawTitle = lines[headerIndex].trim().replace(/^#{1,6}\s+/, ''); // Clean MD
+      // Preserve interior blank lines; only trim surrounding whitespace
+      let content = lines.slice(headerIndex + 1).join('\n').trim();
 
       // Title Extraction Heuristics
       let title = rawTitle;
@@ -135,8 +139,9 @@ function splitChapters(text: string): ParsedChapter[] {
           if (parts.length > 1) title = parts[1].trim();
       }
       // 3. Next Line Extraction: Header is "Chapter 1", next line is "THE ARRIVAL"
-      else if (lines.length > 1) {
-          const nextLine = lines[1].trim();
+      else if (lines.length > headerIndex + 1) {
+          const nextLineRaw = lines.slice(headerIndex + 1).find(l => l.trim().length > 0);
+          const nextLine = nextLineRaw?.trim() ?? '';
           
           // Heuristics for title detection
           const isShort = nextLine.length > 0 && nextLine.length < 100;
@@ -159,7 +164,7 @@ function splitChapters(text: string): ParsedChapter[] {
                title = `${rawTitle}: ${nextLine}`;
                
                // Consume the line from the content
-               content = lines.slice(2).join('\n').trim();
+               content = lines.slice(headerIndex + 2).join('\n').trim();
           }
       }
 

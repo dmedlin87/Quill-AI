@@ -62,6 +62,16 @@ export function useAutoResize(
       }
     };
   }, []);
+
+  // Cancel any pending resize when leaving editor mode
+  useLayoutEffect(() => {
+    if (mode === 'EDITOR') return;
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    pendingRef.current = false;
+  }, [mode]);
 }
 
 /**

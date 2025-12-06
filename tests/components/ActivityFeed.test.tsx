@@ -43,6 +43,23 @@ describe('ActivityFeed', () => {
     expect(descriptions[1]).toBe('First change');
   });
 
+  it('does not mutate provided history array when rendering', () => {
+    const first = makeHistoryItem({ id: '1' });
+    const second = makeHistoryItem({ id: '2' });
+    const history = [first, second];
+
+    render(
+      <ActivityFeed
+        history={history}
+        onRestore={vi.fn()}
+        onInspect={vi.fn()}
+      />
+    );
+
+    expect(history[0].id).toBe('1');
+    expect(history[1].id).toBe('2');
+  });
+
   it('fires callbacks when Revert and Diff are clicked', () => {
     const item = makeHistoryItem({ id: 'abc', description: 'Some change' });
     const onRestore = vi.fn();

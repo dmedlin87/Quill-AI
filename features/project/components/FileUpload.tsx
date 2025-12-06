@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { RecentFile } from '@/types';
 
 interface FileUploadProps {
@@ -8,6 +8,8 @@ interface FileUploadProps {
 
 export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFiles = [] }) => {
 
+  const [pastedText, setPastedText] = useState('');
+
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -16,6 +18,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
       if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
         const text = await file.text();
         onTextLoaded(text, file.name);
+        event.target.value = '';
       } else {
         alert("Please upload a .txt or .md file.");
       }
@@ -68,10 +71,19 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
             <textarea 
               className="w-full h-32 p-4 text-sm text-gray-700 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none bg-gray-50 transition-all placeholder:text-gray-400 shadow-inner"
               placeholder="Paste text here..."
-              onChange={(e) => {
-                 if(e.target.value.length > 0) onTextLoaded(e.target.value, 'Untitled Draft');
-              }}
+              value={pastedText}
+              onChange={(e) => setPastedText(e.target.value)}
             />
+            <div className="flex justify-end mt-2">
+              <button
+                type="button"
+                disabled={!pastedText.trim()}
+                onClick={() => onTextLoaded(pastedText, 'Untitled Draft')}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors"
+              >
+                Load pasted text
+              </button>
+            </div>
         </div>
 
         {/* Recent Files */}

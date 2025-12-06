@@ -133,6 +133,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const initGenRef = useRef(0);
 
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
 
 
   /**
@@ -307,7 +315,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, [initialMessage]);
 
   const sendMessageWithText = async (messageText: string) => {
-    if (!messageText.trim() || !chatRef.current) return;
+    if (!messageText.trim() || !chatRef.current || isLoading) return;
 
     const userMsg: ChatMessage = { role: 'user', text: messageText, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
@@ -389,11 +397,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
       // 4. Final Text Response
       const responseText = result.text;
-      setMessages(prev => [...prev, {
-        role: 'model',
-        text: responseText || "Done.",
-        timestamp: new Date()
-      }]);
+      if (isMountedRef.current) {
+        setMessages(prev => [...prev, {
+          role: 'model',
+          text: responseText || "Done.",
+          timestamp: new Date()
+        }]);
+      }
 
     } catch (e) {
       console.error(e);
@@ -406,14 +416,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         friendlyMessage = e.message || friendlyMessage;
       }
 
-      setMessages(prev => [...prev, {
-        role: 'model',
-        text: friendlyMessage,
-        timestamp: new Date()
-      }]);
+      if (isMountedRef.current) {
+        setMessages(prev => [...prev, {
+          role: 'model',
+          text: friendlyMessage,
+          timestamp: new Date()
+        }]);
+      }
     } finally {
-      setIsLoading(false);
-      setAgentState('idle');
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setAgentState('idle');
+      }
     }
   };
 

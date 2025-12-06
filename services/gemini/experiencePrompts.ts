@@ -5,7 +5,7 @@
 
 import { ExperienceLevel, AutonomyMode } from '../../types/experienceSettings';
 
-export const EXPERIENCE_MODIFIERS: Record<ExperienceLevel, string> = {
+export const EXPERIENCE_MODIFIERS = Object.freeze({
   novice: `[EXPERIENCE LEVEL: NOVICE]
 Use simple, accessible language. Explain literary concepts (POV, pacing, beats, subtext) when relevant.
 Be encouraging and supportive—celebrate small wins.
@@ -24,9 +24,9 @@ Be concise and direct. Use industry-standard terminology without definitions.
 Skip fundamentals—focus on execution and nuance.
 The author understands craft; discuss subtle technique and market considerations.
 Prioritize efficiency over explanation. Actions over words.`
-};
+}) satisfies Readonly<Record<ExperienceLevel, string>>;
 
-export const AUTONOMY_MODIFIERS: Record<AutonomyMode, string> = {
+export const AUTONOMY_MODIFIERS = Object.freeze({
   teach: `[AUTONOMY MODE: TEACH]
 Do NOT apply fixes automatically. Suggest changes and ask the user if they want to proceed.
 Explain *why* each change helps—connect it to craft principles.
@@ -48,18 +48,18 @@ Only pause for confirmation on:
 - Deletions that remove significant content
 - Changes that alter character voice or plot direction
 Be efficient. Apply changes, then briefly report what you did.`
-};
+}) satisfies Readonly<Record<AutonomyMode, string>>;
 
 /**
  * Get the experience level modifier for injection into prompts
  */
 export function getExperienceModifier(level: ExperienceLevel): string {
-  return EXPERIENCE_MODIFIERS[level] || EXPERIENCE_MODIFIERS.intermediate;
+  return EXPERIENCE_MODIFIERS[level] ?? EXPERIENCE_MODIFIERS.intermediate;
 }
 
 /**
  * Get the autonomy mode modifier for injection into prompts
  */
 export function getAutonomyModifier(mode: AutonomyMode): string {
-  return AUTONOMY_MODIFIERS[mode] || AUTONOMY_MODIFIERS.copilot;
+  return AUTONOMY_MODIFIERS[mode] ?? AUTONOMY_MODIFIERS.copilot;
 }

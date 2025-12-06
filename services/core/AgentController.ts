@@ -297,13 +297,17 @@ export class DefaultAgentController implements AgentController {
     this.currentAbortController = internalAbortController;
 
     const externalSignal = input.options?.abortSignal;
-    if (externalSignal) {
-      if (externalSignal.aborted) {
-        internalAbortController.abort();
-      } else {
-        const onAbort = () => internalAbortController.abort();
-        externalSignal.addEventListener('abort', onAbort, { once: true });
-      }
+    const teardownAbortListener =
+      externalSignal && !externalSignal.aborted
+        ? (() => {
+            const onAbort = () => internalAbortController.abort();
+            externalSignal.addEventListener('abort', onAbort, { once: true });
+            return () => externalSignal.removeEventListener('abort', onAbort);
+          })()
+        : null;
+
+    if (externalSignal?.aborted) {
+      internalAbortController.abort();
     }
 
     // Ensure we have an initialized chat session
@@ -478,6 +482,7 @@ export class DefaultAgentController implements AgentController {
         this.events?.onMessage?.(errorMessage);
       }
     } finally {
+      teardownAbortListener?.();
       this.currentAbortController = null;
     }
   }

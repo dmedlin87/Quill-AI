@@ -68,8 +68,10 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
           </span>
         </div>
         <button
+          type="button"
           onClick={onDismissAll}
           className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label={`Dismiss all ${suggestions.length} suggestions`}
         >
           Dismiss all
         </button>
@@ -123,15 +125,19 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
               <div className="flex items-center gap-3 mt-2 ml-6">
                 {onAction && suggestion.suggestedAction && (
                   <button
+                    type="button"
                     onClick={() => onAction(suggestion)}
                     className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                    aria-label={`Take action on suggestion: ${suggestion.title}`}
                   >
                     Take action →
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => onDismiss(suggestion.id)}
                   className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label={`Dismiss suggestion: ${suggestion.title}`}
                 >
                   Dismiss
                 </button>

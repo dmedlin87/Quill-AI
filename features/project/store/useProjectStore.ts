@@ -64,7 +64,10 @@ export const useProjectStore = create<ProjectState>((set, get) => {
 
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.ready;
-        await registration.sync?.register('flush-pending-writes');
+        const syncManager = (registration as ServiceWorkerRegistration & { sync?: { register?: (tag: string) => Promise<void> } }).sync;
+        if (syncManager?.register) {
+          await syncManager.register('flush-pending-writes');
+        }
       }
     } catch (error) {
       console.error('[ProjectStore] Failed to queue persistence keepalive for pending writes', error);

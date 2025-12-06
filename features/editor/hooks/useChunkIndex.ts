@@ -287,15 +287,16 @@ export function useChunkIndexSync(
 } {
   const lastContentRef = useRef<string>('');
   const lastChapterIdRef = useRef<string | null>(null);
+  const { registerChapter, handleEdit, getChunk, getAnalysisAtCursor } = chunkIndex;
   
   // Register chapter when it changes
   useEffect(() => {
     if (chapterId && chapterId !== lastChapterIdRef.current) {
-      chunkIndex.registerChapter(chapterId, content);
+      registerChapter(chapterId, content);
       lastChapterIdRef.current = chapterId;
       lastContentRef.current = content;
     }
-  }, [chapterId, content, chunkIndex]);
+  }, [chapterId, content, registerChapter]);
   
   // Handle edits when content changes
   useEffect(() => {
@@ -317,17 +318,17 @@ export function useChunkIndexSync(
       newEnd--;
     }
     
-    chunkIndex.handleEdit(chapterId, content, editStart, oldEnd);
+    handleEdit(chapterId, content, editStart, oldEnd);
     lastContentRef.current = content;
-  }, [chapterId, content, chunkIndex]);
+  }, [chapterId, content, handleEdit]);
   
   // Get current chunk at cursor
   const currentChunk = chapterId
-    ? chunkIndex.getChunk(createChunkId('chapter', chapterId))
+    ? getChunk(createChunkId('chapter', chapterId))
     : undefined;
   
   const currentAnalysis = chapterId
-    ? chunkIndex.getAnalysisAtCursor(chapterId, cursorOffset)
+    ? getAnalysisAtCursor(chapterId, cursorOffset)
     : null;
   
   return {

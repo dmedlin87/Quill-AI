@@ -222,6 +222,12 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     clearComments,
   } = useEditorComments(activeChapter);
 
+  // Reset per-chapter transient UI state to avoid leaking selection/comments across chapters
+  useEffect(() => {
+    clearSelection();
+    clearComments();
+  }, [activeChapterId, clearSelection, clearComments]);
+
   // Quill AI 3.0: Zen Mode State
   const [isZenMode, setIsZenMode] = useState(false);
   const toggleZenMode = useCallback(() => {

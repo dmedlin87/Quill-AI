@@ -9,55 +9,57 @@ import {
 } from '@/types/experienceSettings';
 
 interface SettingsState {
-  // Critique intensity
   critiqueIntensity: CritiqueIntensity;
   setCritiqueIntensity: (intensity: CritiqueIntensity) => void;
-
-  // Experience level
   experienceLevel: ExperienceLevel;
   setExperienceLevel: (level: ExperienceLevel) => void;
-
-  // Autonomy mode
   autonomyMode: AutonomyMode;
   setAutonomyMode: (mode: AutonomyMode) => void;
-
-  // Budget Settings
   budgetThreshold: number;
   setBudgetThreshold: (threshold: number) => void;
-
-  // Editor preferences
   nativeSpellcheckEnabled: boolean;
   setNativeSpellcheckEnabled: (enabled: boolean) => void;
 }
 
+const initialState: Omit<SettingsState, keyof SettingsActions> = {
+  critiqueIntensity: DEFAULT_CRITIQUE_INTENSITY,
+  experienceLevel: DEFAULT_EXPERIENCE,
+  autonomyMode: DEFAULT_AUTONOMY,
+  budgetThreshold: 1.0,
+  nativeSpellcheckEnabled: true,
+};
+
+type SettingsActions = Pick<
+  SettingsState,
+  | 'setCritiqueIntensity'
+  | 'setExperienceLevel'
+  | 'setAutonomyMode'
+  | 'setBudgetThreshold'
+  | 'setNativeSpellcheckEnabled'
+>;
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      critiqueIntensity: DEFAULT_CRITIQUE_INTENSITY,
-      experienceLevel: DEFAULT_EXPERIENCE,
-      autonomyMode: DEFAULT_AUTONOMY,
-      budgetThreshold: 1.0,
-      nativeSpellcheckEnabled: true,
-
-      setCritiqueIntensity: (intensity) => {
-        set({ critiqueIntensity: intensity });
-      },
-
-      setExperienceLevel: (level) => {
-        set({ experienceLevel: level });
-      },
-
-      setAutonomyMode: (mode) => {
-        set({ autonomyMode: mode });
-      },
-
-      setBudgetThreshold: (threshold) => {
-        set({ budgetThreshold: threshold });
-      },
-
-      setNativeSpellcheckEnabled: (enabled) => {
-        set({ nativeSpellcheckEnabled: enabled });
-      },
+      ...initialState,
+      setCritiqueIntensity: (intensity) =>
+        set((state) =>
+          state.critiqueIntensity === intensity ? state : { ...state, critiqueIntensity: intensity }
+        ),
+      setExperienceLevel: (level) =>
+        set((state) => (state.experienceLevel === level ? state : { ...state, experienceLevel: level })),
+      setAutonomyMode: (mode) =>
+        set((state) => (state.autonomyMode === mode ? state : { ...state, autonomyMode: mode })),
+      setBudgetThreshold: (threshold) =>
+        set((state) =>
+          state.budgetThreshold === threshold ? state : { ...state, budgetThreshold: threshold }
+        ),
+      setNativeSpellcheckEnabled: (enabled) =>
+        set((state) =>
+          state.nativeSpellcheckEnabled === enabled
+            ? state
+            : { ...state, nativeSpellcheckEnabled: enabled }
+        ),
     }),
     {
       name: 'quill-settings',

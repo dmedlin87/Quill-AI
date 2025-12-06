@@ -55,6 +55,12 @@ function createEmptyState(): SessionMemoryState {
  * Track a newly created memory in the current session.
  */
 export function trackSessionMemory(memory: MemoryNote): void {
+  // Replace existing entry with same id to keep snapshot accurate
+  const existingIndex = sessionState.created.findIndex(m => m.id === memory.id);
+  if (existingIndex >= 0) {
+    sessionState.created[existingIndex] = memory;
+    return;
+  }
   sessionState.created.push(memory);
 }
 
@@ -69,7 +75,9 @@ export function trackSessionMemoryUpdate(id: string, description: string): void 
  * Track a memory deletion in the current session.
  */
 export function trackSessionMemoryDelete(id: string): void {
-  sessionState.deleted.push(id);
+  if (!sessionState.deleted.includes(id)) {
+    sessionState.deleted.push(id);
+  }
   // Also remove from created if it was created this session
   sessionState.created = sessionState.created.filter(m => m.id !== id);
 }
@@ -78,7 +86,9 @@ export function trackSessionMemoryDelete(id: string): void {
  * Track a goal creation in the current session.
  */
 export function trackSessionGoal(goalId: string): void {
-  sessionState.goalsCreated.push(goalId);
+  if (!sessionState.goalsCreated.includes(goalId)) {
+    sessionState.goalsCreated.push(goalId);
+  }
 }
 
 /**
@@ -96,7 +106,13 @@ export function clearSessionMemories(): void {
  * Get current session state.
  */
 export function getSessionState(): Readonly<SessionMemoryState> {
-  return sessionState;
+  return {
+    ...sessionState,
+    created: [...sessionState.created],
+    updated: [...sessionState.updated],
+    deleted: [...sessionState.deleted],
+    goalsCreated: [...sessionState.goalsCreated],
+  };
 }
 
 /**

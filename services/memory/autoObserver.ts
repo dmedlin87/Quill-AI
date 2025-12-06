@@ -117,6 +117,7 @@ async function observeCharacters(
             importance: 0.7,
           });
           result.created.push(note);
+          if (deduplicateEnabled && existingMemories) existingMemories.push(note);
         } catch (e) {
           result.errors.push(`Failed to create arc observation for ${char.name}: ${e}`);
         }
@@ -144,6 +145,7 @@ async function observeCharacters(
               importance: 0.5,
             });
             result.created.push(note);
+            if (deduplicateEnabled && existingMemories) existingMemories.push(note);
           } catch (e) {
             result.errors.push(`Failed to create relationship observation: ${e}`);
           }
@@ -170,6 +172,7 @@ async function observeCharacters(
               importance: 0.9,
             });
             result.created.push(note);
+            if (deduplicateEnabled && existingMemories) existingMemories.push(note);
           } catch (e) {
             result.errors.push(`Failed to create inconsistency observation: ${e}`);
           }
@@ -195,6 +198,7 @@ async function observeCharacters(
             importance: 0.6,
           });
           result.created.push(note);
+          if (deduplicateEnabled && existingMemories) existingMemories.push(note);
         } catch (e) {
           result.errors.push(`Failed to create development suggestion: ${e}`);
         }

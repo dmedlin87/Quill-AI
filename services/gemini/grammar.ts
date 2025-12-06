@@ -64,6 +64,7 @@ export const mapEditsToSuggestions = (
 
     const end = start + edit.originalText.length;
     usedRanges.push({ start, end });
+    // Collapse unsupported severities (e.g., spelling) into grammar to satisfy UI schema
     const severity: GrammarSuggestion['severity'] =
       edit.severity === 'style' ? 'style' : 'grammar';
 
