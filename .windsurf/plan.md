@@ -33,3 +33,9 @@
 6. **Regression Testing**
  6.1. Add coverage for the above changes.
  6.2. Run targeted test suites.
+
+## Plan: Refactor ExperienceSelector & ChatInterface
+
+1. Inspect ExperienceSelector and ChatInterface plus their tests to identify state/typing/structural issues to address.
+2. Implement refactors (ExperienceSelector preset config reuse + stable callbacks; ChatInterface send/error handling extraction) and adjust tests/mocks accordingly.
+3. Run targeted tests (ExperienceSelector, ChatInterface) and summarize results.

@@ -141,8 +141,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     };
   }, []);
 
-
-
   /**
    * Build memory context string from stored memories and goals
    */
