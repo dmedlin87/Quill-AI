@@ -122,11 +122,11 @@ const RESOLUTION_PATTERNS = [
 
 let idCounter = 0;
 const generateId = (): string => {
-  const randomUUID = (globalThis as any)?.crypto?.randomUUID;
-  if (typeof randomUUID === 'function') {
-    return randomUUID();
+  const crypto = (globalThis as any)?.crypto;
+  if (crypto && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
   }
-  
+
   // Fallback to deterministic, low-collision identifier
   idCounter += 1;
   return `tl_${Date.now().toString(36)}_${idCounter.toString(36)}`;

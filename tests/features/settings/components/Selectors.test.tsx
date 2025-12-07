@@ -31,7 +31,10 @@ const mockStore = {
 };
 
 vi.mock('@/features/settings/store/useSettingsStore', () => ({
-  useSettingsStore: () => mockStore,
+  useSettingsStore: (selector?: (state: typeof mockStore) => unknown) => {
+    if (selector) return selector(mockStore);
+    return mockStore;
+  },
 }));
 
 describe('Settings selectors', () => {

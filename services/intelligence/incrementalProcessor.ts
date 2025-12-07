@@ -14,6 +14,7 @@ import {
   Timeline,
   Scene,
   TextChange,
+  EntityEdge,
 } from '../../types/intelligence';
 
 import { parseStructure } from './structuralParser';
@@ -46,32 +47,26 @@ interface AffectedRange {
   start: number;
   end: number;
   changeType: 'insert' | 'delete' | 'modify';
-  lengthDelta: number; // How much the range shifted
+  lengthDelta: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RANGE UTILITIES
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Check if two ranges overlap
- */
 export const rangesOverlap = (
   r1: { start: number; end: number },
   r2: { start: number; end: number },
-  buffer: number = 50
+  buffer: number = 50,
 ): boolean => {
   return r1.start - buffer < r2.end && r1.end + buffer > r2.start;
 };
 
-/**
- * Convert TextChanges to AffectedRanges with length deltas
- */
 const computeAffectedRanges = (changes: TextChange[]): AffectedRange[] => {
   return changes.map(change => {
     const oldLength = change.oldText?.length || 0;
     const newLength = change.newText?.length || 0;
-    
+
     return {
       start: change.start,
       end: change.end,
@@ -80,10 +75,6 @@ const computeAffectedRanges = (changes: TextChange[]): AffectedRange[] => {
     };
   });
 };
-
-/**
- * Adjust an offset based on preceding changes
- */
 // ─────────────────────────────────────────────────────────────────────────────
 // STRUCTURAL PATCHING
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,22 +84,37 @@ const computeAffectedRanges = (changes: TextChange[]): AffectedRange[] => {
  */
 const getAffectedSceneIds = (
   scenes: Scene[],
-  affectedRanges: AffectedRange[]
+  affectedRanges: AffectedRange[],
 ): Set<string> => {
   const affected = new Set<string>();
-  
+
+  // Optimization: Quick bounds check
+  let minStart = Infinity;
+  let maxEnd = -Infinity;
+
+  if (affectedRanges.length === 0) return affected;
+
+  for (const r of affectedRanges) {
+    if (r.start < minStart) minStart = r.start;
+    if (r.end > maxEnd) maxEnd = r.end;
+  }
+  minStart -= 50;
+  maxEnd += 50;
+
   for (const scene of scenes) {
+    // Fast fail: Scene is completely outside the global change window
+    if (scene.endOffset < minStart || scene.startOffset > maxEnd) {
+      continue;
+    }
+
     for (const range of affectedRanges) {
-      if (rangesOverlap(
-        { start: scene.startOffset, end: scene.endOffset },
-        { start: range.start, end: range.end }
-      )) {
+      if (rangesOverlap({ start: scene.startOffset, end: scene.endOffset }, { start: range.start, end: range.end })) {
         affected.add(scene.id);
         break;
       }
     }
   }
-  
+
   return affected;
 };
 
@@ -118,58 +124,59 @@ const getAffectedSceneIds = (
 const patchStructure = (
   newText: string,
   prevStructural: StructuralFingerprint,
-  affectedRanges: AffectedRange[]
-): { structural: StructuralFingerprint; scenesReprocessed: number; scenesReused: number; fullReprocessReason?: string } => {
-  // If more than 3 changes or large changes, do full reprocess
-  const totalChangeSize = affectedRanges.reduce((sum, r) => 
-    sum + Math.abs(r.lengthDelta) + (r.end - r.start), 0);
-  
-  if (affectedRanges.length > 3 || totalChangeSize > INCREMENTAL_CHANGE_SIZE_THRESHOLD) {
+  affectedRanges: AffectedRange[],
+): {
+  structural: StructuralFingerprint;
+  scenesReprocessed: number;
+  scenesReused: number;
+  fullReprocessReason?: string;
+} => {
+  const totalChangeSize = affectedRanges.reduce((sum, r) => sum + Math.abs(r.lengthDelta) + (r.end - r.start), 0);
+
+  if (affectedRanges.length > 20 || totalChangeSize > INCREMENTAL_CHANGE_SIZE_THRESHOLD) {
     const structural = parseStructure(newText);
-    return { 
-      structural, 
-      scenesReprocessed: structural.scenes.length, 
-      scenesReused: 0,
-      fullReprocessReason: 'change-size-threshold',
-    };
+    return { structural, scenesReprocessed: structural.scenes.length, scenesReused: 0, fullReprocessReason: 'change-size-threshold' };
   }
-  
-  // Identify affected scenes
+
   const affectedSceneIds = getAffectedSceneIds(prevStructural.scenes, affectedRanges);
-  
-  // If most scenes affected, just reprocess everything
+
   if (affectedSceneIds.size > prevStructural.scenes.length * 0.5) {
     const structural = parseStructure(newText);
-    return { 
-      structural, 
-      scenesReprocessed: structural.scenes.length, 
-      scenesReused: 0,
-      fullReprocessReason: 'majority-scenes-affected',
-    };
+    return { structural, scenesReprocessed: structural.scenes.length, scenesReused: 0, fullReprocessReason: 'majority-scenes-affected' };
   }
-  
-  // Full reprocess but track which scenes are new vs reused
+
   const newStructural = parseStructure(newText);
-  
-  // For scenes not affected, try to preserve analysis metadata
+
+  // OPTIMIZATION: Index old scenes by type/location to avoid O(N^2) search
+  const oldScenesLookup = new Map<string, Scene[]>();
+
+  for (const s of prevStructural.scenes) {
+    if (affectedSceneIds.has(s.id)) continue;
+    const key = `${s.type}:${Math.floor(s.startOffset / 1000)}`;
+    if (!oldScenesLookup.has(key)) oldScenesLookup.set(key, []);
+    oldScenesLookup.get(key)!.push(s);
+  }
+
   for (const newScene of newStructural.scenes) {
-    const oldScene = prevStructural.scenes.find(s => 
-      !affectedSceneIds.has(s.id) &&
-      s.type === newScene.type &&
-      Math.abs(s.startOffset - newScene.startOffset) < INCREMENTAL_SCENE_MATCH_BUFFER
-    );
-    
+    const baseBucket = Math.floor(newScene.startOffset / 1000);
+    const candidateBuckets = [baseBucket - 1, baseBucket, baseBucket + 1];
+    let oldScene: Scene | undefined;
+
+    for (const bucket of candidateBuckets) {
+      const key = `${newScene.type}:${bucket}`;
+      const candidates = oldScenesLookup.get(key);
+      if (!candidates) continue;
+
+      oldScene = candidates.find(s => Math.abs(s.startOffset - newScene.startOffset) < INCREMENTAL_SCENE_MATCH_BUFFER);
+      if (oldScene) break;
+    }
+
     if (oldScene) {
-      // Preserve POV and location if they weren't in the change area
-      if (oldScene.pov && !newScene.pov) {
-        newScene.pov = oldScene.pov;
-      }
-      if (oldScene.location && !newScene.location) {
-        newScene.location = oldScene.location;
-      }
+      if (oldScene.pov && !newScene.pov) newScene.pov = oldScene.pov;
+      if (oldScene.location && !newScene.location) newScene.location = oldScene.location;
     }
   }
-  
+
   return {
     structural: newStructural,
     scenesReprocessed: affectedSceneIds.size,
@@ -181,55 +188,40 @@ const patchStructure = (
 // ENTITY PATCHING
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Patch entity graph by updating only affected entities
- */
 const patchEntities = (
   newText: string,
   prevEntities: EntityGraph,
   affectedEntityIds: string[],
   newStructural: StructuralFingerprint,
-  chapterId: string
+  chapterId: string,
 ): { entities: EntityGraph; entitiesUpdated: number; entitiesReused: number } => {
-  // If too many entities affected, full reprocess
-  if (affectedEntityIds.length > prevEntities.nodes.length * 0.5 || 
-      affectedEntityIds.length > 10) {
-    const entities = extractEntities(
-      newText,
-      newStructural.paragraphs,
-      newStructural.dialogueMap,
-      chapterId
-    );
-    return { 
-      entities, 
-      entitiesUpdated: entities.nodes.length, 
-      entitiesReused: 0 
-    };
+
+  // Fallback if too many changes
+  if (affectedEntityIds.length > prevEntities.nodes.length * 0.5 || affectedEntityIds.length > 50) {
+    const entities = extractEntities(newText, newStructural.paragraphs, newStructural.dialogueMap, chapterId);
+    return { entities, entitiesUpdated: entities.nodes.length, entitiesReused: 0 };
   }
-  
-  // Full re-extract for accuracy, but we track what changed
-  const newEntities = extractEntities(
-    newText,
-    newStructural.paragraphs,
-    newStructural.dialogueMap,
-    chapterId
-  );
-  
-  // Preserve relationship sentiment for unchanged entities
+
+  const newEntities = extractEntities(newText, newStructural.paragraphs, newStructural.dialogueMap, chapterId);
+
+  // OPTIMIZATION: Create a lookup Map for old edges (O(1) access)
+  const oldEdgeMap = new Map<string, EntityEdge>();
+  for (const e of prevEntities.edges) {
+    if (!affectedEntityIds.includes(e.source) && !affectedEntityIds.includes(e.target)) {
+      oldEdgeMap.set(`${e.source}:${e.target}`, e);
+    }
+  }
+
   for (const newEdge of newEntities.edges) {
-    if (!affectedEntityIds.includes(newEdge.source) && 
-        !affectedEntityIds.includes(newEdge.target)) {
-      const oldEdge = prevEntities.edges.find(e => 
-        e.source === newEdge.source && e.target === newEdge.target
-      );
+    if (!affectedEntityIds.includes(newEdge.source) && !affectedEntityIds.includes(newEdge.target)) {
+      const oldEdge = oldEdgeMap.get(`${newEdge.source}:${newEdge.target}`);
       if (oldEdge) {
-        // Preserve accumulated data
         newEdge.sentiment = oldEdge.sentiment;
         newEdge.evidence = [...oldEdge.evidence, ...newEdge.evidence].slice(-5);
       }
     }
   }
-  
+
   return {
     entities: newEntities,
     entitiesUpdated: affectedEntityIds.length,
@@ -241,15 +233,11 @@ const patchEntities = (
 // MAIN INCREMENTAL PROCESSOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Process manuscript incrementally based on delta changes
- * Falls back to full processing when incremental isn't feasible
- */
 export const processManuscriptIncremental = (
   newText: string,
   chapterId: string,
   prevText: string,
-  prevIntelligence: ManuscriptIntelligence
+  prevIntelligence: ManuscriptIntelligence,
 ): IncrementalProcessingResult => {
   const startTime = Date.now();
   const stats = {
@@ -260,23 +248,15 @@ export const processManuscriptIncremental = (
     fullReprocessReason: undefined as string | undefined,
     processingTimeMs: 0,
   };
-  
-  // Quick hash check - if identical, return cached
+
   const newHash = hashContent(newText);
   if (newHash === prevIntelligence.delta.contentHash) {
     stats.processingTimeMs = Date.now() - startTime;
     return { intelligence: prevIntelligence, processingStats: stats };
   }
-  
-  // Compute delta
-  const delta = createDelta(
-    prevText,
-    newText,
-    prevIntelligence.entities,
-    prevIntelligence.timeline
-  );
-  
-  // If no meaningful changes detected, return with updated hash
+
+  const delta = createDelta(prevText, newText, prevIntelligence.entities, prevIntelligence.timeline);
+
   if (delta.changedRanges.length === 0) {
     stats.processingTimeMs = Date.now() - startTime;
     return {
@@ -284,48 +264,28 @@ export const processManuscriptIncremental = (
       processingStats: stats,
     };
   }
-  
+
   const affectedRanges = computeAffectedRanges(delta.changedRanges);
-  
-  // 1. Structural patching
-  const { structural, scenesReprocessed, scenesReused, fullReprocessReason } = patchStructure(
-    newText,
-    prevIntelligence.structural,
-    affectedRanges
-  );
+
+  const { structural, scenesReprocessed, scenesReused, fullReprocessReason } = patchStructure(newText, prevIntelligence.structural, affectedRanges);
   stats.scenesReprocessed = scenesReprocessed;
   stats.scenesReused = scenesReused;
   if (fullReprocessReason) stats.fullReprocessReason = fullReprocessReason;
-  
-  // 2. Entity patching
-  const { entities, entitiesUpdated, entitiesReused } = patchEntities(
-    newText,
-    prevIntelligence.entities,
-    delta.affectedEntities,
-    structural,
-    chapterId
-  );
+
+  const { entities, entitiesUpdated, entitiesReused } = patchEntities(newText, prevIntelligence.entities, delta.affectedEntities, structural, chapterId);
   stats.entitiesUpdated = entitiesUpdated;
   stats.entitiesReused = entitiesReused;
-  
-  // 3. Timeline - always full rebuild (fast anyway)
+
   const timeline = buildTimeline(newText, structural.scenes, chapterId);
-  
-  // 4. Style - full rebuild if significant change, otherwise reuse
-  const totalChangeSize = affectedRanges.reduce((sum, r) => 
-    sum + Math.abs(r.lengthDelta) + (r.end - r.start), 0);
-  
-  const style = totalChangeSize > 500 
-    ? analyzeStyle(newText)
-    : prevIntelligence.style;
-  
-  // 5. Voice analysis
+
+  const totalChangeSize = affectedRanges.reduce((sum, r) => sum + Math.abs(r.lengthDelta) + (r.end - r.start), 0);
+
+  const style = totalChangeSize > 500 ? analyzeStyle(newText) : prevIntelligence.style;
+
   const voice = analyzeVoices(structural.dialogueMap);
-  
-  // 6. Heatmap - always rebuild (uses all other data)
+
   const heatmap = buildHeatmap(newText, structural, entities, timeline, style);
-  
-  // 7. Build HUD
+
   const intelligence: ManuscriptIntelligence = {
     chapterId,
     structural,
@@ -335,39 +295,30 @@ export const processManuscriptIncremental = (
     voice,
     heatmap,
     delta,
-    hud: null as any, // Will be set below
+    hud: null as any,
   };
-  
+
   intelligence.hud = buildHUD(intelligence, 0);
-  
+
   stats.processingTimeMs = Date.now() - startTime;
-  
+
   return { intelligence, processingStats: stats };
 };
 
-/**
- * Determine if incremental processing is appropriate
- */
 export const shouldUseIncremental = (
   delta: ManuscriptDelta,
-  textLength: number
+  textLength: number,
 ): boolean => {
-  // Use incremental if:
-  // 1. Few changes (typical editing)
-  // 2. Changes are small relative to document size
-  // 3. Not a bulk paste/replace operation
-  
   if (delta.changedRanges.length === 0) return false;
-  if (delta.changedRanges.length > 5) return false;
-  
+  if (delta.changedRanges.length > 20) return false;
+
   const totalChangeSize = delta.changedRanges.reduce((sum, c) => {
     const oldLen = c.oldText?.length || 0;
     const newLen = c.newText?.length || 0;
     return sum + Math.max(oldLen, newLen);
   }, 0);
-  
-  // If changes are more than 20% of document, do full reprocess
-  if (totalChangeSize > textLength * 0.2) return false;
-  
+
+  if (totalChangeSize > textLength * 0.3) return false;
+
   return true;
 };

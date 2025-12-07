@@ -8,6 +8,9 @@ const windowRef =
     ? window
     : ((globalThis as any) as Window & typeof globalThis);
 
+// Force zero-latency persistence in tests to avoid debounce-induced delays
+(globalThis as any).__QUILL_WRITE_DEBOUNCE_MS = 0;
+
 // Stores are now globally mocked, so no need for manual state tracking
 
 // Lightweight global mock for @google/genai to avoid heavy SDK initialization in tests
