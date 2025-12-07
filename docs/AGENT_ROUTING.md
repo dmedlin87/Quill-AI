@@ -22,25 +22,25 @@
 ## How the agent gets context (files to inspect)
 
 - **App Brain state + builders:** `services/appBrain/contextBuilder.ts`, `services/appBrain/adaptiveContext.ts`, `services/appBrain/contextStreamer.ts` (prompt assembly, token budgeting, memory relevance).  
-- **State provider:** `features/shared/context/AppBrainContext.tsx` (aggregates manuscript, editor, analysis, intelligence, UI/session).  
+- **State provider:** `features/core/context/AppBrainContext.tsx` (aggregates manuscript, editor, analysis, intelligence, UI/session).  
 - **Smart context entrypoint:** `services/appBrain/index.ts` exports `getSmartAgentContext` and profiles (see `PROFILE_ALLOCATIONS`).  
 - **Memory fetch + ordering:** `services/memory/index.ts` (memory slices, bedside prioritization).  
 - **Model + token budgets:** `config/models.ts`, `config/api.ts`, `config/index.ts` (limits, reserves).  
-- **Where prompts are consumed:** `services/gemini/agent.ts` (chat creation), `services/gemini/agentTools.ts` (tools), `services/gemini/agentToolLoop.ts` (execution loop).
+- **Where prompts are consumed:** `services/gemini/agent.ts` (chat creation), `services/gemini/agentTools.ts` (tools), `services/core/agentToolLoop.ts` (execution loop).
 
 ## Event bus → Orchestrator → Tool execution
 
 - **Event bus + orchestrator machine:** `services/core/agentOrchestratorMachine.ts`, `services/core/AgentController.ts`, `services/core/agentToolLoop.ts`.  
 - **Canonical hook:** `features/agent/hooks/useAgentOrchestrator.ts` (UI entrypoint).  
 - **Commands registry:** `services/commands/*` (grouped by domain: editing, navigation, analysis, generation, etc.).  
-- **App actions wiring:** `features/shared/context/AppBrainContext.tsx` passes action handlers into the orchestrator.  
+- **App actions wiring:** `features/core/context/AppBrainContext.tsx` passes action handlers into the orchestrator.  
 - **Legacy path (deprecated):** `features/agent/hooks/useAgentService.ts` + `features/agent/components/ChatInterface.tsx` — prefer orchestrator.
 
 ## Agent tools: how to add or change one
 
 1. **Define/modify tool schema:** `services/gemini/agentTools.ts` (FunctionDeclarations).  
-2. **Wire execution:** Add or update a command in `services/commands/*.ts` and export it through `services/commands/index.ts`.  
-3. **Expose to orchestrator:** Ensure the command is registered in `services/core/agentToolLoop.ts` / `AgentController`.  
+2. **Wire execution:** Add or update a command in `services/commands/*.ts` and register it in `services/commands/registry.ts`.  
+3. **Expose to orchestrator:** The shared tool loop lives in `services/core/agentToolLoop.ts` and is used by both `useAgentOrchestrator` and `services/core/AgentController.ts` via `services/gemini/toolExecutor.ts`. Make sure the **tool name** you added in `agentTools.ts` matches the command name registered in the `CommandRegistry`.
 4. **Surface in UI (if needed):** Confirm `useAgentOrchestrator` is used by the UI you care about.  
 5. **Docs:** Add the tool to [AGENT_TOOLS_REFERENCE.md](./AGENT_TOOLS_REFERENCE.md).  
 6. **Tests:** Add coverage under `tests/services/commands/` or feature-level tests as appropriate.

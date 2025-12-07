@@ -12,7 +12,7 @@ Related docs:
 - [Omniscient Agent Architecture](./AGENT_ARCHITECTURE.md)
 - [App Brain, Memory, and Intelligence Flow](./APP_BRAIN_FLOW.md)
 - [Token limits and analysis truncation](./token-limits.md)
- - [Deterministic Intelligence Engine](./INTELLIGENCE_ENGINE.md)
+- [Deterministic Intelligence Engine](./INTELLIGENCE_ENGINE.md)
 
 ## 1. State Hierarchy
 
@@ -67,7 +67,7 @@ The store is the **single source of truth** for persisted manuscript structure a
 
 ### 1.2 Editor Context (React Context)
 
-- **Location:** `features/shared/context/EditorContext.tsx`
+- **Location:** `features/core/context/EditorContext.tsx`
 - **Responsibility:** Transient editing session state for the active chapter.
 
 Key capabilities:
@@ -84,7 +84,7 @@ The EditorContext **subscribes to** the Project Store (active chapter) and expos
 
 ### 1.3 Engine Context (AI Engine)
 
-- **Location:** `features/shared/context/EngineContext.tsx`
+- **Location:** `features/core/context/EngineContext.tsx`
 - **Responsibility:** Orchestrates AI features (analysis, magic editor, agent tools) and background indexing.
 
 Composition:
@@ -220,7 +220,7 @@ Together, the **Viewport Collision** UX pattern and the **Token Guard** API patt
 
 Above the Engine layer, Quill AI exposes an omniscient agent that sees unified application state and can safely execute tools.
 
-- **State aggregation:** `AppBrainProvider` (`features/shared/context/AppBrainContext.tsx`) combines:
+- **State aggregation:** `AppBrainProvider` (`features/core/context/AppBrainContext.tsx`) combines:
   - Project Store (projects, chapters, lore, manuscript index)
   - EditorContext (text, selection, branches, comments, zen mode)
   - Analysis state (incremental analysis results and status)
@@ -230,7 +230,7 @@ Above the Engine layer, Quill AI exposes an omniscient agent that sees unified a
 - **Canonical agent hook:** `useAgentOrchestrator` (`features/agent/hooks/useAgentOrchestrator.ts`) is the primary entrypoint for chat/agent UIs. It:
   - Creates Gemini chat sessions via `services/gemini/agent.ts` with `ALL_AGENT_TOOLS`.
   - Builds prompts from AppBrain context (including compressed variants for latency‑sensitive modes).
-  - Routes tool calls through `executeAppBrainToolCall` to `AppBrainActions` (navigation, editing, analysis, UI, knowledge, generation).
+  - Routes tool calls through `executeAgentToolCall` (in `services/gemini/toolExecutor.ts`) to `AppBrainActions` and the memory service.
 
 ### 5.1 Legacy Agent Paths (Deprecated)
 

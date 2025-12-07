@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useState, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useCallback, useState, useMemo, useEffect, useRef } from 'react';
 
 import { useProjectStore } from '@/features/project';
 import { useDocumentHistory, useEditorSelection, useEditorComments, useEditorBranching } from '@/features/editor';
@@ -222,10 +222,14 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     clearComments,
   } = useEditorComments(activeChapter);
 
-  // Reset per-chapter transient UI state to avoid leaking selection/comments across chapters
+  const prevChapterIdRef = useRef(activeChapterId);
   useEffect(() => {
-    clearSelection();
-    clearComments();
+    // Only clear when switching TO A DIFFERENT chapter, not on initial mount
+    if (prevChapterIdRef.current !== activeChapterId && prevChapterIdRef.current !== undefined) {
+      clearSelection();
+      clearComments();
+    }
+    prevChapterIdRef.current = activeChapterId;
   }, [activeChapterId, clearSelection, clearComments]);
 
   // Quill AI 3.0: Zen Mode State

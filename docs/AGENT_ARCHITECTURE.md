@@ -49,10 +49,10 @@ A **unified agent layer** that has complete awareness of the application state�
 │  │                                                                  ││
 │  │  NAVIGATION                    EDITING                           ││
 │  │  • navigate_to_text            • update_manuscript               ││
-│  │  • search_dialogue             • append_text                     ││
-│  │  • search_character_mentions   • undo / redo                     ││
-│  │  • jump_to_chapter             • create_branch                   ││
-│  │  • jump_to_scene                                                 ││
+│  │  • jump_to_chapter             • append_to_manuscript            ││
+│  │  • jump_to_scene               • insert_at_cursor                ││
+│  │  • scroll_to_position          • undo_last_change / redo_last_change ││
+│  │                                  • create_branch                 ││
 │  │                                                                  ││
 │  │  ANALYSIS                      UI CONTROL                        ││
 │  │  • get_critique_for_selection  • switch_panel                    ││
@@ -114,7 +114,7 @@ The agent receives:
 const agent = useAgentService(text, { lore, chapters, analysis, intelligenceHUD });
 
 // After: Automatic context from AppBrain
-const agent = useAgent(); // Automatically has full context
+const agent = useAgentOrchestrator(); // Uses AppBrain-powered context
 ```
 
 ---
@@ -535,7 +535,7 @@ export class EventBus {
 
 ### Phase 5: Database Extensions
 
-Add new tables for unified knowledge:
+Add new tables for unified knowledge (planned / future work):
 
 ```typescript
 // services/db.ts
@@ -698,7 +698,7 @@ services/
 │   └── types.ts              # Unified AppBrain types (state, actions, events)
 ├── gemini/
 │   ├── agent.ts              # Agent session creation
-│   ├── agentTools.ts         # NEW: Full tool definitions
+│   ├── agentTools.ts         # Tool definitions
 │   └── ...
 └── db.ts                     # Dexie DB with projects, chapters, and agent memory tables
 
@@ -706,12 +706,9 @@ features/
 ├── agent/
 │   ├── hooks/
 │   │   ├── useAgentOrchestrator.ts  # Canonical omniscient agent hook (AppBrain-powered)
-│   │   ├── useAgentService.ts       # Legacy manual-context hook (deprecated)
-│   │   └── useAgenticEditor.ts      # Legacy agentic editor wrapper (deprecated)
-│   ├── components/
-│   │   └── ChatInterface.tsx        # Legacy chat UI using useAgentService (deprecated)
+│   │   └── ...
 │   └── ...
-└── shared/
+└── core/
     └── context/
         └── AppBrainContext.tsx       # React wrapper over AppBrain (canonical source for agent state)
 ```

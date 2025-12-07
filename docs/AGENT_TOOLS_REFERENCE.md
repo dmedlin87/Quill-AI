@@ -84,9 +84,9 @@ Representative tools:
     - Replaces the **first** occurrence of `searchText` in the current chapter.  
     - Commits via `deps.commitEdit(newText, description, 'Agent')` so history/undo sees it.
 
-- **`append_text`**  
+- **`append_to_manuscript`**  
   - **Command:** `AppendTextCommand`  
-  - **Behavior:** Appends text to the end of the chapter and records the operation with `commitEdit`.
+  - **Behavior:** Appends text to the end of the active chapter and records the operation with `commitEdit` so it participates in undo/redo.
 
 Agent edits are recorded in **CommandHistory** (unless they are pure memory tools). `CommandRegistry.isReversible(toolName)` marks which edits can be undone.
 

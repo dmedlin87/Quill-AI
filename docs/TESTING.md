@@ -38,8 +38,8 @@ Quill AI uses:
 | `npm run test:quick` | Fast dot‑reporter run for quick feedback |
 | `npm run test:ui` | Open Vitest UI for focused debugging |
 | `npm run test:coverage` | Run tests with coverage, write `coverage/coverage-summary.json` & HTML report |
-| `npm run test:status` | Generate [docs/TEST_COVERAGE.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_COVERAGE.md:0:0-0:0) + update `coverage/history.json` |
-| `npm run test:audit` | Generate [docs/TEST_AUDIT.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_AUDIT.md:0:0-0:0) (missing & stale tests) |
+| `npm run test:status` | Generate [docs/TEST_COVERAGE.md](./TEST_COVERAGE.md) + update `coverage/history.json` |
+| `npm run test:audit` | Generate [docs/TEST_AUDIT.md](./TEST_AUDIT.md) (missing & stale tests) |
 | `npm run test:regression` | Fail if coverage drops more than **2.0 points** vs baseline |
 | `npm run test:docs` | Ensure [TEST_COVERAGE.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_COVERAGE.md:0:0-0:0) / [TEST_AUDIT.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_AUDIT.md:0:0-0:0) are **fresh** vs git HEAD date |
 | `npm run test:docs:strict` | Ensure coverage docs in the working tree match committed generator output |
@@ -51,7 +51,7 @@ Pipeline (matches the **Coverage Report Generation** codemap):
 
 1. **Collect coverage**  
    - `npm run test:coverage` → Vitest writes `coverage/coverage-summary.json` and HTML report.
-2. **Generate status report** ([scripts/generate-test-status.mjs](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/scripts/generate-test-status.mjs:0:0-0:0))  
+2. **Generate status report** (`scripts/generate-test-status.mjs`)  
    - Reads `coverage-summary.json` and optional `vitest-report.json`.  
    - Extracts total coverage metrics.  
    - Appends a snapshot to `coverage/history.json` (up to the last 100 runs).  
@@ -97,7 +97,7 @@ Flow (matches the **Coverage Regression Checking** codemap):
 
 ### CI Workflow (GitHub Actions)
 
-Flow (see [.github/workflows/tests.yml](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/.github/workflows/tests.yml:0:0-0:0)):
+Flow (see `.github/workflows/tests.yml`):
 
 1. **Test execution phase**  
    - `npm run test:coverage` (with `CI=true`).
@@ -138,9 +138,9 @@ This ensures the repository always has accurate, up-to-date coverage documentati
 
 Exact percentages change frequently and are **not hard‑coded** here. To see them:
 
-- **Snapshot report:** [docs/TEST_COVERAGE.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_COVERAGE.md:0:0-0:0)
+- **Snapshot report:** [docs/TEST_COVERAGE.md](./TEST_COVERAGE.md)
 - **Historical trend:** `coverage/history.json` (latest 100 snapshots)
-- **Gap analysis:** [docs/TEST_AUDIT.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_AUDIT.md:0:0-0:0)
+- **Gap analysis:** [docs/TEST_AUDIT.md](./TEST_AUDIT.md)
 - **HTML report:** `coverage/index.html`
 
 Thresholds enforced (in Vite + Test Health Suite):
@@ -168,7 +168,7 @@ Testing is considered **complete enough** when:
    - At least one integration test in `tests/integration/` that exercises the end‑to‑end happy path.
    - Error paths for those flows are covered either by integration tests or focused unit tests.
 5. **Zero regressions** – coverage cannot silently drop without CI failure; any intentional decrease must be justified in the PR description and accompanied by new tests elsewhere.
-6. **Docs stay in sync** – [TEST_COVERAGE.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_COVERAGE.md:0:0-0:0) and [TEST_AUDIT.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_AUDIT.md:0:0-0:0) are fresh and committed.
+6. **Docs stay in sync** – [TEST_COVERAGE.md](./TEST_COVERAGE.md) and [TEST_AUDIT.md](./TEST_AUDIT.md) are fresh and committed.
 7. **CI thresholds are treated as a floor, not the goal** – local work aims for the stricter targets above (95%+ core logic, 75–90%+ key UI) even though Vite/CI enforce lower numeric minimums.
 
 ---
@@ -197,8 +197,8 @@ Most of these modules now have strong coverage; new logic should follow the same
   - `features/project/store/useProjectStore.ts`
   - `features/settings/store/useSettingsStore.ts`
 - React contexts:
-  - `features/shared/context/EditorContext.tsx`
-  - `features/shared/context/EngineContext.tsx`
+  - `features/core/context/EditorContext.tsx`
+  - `features/core/context/EngineContext.tsx`
   - `features/shared/context/UsageContext.tsx`
   - `features/analysis/context/AnalysisContext.tsx`
 
@@ -243,10 +243,10 @@ For the agent layer specifically, the shared Gemini tool-call loop and its orche
 Focus on:
 
 - Rich editor UI:
-  - [features/editor/components/RichTextEditor.tsx](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/features/editor/components/RichTextEditor.tsx:0:0-0:0)
-  - [features/editor/components/MagicBar.tsx](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/features/editor/components/MagicBar.tsx:0:0-0:0)
-  - [features/editor/components/CommentCard.tsx](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/features/editor/components/CommentCard.tsx:0:0-0:0)
-  - [features/editor/components/EditorWorkspace.tsx](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/features/editor/components/EditorWorkspace.tsx:0:0-0:0)
+  - `features/editor/components/RichTextEditor.tsx`
+  - `features/editor/components/MagicBar.tsx`
+  - `features/editor/components/CommentCard.tsx`
+  - `features/editor/components/EditorWorkspace.tsx`
 - Agent / analysis UI:
   - `features/agent/components/ChatInterface.tsx`
   - `features/analysis/components/AnalysisPanel.tsx`
