@@ -1,8 +1,8 @@
 # Plan: MemoryManager refactor
 
-- [ ] Analyze features/memory/MemoryManager.tsx for typing gaps, memo/callback needs, and lifecycle cleanup.
-- [ ] Refactor MemoryManager with stricter typing, memoized callbacks, JSDoc on complex flows, and leak prevention.
-- [ ] Add/adjust tests for MemoryManager behaviors and run relevant vitest suites.
+- [x] Review memory module files (MemoryManager, autoObserver, memory service/types) for typing gaps, memo/callback misuse, leaks.
+- [ ] Refactor to strict typing and React 18 patterns; add JSDoc for complex logic; fix leaks.
+- [ ] Add/adjust tests if needed; run targeted test suite.
 
 ## Plan: ImportWizard refactor & tests
 

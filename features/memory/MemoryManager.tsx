@@ -77,6 +77,8 @@ const clampImportance = (value: number) => Math.max(0, Math.min(1, value));
 
 /**
  * Normalizes user-entered importance to the [0, 1] range with a safe fallback.
+ *
+ * @param value raw numeric input (may be NaN from parsing form fields)
  */
 const normalizeImportance = (value: number) => (Number.isFinite(value) ? clampImportance(value) : 0.5);
 
@@ -106,7 +108,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
 
   /**
    * Fetches all scoped memory data for the active project.
-   * Memoized to avoid recreating the function in effects and handlers.
+   * Uses a mounted guard to avoid setting state after unmount.
    */
   const refreshData = useCallback(async () => {
     if (!projectId) return;
@@ -137,6 +139,9 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
     }
   }, [projectId, refreshData]);
 
+  /**
+   * Handles memory create/update with strict validation and normalized importance.
+   */
   const handleMemorySubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -146,13 +151,19 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       return;
     }
 
+    const sanitizedText = memoryForm.text.trim();
+    if (!sanitizedText) {
+      setError('Memory text is required.');
+      return;
+    }
+
     const topicTags = memoryForm.topicTags
       .split(',')
       .map(tag => tag.trim())
       .filter(Boolean);
 
     const payload: CreateMemoryNoteInput = {
-      text: memoryForm.text.trim(),
+      text: sanitizedText,
       type: memoryForm.type,
       topicTags,
       importance: normalizeImportance(memoryForm.importance),
@@ -168,8 +179,8 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       }
       setMemoryForm(defaultMemoryForm(projectId));
       void refreshData();
-    } catch (err: any) {
-      setError(err?.message || 'Unable to save memory');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to save memory');
     }
   }, [memoryForm, projectId, refreshData]);
 
@@ -186,10 +197,18 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
   }, []);
 
   const handleDeleteMemory = useCallback(async (id: string) => {
-    await deleteMemory(id);
-    void refreshData();
+    setError(null);
+    try {
+      await deleteMemory(id);
+      void refreshData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to delete memory');
+    }
   }, [refreshData]);
 
+  /**
+   * Handles goal create/update for the active project.
+   */
   const handleGoalSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -200,7 +219,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
 
     const payload: CreateGoalInput = {
       projectId,
-      title: goalForm.title?.trim() || '',
+      title: goalForm.title?.trim() ?? '',
       description: goalForm.description?.trim(),
       status: goalForm.status || 'active',
       progress: goalForm.progress ?? 0,
@@ -214,8 +233,8 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       }
       setGoalForm(defaultGoalForm);
       void refreshData();
-    } catch (err: any) {
-      setError(err?.message || 'Unable to save goal');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to save goal');
     }
   }, [goalForm, projectId, refreshData]);
 
@@ -230,10 +249,18 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
   }, []);
 
   const handleDeleteGoal = useCallback(async (id: string) => {
-    await deleteGoal(id);
-    void refreshData();
+    setError(null);
+    try {
+      await deleteGoal(id);
+      void refreshData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to delete goal');
+    }
   }, [refreshData]);
 
+  /**
+   * Handles watched entity create/update for proactive monitoring.
+   */
   const handleEntitySubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -242,13 +269,13 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       return;
     }
 
-    const payload = {
+    const payload: Omit<WatchedEntity, 'id' | 'createdAt'> = {
       projectId,
       name: entityForm.name?.trim() || '',
       priority: entityForm.priority || 'medium',
       reason: entityForm.reason?.trim(),
       monitoringEnabled: entityForm.monitoringEnabled !== false,
-    } as const;
+    };
 
     try {
       if (entityForm.id) {
@@ -258,8 +285,8 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
       }
       setEntityForm(defaultEntityForm);
       void refreshData();
-    } catch (err: any) {
-      setError(err?.message || 'Unable to save watched entity');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to save watched entity');
     }
   }, [entityForm, projectId, refreshData]);
 
@@ -274,11 +301,16 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
   }, []);
 
   const handleDeleteEntity = useCallback(async (id: string) => {
-    await removeWatchedEntity(id);
-    if (entityForm.id === id) {
-      setEntityForm(defaultEntityForm);
+    setError(null);
+    try {
+      await removeWatchedEntity(id);
+      if (entityForm.id === id) {
+        setEntityForm(defaultEntityForm);
+      }
+      void refreshData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to delete watched entity');
     }
-    void refreshData();
   }, [entityForm.id, refreshData]);
 
   const handleToggleMonitoring = useCallback(async (entity: WatchedEntity) => {
