@@ -8,14 +8,29 @@ import { Chapter } from '@/types/schema';
 vi.mock('@/features/project/store/useProjectStore');
 vi.mock('framer-motion', async () => {
   const actual = await vi.importActual('framer-motion');
+  const stripMotionProps = <P extends Record<string, unknown>>(props: P) => {
+    const {
+      layout,
+      layoutId,
+      whileHover,
+      whileTap,
+      transition,
+      variants,
+      initial,
+      animate,
+      exit,
+      ...rest
+    } = props;
+    return rest;
+  };
   return {
     ...actual,
     motion: {
-      div: ({ children, ...props }: React.PropsWithChildren<React.HTMLAttributes<HTMLDivElement>>) => (
-        <div {...props}>{children}</div>
+      div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => (
+        <div {...stripMotionProps(props)}>{children}</div>
       ),
-      button: ({ children, ...props }: React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>) => (
-        <button {...props}>{children}</button>
+      button: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => (
+        <button {...stripMotionProps(props)}>{children}</button>
       ),
     },
     AnimatePresence: ({ children }: React.PropsWithChildren) => <>{children}</>,

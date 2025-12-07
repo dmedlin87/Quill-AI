@@ -8,10 +8,11 @@ import { EXPERIENCE_PRESETS, AUTONOMY_PRESETS, ExperienceLevel, AutonomyMode } f
 // Mock framer-motion to avoid animation issues in JSDOM
 vi.mock('framer-motion', () => ({
   motion: {
-    div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+    // Destructure framer-specific props to prevent them from being passed to the DOM
+    div: ({ children, layoutId, transition, ...props }: any) => (
       <div {...props}>{children}</div>
     ),
-    button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    button: ({ children, whileHover, whileTap, transition, ...props }: any) => (
       <button {...props}>{children}</button>
     ),
   },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { vi } from 'vitest';
 import { RateLimitError, AIError } from '@/services/gemini/errors';
 
@@ -46,15 +46,18 @@ const baseProps = {
 };
 
 const typeAndSend = async (text: string) => {
-  const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
-  const sendButton = screen.getAllByRole('button').at(-1);
+  let input: HTMLElement | null = null;
+  await act(async () => {
+    input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
+    const sendButton = screen.getAllByRole('button').at(-1);
 
-  expect(sendButton).toBeTruthy();
+    expect(sendButton).toBeTruthy();
 
-  fireEvent.change(input, { target: { value: text } });
-  fireEvent.click(sendButton!);
+    fireEvent.change(input!, { target: { value: text } });
+    fireEvent.click(sendButton!);
+  });
 
-  return input;
+  return input!;
 };
 
 describe('ChatInterface', () => {
