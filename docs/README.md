@@ -28,6 +28,25 @@ This folder contains project documentation and development guides. Start here to
 | Gap audit | [TEST_AUDIT.md](./TEST_AUDIT.md) | Auto-generated test gap analysis. |
 | Coverage plan | [TEST_COVERAGE_PLAN.md](./TEST_COVERAGE_PLAN.md) | Plan to drive files to ≥90% coverage. |
 
+## Core systems quick map
+
+- **AppBrain state aggregation** – How unified manuscript, analysis, intelligence, and UI state are built and passed to the agent. See:
+  - [ARCHITECTURE.md](./ARCHITECTURE.md)
+  - [APP_BRAIN_FLOW.md](./APP_BRAIN_FLOW.md)
+  - [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md)
+- **Agent tool execution** – How Gemini tool calls become concrete app actions. See:
+  - [AGENT_ROUTING.md](./AGENT_ROUTING.md)
+  - [AGENT_TOOLS_REFERENCE.md](./AGENT_TOOLS_REFERENCE.md)
+  - [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md)
+- **Memory retrieval & bedside notes** – How persistent memory and planning notes are stored and injected into prompts. See:
+  - [MEMORY_SYSTEM.md](./MEMORY_SYSTEM.md)
+  - [BEDSIDE_NOTE_ROADMAP.md](./BEDSIDE_NOTE_ROADMAP.md)
+  - [APP_BRAIN_FLOW.md](./APP_BRAIN_FLOW.md)
+- **Analysis pipeline & token guard** – How manuscript analysis runs through the engine, token guard, and Dexie. See:
+  - [ARCHITECTURE.md](./ARCHITECTURE.md)
+  - [INTELLIGENCE_ENGINE.md](./INTELLIGENCE_ENGINE.md)
+  - [token-limits.md](./token-limits.md)
+
 ## Quick commands
 
 - **Run tests:** `npm test`

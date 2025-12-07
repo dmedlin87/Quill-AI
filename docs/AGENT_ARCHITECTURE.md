@@ -195,6 +195,14 @@ export interface AppBrainContext {
 }
 ```
 
+#### How to add a new AppBrain signal (checklist)
+
+- **Pick the state slice:** Decide whether the signal belongs to `manuscript`, `intelligence`, `analysis`, `lore`, `ui`, or `session` and add the field to `AppBrainState` in `services/appBrain/types.ts`.
+- **Populate it from real sources:** Update `AppBrainProvider` in `features/core/context/AppBrainContext.tsx` so the new field is derived from existing stores/contexts (`useProjectStore`, `useEditorContext`, `useEngineContext`, intelligence hooks, etc.).
+- **Expose actions only if needed:** If the agent should change this signal (not just read it), extend `AppBrainActions` in `services/appBrain/types.ts` and implement the action in `AppBrainProvider`, then wire it through any relevant commands in `services/commands/*`.
+- **Thread it into context:** If the signal should appear in prompts, update the builders in `services/appBrain/contextBuilder.ts` / `adaptiveContext.ts` to include it in the appropriate section (e.g. intelligence, UI, session) rather than adding ad-hoc strings elsewhere.
+- **Cover with tests:** Add or extend tests around `AppBrainProvider` and/or the context builders to assert that when the underlying store/context changes, the new AppBrain field and any derived context strings update as expected.
+
 ### Phase 2: Enhanced Agent Tools
 
 Expand the tool set for full app control:
@@ -676,6 +684,14 @@ Status (current):
 - Phases 1–3 are implemented (AppBrain, unified tools, event bus).
 - Phase 4 is realized via the agent memory tables (`memories`, `goals`, `watchedEntities`).
 - Phase 5 (voice integration on top of compressed context + VOICE_SAFE_TOOLS) is in progress/experimental.
+
+### Implementation status snapshot
+
+- **Phase 1 – AppBrain foundation:** Implemented. `AppBrainState`, context builders, and `AppBrainProvider` (`features/core/context/AppBrainContext.tsx`) are in active use.
+- **Phase 2 – Unified tools:** Implemented. Tool schemas live in `services/gemini/agentTools.ts` and execute via `services/gemini/toolExecutor.ts` and `services/commands/*`.
+- **Phase 3 – Orchestrator + event bus:** Implemented. `useAgentOrchestrator` uses the shared `runAgentToolLoop` (`services/core/agentToolLoop.ts`) with AppBrain actions; the event bus is provided by `services/appBrain/eventBus.ts`.
+- **Phase 4 – Persistent memory:** Implemented for agent memory tables. The Dexie schema in `services/db.ts` includes `memories`, `goals`, and `watchedEntities`, and flows are wired through `services/memory/*`.
+- **Phase 5 – Voice mode:** Partial/experimental. Voice mode uses compressed AppBrain context and `VOICE_SAFE_TOOLS`, but the UI and experience are still evolving.
 
 Planned rollout (original roadmap):
 

@@ -41,7 +41,7 @@ Quill AI uses:
 | `npm run test:status` | Generate [docs/TEST_COVERAGE.md](./TEST_COVERAGE.md) + update `coverage/history.json` |
 | `npm run test:audit` | Generate [docs/TEST_AUDIT.md](./TEST_AUDIT.md) (missing & stale tests) |
 | `npm run test:regression` | Fail if coverage drops more than **2.0 points** vs baseline |
-| `npm run test:docs` | Ensure [TEST_COVERAGE.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_COVERAGE.md:0:0-0:0) / [TEST_AUDIT.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_AUDIT.md:0:0-0:0) are **fresh** vs git HEAD date |
+| `npm run test:docs` | Ensure [TEST_COVERAGE.md](./TEST_COVERAGE.md) / [TEST_AUDIT.md](./TEST_AUDIT.md) are **fresh** vs git HEAD date |
 | `npm run test:docs:strict` | Ensure coverage docs in the working tree match committed generator output |
 | `npm run test:full` | Convenience: `test:coverage` + `test:status` + `test:audit` in one command |
 
@@ -55,7 +55,7 @@ Pipeline (matches the **Coverage Report Generation** codemap):
    - Reads `coverage-summary.json` and optional `vitest-report.json`.  
    - Extracts total coverage metrics.  
    - Appends a snapshot to `coverage/history.json` (up to the last 100 runs).  
-   - Writes [docs/TEST_COVERAGE.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_COVERAGE.md:0:0-0:0) with:
+   - Writes [docs/TEST_COVERAGE.md](./TEST_COVERAGE.md) with:
      - Hero badge line (tests + coverage + date)
      - Coverage summary & threshold health
      - Test counts table
@@ -67,9 +67,9 @@ Pipeline (matches the **Coverage Report Generation** codemap):
 Flow (matches the **Test Gap Auditing** codemap):
 
 1. **Scan source files**  
-   - Scans [features/](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/tests/features:0:0-0:0), [services/](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/tests/services:0:0-0:0), [config/](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/tests/config:0:0-0:0), [types/](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/tests/types:0:0-0:0) for `.ts` / `.tsx`.
+   - Scans `features/`, `services/`, `config/`, `types/` for `.ts` / `.tsx`.
 2. **Scan tests**  
-   - Scans [tests/](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/tests:0:0-0:0) for `.test.ts` / `.test.tsx`.
+   - Scans `tests/` for `.test.ts` / `.test.tsx`.
 3. **Identify missing tests**  
    - For each source file, looks for a matching test file by basename.  
    - If no match, it is added to **“Source Files Missing Tests”**.
@@ -77,7 +77,7 @@ Flow (matches the **Test Gap Auditing** codemap):
    - For each test file, checks if a corresponding source file exists.  
    - If not, it goes into **“Potentially Stale Test Files”** (may be integration tests or dead tests).
 5. **Generate audit report**  
-   - Writes summary + tables to [docs/TEST_AUDIT.md](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/docs/TEST_AUDIT.md:0:0-0:0) with a `Last updated:` stamp.
+   - Writes summary + tables to [docs/TEST_AUDIT.md](./TEST_AUDIT.md) with a `Last updated:` stamp.
 
 ### Coverage Regression Checking
 
@@ -272,7 +272,7 @@ Representative flows:
 - Agent:
   - Chat request → AI response → manuscript edit applied.
 
-Existing tests in [tests/integration/](cci:7://file:///c:/Users/dmedl/Projects/Quill%20AI/tests/integration:0:0-0:0) cover core flows; new high‑level features should add similar integration tests.
+Existing tests in `tests/integration/` cover core flows; new high‑level features should add similar integration tests.
 
 ---
 

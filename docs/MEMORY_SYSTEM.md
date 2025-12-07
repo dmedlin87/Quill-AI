@@ -387,3 +387,13 @@ For a high-level view of how memory fits into the overall agent architecture, se
 For the full roadmap of bedside-note planning memory development, see:
 
 - `docs/BEDSIDE_NOTE_ROADMAP.md`
+
+## 9. Adding a new memory-backed feature (checklist)
+
+- **Shape the data first:** Decide whether the feature needs a new `MemoryNote` type, `AgentGoal`, `WatchedEntity`, or a separate table. If schema changes are required, add a new Dexie version in `services/db.ts` (keeping existing versions backwards-compatible).
+- **Extend the memory service:** Add focused helpers in `services/memory/index.ts` (or a nearby module) to create/query/update the new data shape. Treat these helpers as the primary API; call them from tools, observers, or UI instead of talking to Dexie directly.
+- **(Optional) Auto-observe it:** If the feature should react to analysis/intelligence automatically, extend `services/memory/autoObserver.ts` (or add a sibling observer) so the new memories/goals are created from `AnalysisResult` / `ManuscriptIntelligence` rather than only via explicit tools.
+- **(Optional) Track per-session behavior:** If the feature needs session-level summaries, update `services/memory/sessionTracker.ts` so new memories/goals participate in the session summary and `enrichToolResponse`.
+- **Integrate with context builders:** When the feature should influence prompts, update `services/appBrain/contextBuilder.ts` / `adaptiveContext.ts` to pull the new memories/goals into `[MEMORY]` or `[GOALS]` blocks, respecting existing token budgets and ordering rules.
+- **Expose via tools only if needed:** If the agent must manipulate this feature directly, add or extend tools in `services/gemini/agentTools.ts` and route them through `services/gemini/toolExecutor.ts` and `services/commands/*` (see `AGENT_TOOLS_REFERENCE.md` for the tool checklist).
+- **Add tests around the new edges:** Cover the new service helpers, any observers/session tracking, and at least one context-builder or tool-path that exercises the new memory-backed behavior (see `docs/TESTING.md` for expectations).

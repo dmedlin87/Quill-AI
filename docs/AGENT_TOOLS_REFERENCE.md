@@ -278,6 +278,8 @@ This allows `CommandRegistry` and `ToolExecutor` to record executions and expose
   - Command behavior in isolation (using fake AppBrain/dependency objects).
   - End-to-end flows for critical tools (via `useAgentOrchestrator` where appropriate).
 
+See `docs/TESTING.md` for overall testing strategy, thresholds, and where these tests fit into the wider health suite.
+
 ---
 
 ## 5. Debugging Tool Calls

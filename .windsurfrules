@@ -1,4 +1,8 @@
-# Bug Fixes
+# Bug FDocumentation edits
+“For non‑generated docs, verify any file paths, tool names, and APIs against the code before changing text.”
+“Prefer short, code‑anchored checklists and links over duplicating implementation details in prose.”
+Auto‑generated docs
+“Never hand‑edit auto‑generated docs (e.g. docs/TEST_COVERAGE.md, docs/TEST_AUDIT.md); only update via their scripts.”ixes
 
 - Always run code to verify fixes. Never claim something works based on reading alone.
 - For non-trivial bugs, write a failing test first, then fix, then confirm the test passes.
