@@ -30,17 +30,32 @@ export interface RunAgentToolLoopParams<TResponse extends AgentToolLoopModelResu
  * side-effects (UI messages, state updates, telemetry) and returns the
  * structured functionResponse payloads to send back to the model.
  */
+const MAX_TOOL_ROUND_TRIPS = 5;
+
 export async function runAgentToolLoop<TResponse extends AgentToolLoopModelResult>(
   params: RunAgentToolLoopParams<TResponse>,
 ): Promise<TResponse> {
-  const { chat, abortSignal, processToolCalls, onThinkingRoundStart } = params;
-  let result = params.initialResult;
+  const { chat, initialResult, processToolCalls, abortSignal, onThinkingRoundStart } = params;
+
+  let result = initialResult;
+  let rounds = 0;
 
   // Loop while the model is asking for tools
   while (result.functionCalls && result.functionCalls.length > 0) {
     if (abortSignal?.aborted) {
       return result;
     }
+
+    if (rounds >= MAX_TOOL_ROUND_TRIPS) {
+      return {
+        ...result,
+        text:
+          result.text ||
+          `Aborted tool execution after ${MAX_TOOL_ROUND_TRIPS} rounds to prevent runaway loops.`,
+        functionCalls: [],
+      };
+    }
+    rounds += 1;
 
     const functionCalls = [...result.functionCalls];
     const functionResponses = await processToolCalls(functionCalls);

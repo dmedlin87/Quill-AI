@@ -39,13 +39,30 @@ interface ProjectState {
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => {
-  const WRITE_DEBOUNCE_MS = 400;
+  const resolvedDebounce =
+    (typeof globalThis !== 'undefined' &&
+      (globalThis as { __QUILL_WRITE_DEBOUNCE_MS?: number }).__QUILL_WRITE_DEBOUNCE_MS) ||
+    (typeof import.meta !== 'undefined' &&
+      (import.meta as any).env?.VITE_WRITE_DEBOUNCE_MS &&
+      Number((import.meta as any).env.VITE_WRITE_DEBOUNCE_MS)) ||
+    (typeof process !== 'undefined' &&
+      process.env?.WRITE_DEBOUNCE_MS &&
+      Number(process.env.WRITE_DEBOUNCE_MS)) ||
+    400;
+
+  const WRITE_DEBOUNCE_MS = Number.isFinite(resolvedDebounce)
+    ? Math.max(50, Number(resolvedDebounce))
+    : 400;
   type PendingChapterWrite = { timer: ReturnType<typeof setTimeout>; promise: Promise<void>; resolve?: () => void };
 
   const pendingChapterWrites = new Map<string, PendingChapterWrite>();
   const latestChapterContent = new Map<string, { content: string; updatedAt: number }>();
 
-  const queuePersistenceKeepAlive = async (pendingCount: number, reason: string) => {
+  const queuePersistenceKeepAlive = async (
+    pendingCount: number,
+    reason: string,
+    chapters?: { chapterId: string; updatedAt: number; content: string }[],
+  ) => {
     if (pendingCount === 0) return;
 
     if (typeof navigator === 'undefined') return;
@@ -54,6 +71,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       pendingCount,
       reason,
       timestamp: Date.now(),
+      chapters,
     });
 
     try {
@@ -281,7 +299,14 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     const pendingCount = entries.length;
 
     if (keepAlive && pendingCount > 0) {
-      void queuePersistenceKeepAlive(pendingCount, reason);
+      const chaptersSnapshot = Array.from(latestChapterContent.entries()).map(
+        ([chapterId, value]) => ({
+          chapterId,
+          updatedAt: value.updatedAt,
+          content: value.content,
+        }),
+      );
+      void queuePersistenceKeepAlive(pendingCount, reason, chaptersSnapshot);
     }
 
     const { errors } = await flushAllPendingWrites(entries);

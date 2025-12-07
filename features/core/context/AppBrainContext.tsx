@@ -7,6 +7,7 @@
  */
 
 import React, { createContext, useContext, useMemo, useEffect, useRef, useState } from 'react';
+import { create } from 'zustand';
 import { useEditor } from './EditorContext';
 import { useAnalysis } from '@/features/analysis';
 import { useProjectStore } from '@/features/project';
@@ -26,6 +27,7 @@ import {
   emitCursorMoved,
   emitChapterSwitched,
   createContextBuilder,
+  createEmptyAppBrainState,
 } from '@/services/appBrain';
 import { MainView, SidebarTab } from '@/types';
 import {
@@ -71,6 +73,7 @@ export interface AppBrainValue {
 }
 
 const AppBrainContext = createContext<AppBrainValue | null>(null);
+const useAppBrainStore = create<AppBrainState>(() => createEmptyAppBrainState());
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROVIDER
@@ -205,6 +208,11 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   ]);
 
   const throttledState = useThrottledValue(state, 100);
+
+  // Push state into the store so selector-based consumers avoid re-renders on unrelated keys
+  useEffect(() => {
+    useAppBrainStore.setState(throttledState, true);
+  }, [throttledState]);
 
   const editMutexRef = useRef<Promise<unknown> | null>(null);
 
@@ -560,11 +568,22 @@ export const useAppBrain = (): AppBrainValue => {
 };
 
 /**
- * Get just the state (for components that only read)
+ * Get state with optional selector to limit re-renders
  */
-export const useAppBrainState = (): AppBrainState => {
-  return useAppBrain().state;
-};
+export function useAppBrainState<T = AppBrainState>(
+  selector?: (state: AppBrainState) => T,
+  equality?: (a: T, b: T) => boolean,
+): T {
+  if (selector) {
+    return useAppBrainStore(selector, equality);
+  }
+  return useAppBrainStore() as unknown as T;
+}
+
+/**
+ * Subscribe to the internal AppBrain store directly (advanced use).
+ */
+export { useAppBrainStore };
 
 /**
  * Get just the actions (for components that only act)

@@ -14,3 +14,12 @@
 ## Plan: ImportWizard runtime review
 
 1. Analyze ImportWizard.tsx for runtime risks (race conditions in effects, null/undefined handling, event listener cleanup).
+
+## Plan: Security + AppBrain perf + Agent continuity + Tool loop + Persistence
+
+1) Security: Remove GEMINI_API_KEY bundling in Vite; add runtime key guard/UX with local storage.  
+2) AppBrain perf: Split volatile editor state from stable metadata (or move to selector-based store) and update consumers.  
+3) Agent continuity: Pass stored chat history into createAgentSession on re-init.  
+4) Tool loop safety: Add max-iteration guard to prevent runaway cycles.  
+5) Persistence: Ensure beforeunload flush sends pending writes (beacon or fallback) and make debounce configurable.  
+6) Tests: Add regression coverage for the above and run targeted suites.

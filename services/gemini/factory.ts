@@ -1,4 +1,4 @@
-import type { Chat } from "@google/genai";
+import type { Chat, Content, CreateChatParameters } from "@google/genai";
 import { ModelConfig } from "../../config/models";
 import { AIError, normalizeAIError } from "./errors";
 import { ai } from "./client";
@@ -65,6 +65,8 @@ export interface CreateAgentSessionOptions {
   deepAnalysis?: boolean;
   /** Switch to a voice-safe model/toolset */
   mode?: "text" | "voice";
+  /** Optional prior conversation history to preserve context on re-init */
+  conversationHistory?: Content[];
 }
 
 export const createAgentSession = (
@@ -84,6 +86,7 @@ export const createAgentSession = (
     voiceFingerprint,
     deepAnalysis,
     mode = "text",
+    conversationHistory,
   } = options;
 
   const intensityModifier = getIntensityModifier(intensity);
@@ -118,13 +121,19 @@ export const createAgentSession = (
   const toolset = mode === "voice" ? VOICE_SAFE_TOOLS : ALL_AGENT_TOOLS;
   const model = mode === "voice" ? ModelConfig.liveAudio : ModelConfig.agent;
 
-  return ai.chats.create({
+  const chatParams: CreateChatParameters = {
     model,
     config: {
       systemInstruction,
       tools: [{ functionDeclarations: toolset }],
     },
-  });
+  };
+
+  if (conversationHistory && conversationHistory.length > 0) {
+    chatParams.history = conversationHistory;
+  }
+
+  return ai.chats.create(chatParams);
 };
 
 /**

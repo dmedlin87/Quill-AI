@@ -11,22 +11,19 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Chat } from '@google/genai';
 import { createAgentSession } from '@/services/gemini/agent';
 import { executeAgentToolCall } from '@/services/gemini/toolExecutor';
-import { useAppBrain } from '@/features/core';
+import { useAppBrainActions, useAppBrainState } from '@/features/core';
 import { ChatMessage, EditorContext } from '@/types';
 import { DEFAULT_PERSONAS, Persona } from '@/types/personas';
 import { useSettingsStore } from '@/features/settings';
 import { emitToolExecuted, eventBus, getSmartAgentContext } from '@/services/appBrain';
-import type { AppEvent } from '@/services/appBrain';
+import type { AppEvent, AppBrainState } from '@/services/appBrain';
 import { AgentToolLoopModelResult, runAgentToolLoop } from '@/services/core/agentToolLoop';
 import { buildAgentContextPrompt } from '@/services/core/agentContextBuilder';
 import { createToolCallAdapter } from '@/services/core/toolCallAdapter';
 import type { ToolResult } from '@/services/gemini/toolExecutor';
-import {
-  AgentMachineAction,
-  AgentMachineState,
-  agentOrchestratorReducer,
-  initialAgentMachineState,
-} from '@/services/core/agentOrchestratorMachine';
+import { AgentMachineAction, AgentMachineState, agentOrchestratorReducer, initialAgentMachineState } from '@/services/core/agentOrchestratorMachine';
+import { shallow } from 'zustand/shallow';
+import type { Content } from '@google/genai';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -88,8 +85,14 @@ export function useAgentOrchestrator(
     ? Math.floor(options.messageLimit as number)
     : 200;
   
-  // Get unified app state
-  const brain = useAppBrain();
+  // Get AppBrain slices via selector to avoid re-renders on keystrokes
+  const manuscript = useAppBrainState(s => s.manuscript, shallow);
+  const lore = useAppBrainState(s => s.lore, shallow);
+  const analysis = useAppBrainState(s => s.analysis, shallow);
+  const intelligence = useAppBrainState(s => s.intelligence, shallow);
+  const ui = useAppBrainState(s => s.ui, shallow);
+  const sessionState = useAppBrainState(s => s.session, shallow);
+  const brainActions = useAppBrainActions();
   
   // Local state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -106,7 +109,14 @@ export function useAgentOrchestrator(
   // Refs
   const chatRef = useRef<Chat | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const latestStateRef = useRef(brain.state);
+  const latestStateRef = useRef<AppBrainState>({
+    manuscript,
+    lore,
+    analysis,
+    intelligence,
+    ui,
+    session: sessionState,
+  });
   const orchestratorEventLogRef = useRef<AppEvent[]>(eventBus.getChangeLog(10));
   const hasSeenContextChangeRef = useRef(false);
 
@@ -119,7 +129,7 @@ export function useAgentOrchestrator(
   const critiqueIntensity = useSettingsStore(s => s.critiqueIntensity);
   const experienceLevel = useSettingsStore(s => s.experienceLevel);
   const autonomyMode = useSettingsStore(s => s.autonomyMode);
-  const manuscriptProjectId = brain.state.manuscript.projectId;
+  const manuscriptProjectId = manuscript.projectId;
 
   const appendMessages = useCallback(
     (newMessages: ChatMessage | ChatMessage[]): void => {
@@ -134,8 +144,15 @@ export function useAgentOrchestrator(
 
   // Keep a ref to the latest brain state so callbacks can read fresh context without re-registering
   useEffect(() => {
-    latestStateRef.current = brain.state;
-  }, [brain.state]);
+    latestStateRef.current = {
+      manuscript,
+      lore,
+      analysis,
+      intelligence,
+      ui,
+      session: sessionState,
+    };
+  }, [analysis, intelligence, lore, manuscript, sessionState, ui]);
 
   useEffect(() => {
     const unsubscribe = eventBus.subscribeForOrchestrator(event => {
@@ -165,6 +182,14 @@ export function useAgentOrchestrator(
       })
       .join('\n-------------------\n');
 
+    const chatHistory: Content[] | undefined =
+      messages.length > 0
+        ? messages.map(msg => ({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text: msg.text }],
+          }))
+        : undefined;
+
     chatRef.current = createAgentSession({
       lore: lore.characters.length > 0 ? { characters: lore.characters, worldRules: lore.worldRules } : undefined,
       analysis: analysis.result || undefined,
@@ -175,6 +200,7 @@ export function useAgentOrchestrator(
       autonomy: autonomyMode,
       intelligenceHUD: intelligence.hud || undefined,
       mode,
+      conversationHistory: chatHistory,
     });
 
     // Silent initialization – tolerate providers or mocks that don't return a Promise
@@ -219,8 +245,8 @@ export function useAgentOrchestrator(
     autoReinit,
     manuscriptProjectId,
     currentPersona,
-    brain.state.lore,
-    brain.state.analysis.result,
+    lore,
+    analysis.result,
     initSession,
     abort,
   ]);
@@ -244,8 +270,8 @@ export function useAgentOrchestrator(
     async (toolName: string, args: Record<string, unknown>): Promise<ToolResult> => {
       dispatch({ type: 'START_EXECUTION', tool: toolName });
 
-      const projectId = brain.state.manuscript.projectId;
-      const result = await executeAgentToolCall(toolName, args, brain.actions, projectId);
+      const projectId = manuscript.projectId;
+      const result = await executeAgentToolCall(toolName, args, brainActions, projectId);
 
       if (result.success) {
         emitToolExecuted(toolName, true);
@@ -261,7 +287,7 @@ export function useAgentOrchestrator(
       }
       return result;
     },
-    [brain.actions, brain.state.manuscript.projectId],
+    [brainActions, manuscript.projectId],
   );
 
   // ─────────────────────────────────────────────────────────────────────────
