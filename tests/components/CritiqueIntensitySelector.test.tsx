@@ -5,6 +5,34 @@ import { vi } from 'vitest';
 import { CritiqueIntensitySelector } from '@/features/settings/components/CritiqueIntensitySelector';
 import { CRITIQUE_PRESETS, CritiqueIntensity } from '@/types/critiqueSettings';
 
+type SettingsState = {
+  critiqueIntensity: CritiqueIntensity;
+  setCritiqueIntensity: (id: CritiqueIntensity) => void;
+};
+
+const { mockState, mockUseSettingsStore } = vi.hoisted(() => {
+  const state: SettingsState = {
+    // Default to a valid literal; tests will override as needed
+    critiqueIntensity: 'standard' as CritiqueIntensity,
+    setCritiqueIntensity: vi.fn(),
+  };
+
+  const useStore = vi.fn(<T,>(selector?: (s: SettingsState) => T): T | SettingsState => {
+    if (typeof selector === 'function') {
+      return selector(state);
+    }
+    return state;
+  });
+
+  return { mockState: state, mockUseSettingsStore: useStore };
+});
+
+const presets = Object.values(CRITIQUE_PRESETS);
+
+vi.mock('@/features/settings/store/useSettingsStore', () => ({
+  useSettingsStore: mockUseSettingsStore,
+}));
+
 // Mock framer-motion to avoid animation issues in JSDOM
 vi.mock('framer-motion', () => ({
   motion: {
@@ -17,23 +45,13 @@ vi.mock('framer-motion', () => ({
   },
 }));
 
-// Mock useSettingsStore (Zustand store)
-const mockUseSettingsStore = vi.fn();
-
-vi.mock('@/features/settings/store/useSettingsStore', () => ({
-  useSettingsStore: () => mockUseSettingsStore(),
-}));
-
 describe('CritiqueIntensitySelector', () => {
-  const presets = Object.values(CRITIQUE_PRESETS);
 
-  const setupStore = (overrides?: Partial<ReturnType<typeof mockUseSettingsStore>>) => {
+  const setupStore = (overrides?: Partial<SettingsState>) => {
     const setCritiqueIntensity = vi.fn();
-    mockUseSettingsStore.mockReturnValue({
-      critiqueIntensity: presets[0].id,
-      setCritiqueIntensity,
-      ...overrides,
-    });
+    mockState.critiqueIntensity = presets[0].id as CritiqueIntensity;
+    mockState.setCritiqueIntensity = setCritiqueIntensity;
+    Object.assign(mockState, overrides);
     return { setCritiqueIntensity };
   };
 
@@ -42,6 +60,9 @@ describe('CritiqueIntensitySelector', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseSettingsStore.mockClear();
+    mockState.critiqueIntensity = presets[0].id as CritiqueIntensity;
+    mockState.setCritiqueIntensity = vi.fn();
   });
 
   it('renders all presets in compact mode using titles', () => {
@@ -120,11 +141,8 @@ describe('CritiqueIntensitySelector', () => {
 
   it('marks the active preset as visually distinguished in full mode', () => {
     const active = presets[0];
-
-    mockUseSettingsStore.mockReturnValue({
-      critiqueIntensity: active.id,
-      setCritiqueIntensity: vi.fn(),
-    });
+    mockState.critiqueIntensity = active.id as CritiqueIntensity;
+    mockState.setCritiqueIntensity = vi.fn();
 
     render(<CritiqueIntensitySelector />);
 

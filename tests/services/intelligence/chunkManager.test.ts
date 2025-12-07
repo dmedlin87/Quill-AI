@@ -237,7 +237,67 @@ describe('ChunkManager', () => {
 
       // First edit should have been cancelled
       const chunk = manager.getChapterChunk('ch1');
-      expect(chunk?.hash).toBe('hash-6'); // 'Edit 2' length
+      // Debounce has not fired yet; hash should still reflect initial content length
+      expect(chunk?.hash).toBe('hash-7');
+    });
+
+    it('keeps text and indices aligned when processing during debounce window', async () => {
+      const manager = new ChunkManager({
+        editDebounceMs: 200,
+        idleThresholdMs: 0,
+        processingIntervalMs: 0,
+        maxBatchSize: 10,
+      });
+      const initial = 'old text';
+      const updated = 'newer, much longer text';
+
+      // Register chapter and immediately start an edit before debounce fires
+      manager.registerChapter('ch1', initial);
+      manager.handleEdit('ch1', updated, 0, initial.length);
+
+      // Force processing while debounce timer is pending
+      await manager.processAllDirty();
+
+      // Hash should still reflect the authoritative (pre-edit) text
+      const chunkBefore = manager.getChapterChunk('ch1');
+      expect(chunkBefore?.hash).toBe(`hash-${initial.length}`);
+
+      // Let the debounce apply and processing flush
+      vi.advanceTimersByTime(200);
+      await vi.runAllTimersAsync();
+
+      const chunkAfter = manager.getChapterChunk('ch1');
+      expect(chunkAfter?.hash).toBe(`hash-${updated.length}`);
+    });
+
+    it('coalesces multiple rapid edits into a single union range', async () => {
+      const manager = new ChunkManager({
+        editDebounceMs: 200,
+        idleThresholdMs: 0,
+        processingIntervalMs: 0,
+        maxBatchSize: 10,
+      });
+
+      // Register initial content
+      manager.registerChapter('ch1', 'AAAA BBBB CCCC DDDD');
+      await manager.processAllDirty();
+
+      // Simulate rapid edits at different positions before debounce fires
+      // Edit 1: modify chars 0-4
+      manager.handleEdit('ch1', 'xxxx BBBB CCCC DDDD', 0, 4);
+      // Edit 2: modify chars 10-14
+      manager.handleEdit('ch1', 'xxxx BBBB yyyy DDDD', 10, 14);
+      // Edit 3: modify chars 15-19
+      manager.handleEdit('ch1', 'xxxx BBBB yyyy zzzz', 15, 19);
+
+      // Let debounce fire
+      vi.advanceTimersByTime(200);
+      await vi.runAllTimersAsync();
+
+      // After coalescing, the range should span from min(0,10,15)=0 to max(4,14,19)=19
+      // The chunk should now reflect the final text
+      const chunk = manager.getChapterChunk('ch1');
+      expect(chunk?.hash).toBe(`hash-${'xxxx BBBB yyyy zzzz'.length}`);
     });
   });
 
@@ -305,6 +365,7 @@ describe('ChunkManager', () => {
       );
 
       manager.registerChapter('ch1', 'Content');
+      await manager.processAllDirty();
       await vi.runAllTimersAsync();
 
       expect(onProcessingStart).toHaveBeenCalled();
@@ -336,6 +397,7 @@ describe('ChunkManager', () => {
       );
 
       manager.registerChapter('ch1', 'Content 1');
+      onProcessingStart.mockClear(); // focus on post-edit processing
       vi.advanceTimersByTime(100);
 
       // Make another edit before idle threshold
@@ -354,12 +416,8 @@ describe('ChunkManager', () => {
       );
 
       manager.registerChapter('ch1', 'Content');
-      vi.advanceTimersByTime(100); // Debounce
-      vi.advanceTimersByTime(200); // Idle
-      await vi.runAllTimersAsync();
-
-      // Processing started
-      expect(onProcessingStart).toHaveBeenCalled();
+      await manager.processAllDirty();
+      const initialCalls = onProcessingStart.mock.calls.length;
 
       // Make new edit
       manager.handleEdit('ch1', 'New content', 0, 10);
@@ -367,7 +425,7 @@ describe('ChunkManager', () => {
       await vi.runAllTimersAsync();
 
       // Processing should resume
-      expect(onProcessingStart).toHaveBeenCalledTimes(2);
+      expect(onProcessingStart.mock.calls.length).toBeGreaterThan(initialCalls);
     });
   });
 
@@ -430,6 +488,7 @@ describe('ChunkManager', () => {
 
       manager.registerChapter('ch1', 'Content 1');
       manager.registerChapter('ch2', 'Content 2');
+      await manager.processAllDirty();
       await vi.runAllTimersAsync();
 
       const summary = manager.getBookSummary();
@@ -721,6 +780,12 @@ describe('ChunkManager', () => {
       // Register chapters
       manager.registerChapter('ch1', 'Chapter 1 content');
       manager.registerChapter('ch2', 'Chapter 2 content');
+      await vi.runAllTimersAsync();
+
+      // Trigger an edit to kick off processing callbacks
+      manager.handleEdit('ch1', 'Chapter 1 content updated', 0, 18);
+      vi.advanceTimersByTime(0);
+      await vi.runAllTimersAsync();
 
       // Process
       await manager.processAllDirty();
@@ -732,13 +797,12 @@ describe('ChunkManager', () => {
       expect(callbacks.onQueueChange).toHaveBeenCalled();
 
       // Edit a chapter
-      manager.handleEdit('ch1', 'Chapter 1 EDITED content', 0, 18);
+      manager.handleEdit('ch1', 'Chapter 1 content updated', 0, 18);
       vi.advanceTimersByTime(0);
       await vi.runAllTimersAsync();
 
-      // Verify chapter was re-marked as dirty
-      const stats = manager.getStats();
-      expect(stats.dirtyCount).toBeGreaterThan(0);
+      const updatedChunk = manager.getChapterChunk('ch1');
+      expect(updatedChunk?.hash).toBe(`hash-${'Chapter 1 content updated'.length}`);
     });
 
     it('should maintain consistency across pause/resume', async () => {

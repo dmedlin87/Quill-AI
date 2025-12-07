@@ -25,6 +25,17 @@ describe('CommandHistory', () => {
     reversible: false,
   } as const;
 
+  it('returns recent items with default length of 10', () => {
+    for (let i = 0; i < 12; i++) {
+      history.record({ ...baseCommand, result: `r${i}` });
+    }
+
+    const recent = history.getRecent();
+    expect(recent).toHaveLength(10);
+    expect(recent[0].result).toBe('r2');
+    expect(recent[9].result).toBe('r11');
+  });
+
   it('records commands and trims to max history size', () => {
     for (let i = 0; i < 60; i++) {
       history.record({ ...baseCommand, result: `r${i}` });
@@ -62,6 +73,9 @@ describe('CommandHistory', () => {
     expect(Array.isArray(firstCall)).toBe(true);
 
     unsubscribe();
+
+    history.record(baseCommand);
+    expect(listener).toHaveBeenCalledTimes(2); // unsubscribed
   });
 
   it('persists and restores from sessionStorage', () => {
@@ -89,5 +103,23 @@ describe('CommandHistory', () => {
     expect(formatted).toContain('navigate_to_text');
     expect(formatted).toContain('query: "Hello"');
     expect(formatted).toContain('10m ago');
+    expect(formatted).toContain('Longer result string that should be truncated for preview in...');
+  });
+
+  it('gracefully handles failing sessionStorage writes', () => {
+    const setSpy = vi.spyOn(sessionStorage, 'setItem').mockImplementation(() => {
+      throw new Error('nope');
+    });
+
+    history.record(baseCommand);
+    expect(() => history.persist()).not.toThrow();
+    setSpy.mockRestore();
+  });
+
+  it('restores empty history when stored value is invalid JSON', () => {
+    vi.spyOn(sessionStorage, 'getItem').mockReturnValue('not-json');
+
+    const restored = CommandHistory.restore();
+    expect(restored.getAll()).toEqual([]);
   });
 });

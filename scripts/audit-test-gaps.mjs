@@ -260,18 +260,14 @@ ${highPriority.length > 0 ? `### High Priority (>100 lines)
 | File | Lines | Coverage |
 |------|-------|----------|
 ${highPriority.slice(0, 20).map(m => `| \`${m.file}\` | ${m.lines} | ${m.coverage !== null ? m.coverage.toFixed(1) + '%' : 'n/a'} |`).join('\n')}
-${highPriority.length > 20 ? `\n*...and ${highPriority.length - 20} more*\n` : ''}
+${highPriority.length > 20 ? `\n> ...and ${highPriority.length - 20} more high-priority files\n` : ''}
 ` : ''}
 ### All Missing (${missingTests.length} files)
-
-<details>
-<summary>Click to expand full list</summary>
 
 | File | Lines | Coverage |
 |------|-------|----------|
 ${missingTests.map(m => `| \`${m.file}\` | ${m.lines} | ${m.coverage !== null ? m.coverage.toFixed(1) + '%' : 'n/a'} |`).join('\n')}
 
-</details>
 `;
   }
 
@@ -280,6 +276,7 @@ ${missingTests.map(m => `| \`${m.file}\` | ${m.lines} | ${m.coverage !== null ? 
 ## Potentially Stale Test Files
 
 These test files don't have an obvious matching source file. They may be:
+
 - Integration tests (expected)
 - Tests for deleted code (should be removed)
 - Tests with non-matching names (should be renamed)
@@ -287,7 +284,7 @@ These test files don't have an obvious matching source file. They may be:
 | Test File | Expected Source |
 |-----------|-----------------|
 ${staleTests.slice(0, 20).map(s => `| \`${s.testFile}\` | \`${s.expectedSource}\` |`).join('\n')}
-${staleTests.length > 20 ? `\n*...and ${staleTests.length - 20} more*\n` : ''}
+${staleTests.length > 20 ? `\n> ...and ${staleTests.length - 20} more\n` : ''}
 `;
   }
 

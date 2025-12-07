@@ -7,9 +7,10 @@
 
 import { AppBrainState, AppBrainContext, AgentContextOptions } from './types';
 import { eventBus } from './eventBus';
-import { getMemoriesForContext } from '../memory/memoryQueries';
-import { getRelevantMemoriesForContext, type MemoryRelevanceOptions } from '../memory/memoryScoring';
 import {
+  getMemoriesForContext,
+  getRelevantMemoriesForContext,
+  type MemoryRelevanceOptions,
   getActiveGoals,
   formatMemoriesForPrompt,
   formatGoalsForPrompt,

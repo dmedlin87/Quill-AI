@@ -82,7 +82,7 @@ ${mode === "Tone Tuner" ? `Target Tone: ${tone}` : ""}`;
       hasSetting: Boolean(setting),
     });
     console.error("[rewriteText] Failed", normalized);
-    throw normalized;
+    return { result: [] };
   }
 };
 

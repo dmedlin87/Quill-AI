@@ -67,6 +67,10 @@ export class ChunkManager {
   
   // Chapter text cache (needed to slice scene content)
   private chapterTexts: Map<string, string> = new Map();
+  private pendingChapterTexts: Map<string, string> = new Map();
+  
+  // Pending edit range for coalescing multiple edits during debounce
+  private pendingEditRange: { chapterId: string; start: number; end: number } | null = null;
   
   // Callbacks
   private onProcessingStart?: () => void;
@@ -126,8 +130,22 @@ export class ChunkManager {
 
     this.lastEditTime = Date.now();
     
-    // Store the latest text
-    this.chapterTexts.set(chapterId, newText);
+    // Cancel any pending processing so we wait for the new idle window
+    if (this.processingTimer) {
+      clearTimeout(this.processingTimer);
+      this.processingTimer = null;
+    }
+    
+    // Store the latest text pending debounce; don't commit until indices update
+    this.pendingChapterTexts.set(chapterId, newText);
+    
+    // Merge edit coordinates into pending range to capture the full dirty span
+    if (this.pendingEditRange && this.pendingEditRange.chapterId === chapterId) {
+      this.pendingEditRange.start = Math.min(this.pendingEditRange.start, editStart);
+      this.pendingEditRange.end = Math.max(this.pendingEditRange.end, editEnd);
+    } else {
+      this.pendingEditRange = { chapterId, start: editStart, end: editEnd };
+    }
     
     // Debounce the actual processing
     if (this.editDebounceTimer) {
@@ -135,7 +153,11 @@ export class ChunkManager {
     }
     
     this.editDebounceTimer = setTimeout(() => {
-      this.applyEdit(chapterId, newText, editStart, editEnd);
+      const range = this.pendingEditRange;
+      this.pendingEditRange = null;
+      if (range) {
+        this.applyEdit(range.chapterId, newText, range.start, range.end);
+      }
     }, this.config.editDebounceMs);
   }
 
@@ -143,30 +165,41 @@ export class ChunkManager {
    * Apply an edit after debounce
    */
   private applyEdit(chapterId: string, newText: string, editStart: number, editEnd: number): void {
+    const text = this.pendingChapterTexts.get(chapterId) ?? newText;
+    this.pendingChapterTexts.delete(chapterId);
+
+    // Commit authoritative text now that indices will be refreshed
+    this.chapterTexts.set(chapterId, text);
+
     // Build edit descriptor for the index
     // Note: The index primarily uses this to identify the affected chapter
     // and mark it dirty. Scene chunks are re-created after this call.
     const edit: ChunkEdit = {
       start: editStart,
       end: editEnd,
-      newLength: newText.length, // Full new chapter length
+      newLength: text.length, // Full new chapter length
       chapterId,
       timestamp: Date.now(),
     };
     
     // Apply to index (marks chunks dirty)
-    this.index.applyEdit(edit, newText);
+    this.index.applyEdit(edit, text);
     
     // Re-parse scenes since structure may have changed
     // This replaces all scene chunks with fresh ones based on current text
-    const structural = parseStructure(newText);
-    this.index.registerScenesForChapter(chapterId, newText, structural);
+    const structural = parseStructure(text);
+    this.index.registerScenesForChapter(chapterId, text, structural);
+
+    if (this.index.hasDirtyChunks()) {
+      this.scheduleProcessing();
+    }
   }
 
   /**
    * Register a new chapter
    */
   registerChapter(chapterId: string, content: string): void {
+    this.lastEditTime = Date.now();
     this.chapterTexts.set(chapterId, content);
     
     const chapterChunkId = createChunkId('chapter', chapterId);
@@ -184,6 +217,10 @@ export class ChunkManager {
     // Parse and register scenes
     const structural = parseStructure(content);
     this.index.registerScenesForChapter(chapterId, content, structural);
+
+    if (this.index.hasDirtyChunks()) {
+      this.scheduleProcessing();
+    }
   }
 
   /**
@@ -299,7 +336,12 @@ export class ChunkManager {
     if (chunk.level === 'chapter') {
       // Get from cache
       const chapterId = chunk.id.replace('chapter-', '');
-      return this.chapterTexts.get(chapterId) || null;
+      const text = this.chapterTexts.get(chapterId);
+      if (!text) return null;
+      if (chunk.startIndex < 0 || chunk.endIndex > text.length) {
+        return null;
+      }
+      return text;
     }
     
     if (chunk.level === 'scene') {
@@ -310,6 +352,13 @@ export class ChunkManager {
       const chapterId = parentChunk.id.replace('chapter-', '');
       const chapterText = this.chapterTexts.get(chapterId);
       if (!chapterText) return null;
+      if (
+        chunk.startIndex < 0 ||
+        chunk.endIndex > chapterText.length ||
+        chunk.startIndex > chunk.endIndex
+      ) {
+        return null;
+      }
       
       return chapterText.slice(chunk.startIndex, chunk.endIndex);
     }
@@ -515,11 +564,21 @@ export class ChunkManager {
    * Force process all dirty chunks now
    */
   async processAllDirty(): Promise<void> {
-    while (this.index.hasDirtyChunks()) {
-      const chunkId = this.index.dequeueNext();
-      if (chunkId) {
-        await this.processChunk(chunkId);
+    if (this.isProcessing) return;
+
+    this.isProcessing = true;
+    this.onProcessingStart?.();
+
+    try {
+      while (this.index.hasDirtyChunks()) {
+        const chunkId = this.index.dequeueNext();
+        if (chunkId) {
+          await this.processChunk(chunkId);
+        }
       }
+    } finally {
+      this.isProcessing = false;
+      this.onProcessingEnd?.();
     }
   }
 
@@ -601,6 +660,7 @@ export class ChunkManager {
     this.pause();
     this.index.clear();
     this.chapterTexts.clear();
+    this.pendingChapterTexts.clear();
   }
 
   /**
