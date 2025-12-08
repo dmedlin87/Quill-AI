@@ -149,6 +149,29 @@ describe('IntelligenceWorkerPool', () => {
       const pool = new IntelligenceWorkerPool();
       expect(pool['poolSize']).toBe(3); // hardwareConcurrency - 1, min 2
     });
+
+    it('reuses cached pool size after first computation', () => {
+      const pool = new IntelligenceWorkerPool();
+      const first = (pool as any).computeDefaultPoolSize();
+
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { hardwareConcurrency: 12 },
+        configurable: true,
+      });
+
+      const second = (pool as any).computeDefaultPoolSize();
+      expect(second).toBe(first);
+    });
+
+    it('falls back to minimum pool size when navigator is unavailable', () => {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: undefined,
+        configurable: true,
+      });
+
+      const pool = new IntelligenceWorkerPool();
+      expect(pool['poolSize']).toBe(2);
+    });
   });
 
   describe('initialize', () => {
@@ -273,6 +296,20 @@ describe('IntelligenceWorkerPool', () => {
       const results = await resultsPromise;
       expect(results.size).toBe(2);
     });
+
+    it('skips storing results when worker callbacks report failure', async () => {
+      const pool = new IntelligenceWorkerPool(1);
+      await pool.initialize();
+
+      vi.spyOn(pool as any, 'submitJob').mockImplementation((_job: WorkerJob, cb: JobCallback) => {
+        cb({ id: 'w', jobId: 'job', success: false, processingTimeMs: 1 });
+        return 'job';
+      });
+
+      const results = await pool.processChapters([{ id: 'ch-fail', text: 'text' }]);
+
+      expect(results.size).toBe(0);
+    });
   });
 
   describe('cancelJob', () => {
@@ -394,6 +431,179 @@ describe('IntelligenceWorkerPool', () => {
 
       expect(callback1).toHaveBeenCalled();
       expect(callback2).toHaveBeenCalled();
+    });
+
+    it('handles worker error messages and dispatches queued jobs', async () => {
+      vi.useFakeTimers();
+      try {
+        const pool = new IntelligenceWorkerPool(1);
+        await pool.initialize();
+
+        const callback1 = vi.fn();
+        const callback2 = vi.fn();
+
+        pool.submitJob({ type: 'PROCESS_FULL', chapterId: 'ch-1', text: 'test', priority: 'normal' }, callback1);
+        pool.submitJob({ type: 'PROCESS_FULL', chapterId: 'ch-2', text: 'test', priority: 'normal' }, callback2);
+
+        const worker = MockWorker.instances[0];
+        vi.clearAllTimers();
+        worker.simulateMessage({ type: 'ERROR', error: 'boom' });
+
+        await vi.runAllTimersAsync();
+        await Promise.resolve();
+
+        expect(callback1).toHaveBeenCalledWith(
+          expect.objectContaining({ success: false, error: 'boom' }),
+        );
+        expect(pool['jobQueue']).toHaveLength(0);
+        expect(callback2).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('ignores worker messages when no current job is assigned', () => {
+      const pool = new IntelligenceWorkerPool(1);
+      const worker = new MockWorker(new URL('http://example.com'));
+      pool['workers'] = [
+        {
+          worker,
+          id: 'worker_0',
+          busy: false,
+          currentJob: null,
+          completedJobs: 0,
+          totalProcessingTime: 0,
+        },
+      ];
+
+      worker.simulateMessage({ type: 'RESULT', payload: {} });
+
+      expect(pool['jobQueue']).toHaveLength(0);
+      expect(pool['callbacks'].size).toBe(0);
+    });
+
+    it('propagates worker onerror events and schedules the next job', async () => {
+      vi.useFakeTimers();
+      try {
+        const pool = new IntelligenceWorkerPool(1);
+        await pool.initialize();
+
+        const callback1 = vi.fn();
+        const callback2 = vi.fn();
+
+        pool.submitJob({ type: 'PROCESS_FULL', chapterId: 'ch-1', text: 'test', priority: 'normal' }, callback1);
+        pool.submitJob({ type: 'PROCESS_FULL', chapterId: 'ch-2', text: 'test', priority: 'normal' }, callback2);
+
+        const worker = MockWorker.instances[0];
+        vi.clearAllTimers();
+        worker.simulateError('kaboom');
+
+        await vi.runAllTimersAsync();
+        await Promise.resolve();
+
+        expect(callback1).toHaveBeenCalledWith(
+          expect.objectContaining({ success: false, error: 'kaboom' }),
+        );
+        expect(pool['jobQueue']).toHaveLength(0);
+        expect(callback2).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('invokes error callbacks when a worker throws', () => {
+      const pool = new IntelligenceWorkerPool(1);
+      const job: WorkerJob = {
+        id: 'job-1',
+        type: 'PROCESS_FULL',
+        chapterId: 'ch-err',
+        text: 'text',
+        priority: 'normal',
+        addedAt: Date.now(),
+      };
+
+      const callback = vi.fn();
+      pool['callbacks'].set(job.id, callback);
+
+      const worker = {
+        id: 'worker_1',
+        currentJob: job,
+        busy: true,
+        completedJobs: 0,
+        totalProcessingTime: 0,
+        worker: { postMessage: vi.fn(), terminate: vi.fn() },
+      } as unknown as any;
+
+      pool['handleWorkerError'](worker, { message: 'fail' } as ErrorEvent);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'fail', jobId: job.id }),
+      );
+    });
+
+    it('falls back when callbacks are missing but a queue exists', async () => {
+      vi.useFakeTimers();
+      try {
+        const pool = new IntelligenceWorkerPool(1);
+        await pool.initialize();
+
+        const firstJobId = pool.submitJob(
+          { type: 'PROCESS_FULL', chapterId: 'ch-1', text: 'text', priority: 'normal' },
+          vi.fn(),
+        );
+        const callback2 = vi.fn();
+        pool.submitJob({ type: 'PROCESS_FULL', chapterId: 'ch-2', text: 'text', priority: 'normal' }, callback2);
+
+        pool['callbacks'].delete(firstJobId);
+
+        vi.clearAllTimers();
+        MockWorker.instances[0].simulateMessage({ type: 'RESULT', payload: {} });
+
+        await vi.runAllTimersAsync();
+        await Promise.resolve();
+
+        expect(callback2).toHaveBeenCalled();
+        expect(pool['callbacks'].size).toBeGreaterThanOrEqual(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('ignores worker errors when no job is active', () => {
+      const pool = new IntelligenceWorkerPool(1);
+      const worker = new MockWorker(new URL('http://example.com'));
+      pool['workers'] = [
+        {
+          worker,
+          id: 'worker_0',
+          busy: false,
+          currentJob: null,
+          completedJobs: 0,
+          totalProcessingTime: 0,
+        },
+      ];
+
+      worker.simulateError('no-job');
+
+      expect(pool['callbacks'].size).toBe(0);
+      expect(pool['jobQueue']).toHaveLength(0);
+    });
+
+    it('ignores stray worker messages when there is no current job', () => {
+      const pool = new IntelligenceWorkerPool(1);
+      const worker = {
+        id: 'worker_x',
+        currentJob: null,
+        busy: false,
+        completedJobs: 0,
+        totalProcessingTime: 0,
+        worker: { postMessage: vi.fn(), terminate: vi.fn() },
+      } as any;
+
+      pool['handleWorkerMessage'](worker, { type: 'RESULT', payload: {} });
+
+      expect(worker.completedJobs).toBe(0);
+      expect(pool['callbacks'].size).toBe(0);
     });
   });
 });
