@@ -38,9 +38,10 @@ export default defineConfig(({ mode }) => {
             'scripts/**/*.mjs',
             'types/**/*.ts',
           ],
+          perFile: true,
           thresholds: {
             statements: 80,
-            branches: 75,
+            branches: 80,
             functions: 80,
             lines: 80,
           },
