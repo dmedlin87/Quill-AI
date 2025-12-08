@@ -2,18 +2,20 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useManuscriptIntelligence } from '@/features/shared/hooks/useManuscriptIntelligence';
 
-const mockProcessInstant = vi.fn();
-const mockProcessDebounced = vi.fn();
-const mockProcessManuscript = vi.fn(() => ({ hud: { situational: {} }, structural: {}, timeline: [] }));
-const mockUpdateHUD = vi.fn(() => ({ situational: {} }));
-const mockGenerateAIContext = vi.fn(() => 'ctx');
+const mocks = vi.hoisted(() => ({
+  processInstant: vi.fn(),
+  processDebounced: vi.fn(),
+  processManuscript: vi.fn(() => ({ hud: { situational: {} }, structural: {}, timeline: [] })),
+  updateHUD: vi.fn(() => ({ situational: {} })),
+  generateAIContext: vi.fn(() => 'ctx'),
+}));
 
 vi.mock('@/services/intelligence', () => ({
-  processInstant: (...args: any[]) => mockProcessInstant(...args),
-  processDebounced: (...args: any[]) => mockProcessDebounced(...args),
-  processManuscript: (...args: any[]) => mockProcessManuscript(...args),
-  updateHUDForCursor: (...args: any[]) => mockUpdateHUD(...args),
-  generateAIContext: (...args: any[]) => mockGenerateAIContext(...args),
+  processInstant: mocks.processInstant,
+  processDebounced: mocks.processDebounced,
+  processManuscript: mocks.processManuscript,
+  updateHUDForCursor: mocks.updateHUD,
+  generateAIContext: mocks.generateAIContext,
   createEmptyIntelligence: (id: string) => ({ hud: { situational: {} }, structural: {}, timeline: [], chapterId: id }),
   ChangeHistory: class { push(change: any) { return change; } },
 }));
@@ -33,9 +35,9 @@ describe('useManuscriptIntelligence', () => {
       result.current.updateText('Hello world', 5);
     });
 
-    expect(mockProcessInstant).toHaveBeenCalled();
+    expect(mocks.processInstant).toHaveBeenCalled();
     vi.runAllTimers();
-    expect(mockProcessDebounced).toHaveBeenCalled();
+    expect(mocks.processDebounced).toHaveBeenCalled();
   });
 
   it('returns AI context using generated data', () => {
@@ -44,7 +46,7 @@ describe('useManuscriptIntelligence', () => {
     );
 
     const context = result.current.getAIContext();
-    expect(mockGenerateAIContext).toHaveBeenCalled();
+    expect(mocks.generateAIContext).toHaveBeenCalled();
     expect(context).toBe('ctx');
   });
 });

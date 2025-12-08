@@ -167,6 +167,75 @@ describe('toolExecutor core helpers', () => {
     expect(result.message).toBe('Unknown tool: unknown_tool');
   });
 
+  it('executes navigation and editing AppBrain tools', async () => {
+    const actions = createMockActions();
+
+    await executeAppBrainToolCall('navigate_to_text', { query: 'find me' }, actions);
+    await executeAppBrainToolCall('jump_to_chapter', { identifier: 'ch1' }, actions);
+    await executeAppBrainToolCall('jump_to_scene', { sceneType: 'fight', direction: 'next' }, actions);
+    await executeAppBrainToolCall('scroll_to_position', { position: 42 }, actions);
+    await executeAppBrainToolCall('append_to_manuscript', { text: 'add', description: 'desc' }, actions);
+    await executeAppBrainToolCall('insert_at_cursor', { text: 'add', description: 'desc' }, actions);
+    await executeAppBrainToolCall('undo_last_change', {}, actions);
+    await executeAppBrainToolCall('redo_last_change', {}, actions);
+
+    expect(actions.navigateToText).toHaveBeenCalledWith({
+      query: 'find me',
+      searchType: undefined,
+      character: undefined,
+      chapter: undefined,
+    });
+    expect(actions.jumpToChapter).toHaveBeenCalledWith('ch1');
+    expect(actions.jumpToScene).toHaveBeenCalledWith('fight', 'next');
+    expect(actions.scrollToPosition).toHaveBeenCalledWith(42);
+    expect(actions.appendText).toHaveBeenCalledTimes(2);
+    expect(actions.undo).toHaveBeenCalled();
+    expect(actions.redo).toHaveBeenCalled();
+  });
+
+  it('executes analysis, UI, knowledge, and generation AppBrain tools', async () => {
+    const actions = createMockActions();
+
+    await executeAppBrainToolCall('get_critique_for_selection', { focus: 'para' }, actions);
+    await executeAppBrainToolCall('run_analysis', { section: 'arc' }, actions);
+    await executeAppBrainToolCall('switch_panel', { panel: 'analysis' }, actions);
+    await executeAppBrainToolCall('toggle_zen_mode', {}, actions);
+    await executeAppBrainToolCall('highlight_text', { start: 1, end: 3, style: 'info' }, actions);
+    await executeAppBrainToolCall('set_selection', { start: 4, end: 6 }, actions);
+    await executeAppBrainToolCall('query_lore', { query: 'dragons' }, actions);
+    await executeAppBrainToolCall('get_character_info', { name: 'Ada' }, actions);
+    await executeAppBrainToolCall('get_timeline_context', { range: 'all' }, actions);
+    await executeAppBrainToolCall('rewrite_selection', { mode: 'shorter', targetTone: 'calm' }, actions);
+    await executeAppBrainToolCall('continue_writing', {}, actions);
+
+    expect(actions.getCritiqueForSelection).toHaveBeenCalledWith('para');
+    expect(actions.runAnalysis).toHaveBeenCalledWith('arc');
+    expect(actions.switchPanel).toHaveBeenCalledWith('analysis');
+    expect(actions.toggleZenMode).toHaveBeenCalled();
+    expect(actions.highlightText).toHaveBeenCalledWith(1, 3, 'info');
+    expect(actions.highlightText).toHaveBeenCalledWith(4, 6, 'info');
+    expect(actions.queryLore).toHaveBeenCalledWith('dragons');
+    expect(actions.getCharacterInfo).toHaveBeenCalledWith('Ada');
+    expect(actions.getTimelineContext).toHaveBeenCalledWith('all');
+    expect(actions.rewriteSelection).toHaveBeenCalledWith({ mode: 'shorter', targetTone: 'calm' });
+    expect(actions.continueWriting).toHaveBeenCalled();
+  });
+
+  it('captures errors from AppBrain actions with legacy param keys', async () => {
+    const actions = createMockActions();
+    (actions.updateManuscript as any).mockRejectedValueOnce(new Error('kaboom'));
+
+    const result = await executeAppBrainToolCall(
+      'update_manuscript',
+      { search_text: 'old', replacement_text: 'new', description: 'desc' },
+      actions,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('kaboom');
+    expect(result.message).toContain('Error executing update_manuscript');
+  });
+
   it('wraps AppBrain action errors in ToolResult', async () => {
     const actions = createMockActions();
     (actions.updateManuscript as any).mockRejectedValueOnce(new Error('boom'));
@@ -207,6 +276,17 @@ describe('toolExecutor core helpers', () => {
     expect(result.message).toContain('Saved memory note');
   });
 
+  it('fails to write project-scoped memory without projectId', async () => {
+    const result = await executeMemoryToolCall(
+      'write_memory_note',
+      { text: 'Note text', type: 'observation', scope: 'project' },
+      null,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('projectId');
+  });
+
   it('returns failure for unknown memory tool', async () => {
     const result = await executeMemoryToolCall('unknown_memory', {}, 'project-1');
 
@@ -242,6 +322,201 @@ describe('toolExecutor core helpers', () => {
     });
     expect(result.message).toContain('Bedside note set applied');
     expect(result.success).toBe(true);
+  });
+
+  it('returns error for invalid bedside note content', async () => {
+    const result = await executeMemoryToolCall(
+      'update_bedside_note',
+      { section: 'currentFocus', action: 'set', content: '   ' },
+      'project-1',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('currentFocus content');
+    expect(result.message).toContain('currentFocus content');
+  });
+
+  it('rejects bedside note list sections with empty items', async () => {
+    const result = await executeMemoryToolCall(
+      'update_bedside_note',
+      { section: 'warnings', action: 'set', content: [] },
+      'project-1',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('warnings content');
+  });
+
+  it('rejects bedside note activeGoals without valid titles', async () => {
+    const result = await executeMemoryToolCall(
+      'update_bedside_note',
+      { section: 'activeGoals', action: 'set', content: ['   ', null] },
+      'project-1',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('activeGoals content');
+  });
+
+  it('rejects bedside note updates without projectId', async () => {
+    const result = await executeMemoryToolCall(
+      'update_bedside_note',
+      { section: 'currentFocus', action: 'set', content: 'focus' },
+      null,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('projectId');
+  });
+
+  it('rejects unknown bedside note sections', async () => {
+    const result = await executeMemoryToolCall(
+      'update_bedside_note',
+      { section: 'unknown_section', action: 'set', content: 'x' },
+      'project-1',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Unknown bedside note section');
+  });
+
+  it('filters search_memory results by scope and type', async () => {
+    const result = await executeMemoryToolCall(
+      'search_memory',
+      { tags: ['any'], scope: 'author', type: 'preference' },
+      'project-1',
+    );
+
+    expect(memoryModule.searchMemoriesByTags).toHaveBeenCalledWith(['any'], {
+      projectId: 'project-1',
+      limit: 50,
+    });
+    expect(memoryModule.formatMemoriesForPrompt).toHaveBeenCalledWith(
+      {
+        author: [{ scope: 'author', type: 'preference', text: 'note2' }],
+        project: [],
+      },
+      { maxLength: 2000 },
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('returns error when update_goal is missing id', async () => {
+    const result = await executeMemoryToolCall(
+      'update_goal',
+      { progress: 10 },
+      'project-1',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Missing id');
+  });
+
+  it('handles update_memory_note success and missing id errors', async () => {
+    const success = await executeMemoryToolCall(
+      'update_memory_note',
+      { id: 'mem-1', text: 'new text', importance: 0.9, tags: ['x'] },
+      'project-1',
+    );
+    expect(memoryModule.updateMemory).toHaveBeenCalledWith('mem-1', {
+      text: 'new text',
+      importance: 0.9,
+      topicTags: ['x'],
+    });
+    expect(success.success).toBe(true);
+
+    const missingId = await executeMemoryToolCall('update_memory_note', { text: 'x' }, 'project-1');
+    expect(missingId.success).toBe(false);
+    expect(missingId.message).toContain('Missing id');
+  });
+
+  it('handles delete_memory_note success and missing id errors', async () => {
+    const success = await executeMemoryToolCall(
+      'delete_memory_note',
+      { id: 'mem-1' },
+      'project-1',
+    );
+    expect(memoryModule.deleteMemory).toHaveBeenCalledWith('mem-1');
+    expect(success.success).toBe(true);
+
+    const missingId = await executeMemoryToolCall('delete_memory_note', {}, 'project-1');
+    expect(missingId.success).toBe(false);
+    expect(missingId.message).toContain('Missing id');
+  });
+
+  it('handles create_goal success and validation errors', async () => {
+    const success = await executeMemoryToolCall(
+      'create_goal',
+      { title: 'Goal title', description: 'desc' },
+      'project-1',
+    );
+    expect(memoryModule.addGoal).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      title: 'Goal title',
+      description: 'desc',
+      status: 'active',
+    });
+    expect(success.success).toBe(true);
+
+    const missingTitle = await executeMemoryToolCall(
+      'create_goal',
+      { description: 'desc' },
+      'project-1',
+    );
+    expect(missingTitle.success).toBe(false);
+    expect(missingTitle.message).toContain('Missing title');
+
+    const missingProject = await executeMemoryToolCall(
+      'create_goal',
+      { title: 'x' },
+      null,
+    );
+    expect(missingProject.success).toBe(false);
+    expect(missingProject.message).toContain('projectId');
+  });
+
+  it('handles update_goal success and status/progress updates', async () => {
+    const success = await executeMemoryToolCall(
+      'update_goal',
+      { id: 'goal-1', progress: 50, status: 'completed' },
+      'project-1',
+    );
+    expect(memoryModule.updateGoal).toHaveBeenCalledWith('goal-1', {
+      progress: 50,
+      status: 'completed',
+    });
+    expect(success.success).toBe(true);
+  });
+
+  it('handles watch_entity success and validation errors', async () => {
+    const success = await executeMemoryToolCall(
+      'watch_entity',
+      { name: 'Seth', priority: 'high', reason: 'hero' },
+      'project-1',
+    );
+    expect(memoryModule.addWatchedEntity).toHaveBeenCalledWith({
+      name: 'Seth',
+      projectId: 'project-1',
+      priority: 'high',
+      reason: 'hero',
+    });
+    expect(success.success).toBe(true);
+
+    const missingName = await executeMemoryToolCall(
+      'watch_entity',
+      { priority: 'low' },
+      'project-1',
+    );
+    expect(missingName.success).toBe(false);
+    expect(missingName.message).toContain('Missing name');
+
+    const missingProject = await executeMemoryToolCall(
+      'watch_entity',
+      { name: 'Seth' },
+      null,
+    );
+    expect(missingProject.success).toBe(false);
+    expect(missingProject.message).toContain('projectId');
   });
 });
 
@@ -320,5 +595,36 @@ describe('ToolExecutor', () => {
     const history = getCommandHistory();
     expect(history.formatForPrompt).toHaveBeenCalledWith(3);
     expect(text).toBe('[HISTORY]');
+  });
+
+  it('skips history recording when recordHistory is false', async () => {
+    const actions = createMockActions();
+    const executor = new ToolExecutor(actions, 'project-1', false);
+
+    await executor.execute('update_manuscript', {
+      search_text: 'old',
+      replacement_text: 'new',
+      description: 'desc',
+    });
+
+    const history = getCommandHistory();
+    expect(history.record).not.toHaveBeenCalled();
+    expect(history.persist).not.toHaveBeenCalled();
+  });
+
+  it('records reversible flag as false for non-reversible commands', async () => {
+    const actions = createMockActions();
+    const executor = new ToolExecutor(actions, 'project-1', true);
+    (CommandRegistry.isReversible as any).mockReturnValueOnce(false);
+
+    await executor.execute('navigate_to_text', { query: 'hello' });
+
+    const history = getCommandHistory();
+    expect(history.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'navigate_to_text',
+        reversible: false,
+      }),
+    );
   });
 });

@@ -128,13 +128,18 @@ const {
   };
 });
 
-vi.mock('@/services/appBrain', () => ({
-  eventBus: { subscribe, subscribeAll },
-  emitSelectionChanged,
-  emitCursorMoved,
-  emitChapterSwitched,
-  createContextBuilder: (getState: () => any) => contextBuilderFactory(getState),
-}));
+vi.mock('@/services/appBrain', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appBrain')>('@/services/appBrain');
+
+  return {
+    ...actual,
+    eventBus: { subscribe, subscribeAll },
+    emitSelectionChanged,
+    emitCursorMoved,
+    emitChapterSwitched,
+    createContextBuilder: (getState: () => any) => contextBuilderFactory(getState),
+  };
+});
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <AppBrainProvider>{children}</AppBrainProvider>

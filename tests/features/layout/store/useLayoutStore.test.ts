@@ -11,19 +11,25 @@ vi.stubGlobal('document', documentStub as unknown);
 vi.stubGlobal('window', {} as unknown);
 vi.stubGlobal('localStorage', localStorageStub as unknown);
 
-const emitPanelSwitched = vi.fn();
+const emitPanelSwitched = vi.hoisted(() => vi.fn());
 
 vi.mock('@/services/appBrain', () => ({
   emitPanelSwitched,
 }));
 
-import { MainView, SidebarTab } from '@/types';
-import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
+let useLayoutStore: typeof import('@/features/layout/store/useLayoutStore')['useLayoutStore'];
+let MainView: typeof import('@/types')['MainView'];
+let SidebarTab: typeof import('@/types')['SidebarTab'];
+let initialState: ReturnType<typeof useLayoutStore.getState>;
 
-const initialState = useLayoutStore.getState();
+beforeAll(async () => {
+  ({ MainView, SidebarTab } = await import('@/types'));
+  ({ useLayoutStore } = await import('@/features/layout/store/useLayoutStore'));
+  initialState = useLayoutStore.getState();
+});
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  emitPanelSwitched.mockClear();
   useLayoutStore.setState(initialState, true);
 });
 

@@ -81,6 +81,10 @@ describe('FileUpload', () => {
     const textarea = screen.getByPlaceholderText('Paste text here...');
     fireEvent.change(textarea, { target: { value: 'Pasted content here' } });
     
+    // Click the "Load pasted text" button to trigger onTextLoaded
+    const loadButton = screen.getByText('Load pasted text');
+    fireEvent.click(loadButton);
+    
     expect(mockOnTextLoaded).toHaveBeenCalledWith('Pasted content here', 'Untitled Draft');
   });
 

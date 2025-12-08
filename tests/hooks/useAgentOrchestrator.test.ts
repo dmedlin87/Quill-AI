@@ -113,6 +113,8 @@ vi.mock('@/services/gemini/agent', () => ({
 
 vi.mock('@/features/core', () => ({
   useAppBrain: mockUseAppBrain,
+  useAppBrainState: (selector: any, _shallow?: any) => selector(brainValue.state),
+  useAppBrainActions: () => brainValue.actions,
 }));
 
 vi.mock('@/services/gemini/toolExecutor', () => ({

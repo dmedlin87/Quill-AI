@@ -23,7 +23,7 @@ exports[`BedsideNoteHistory snapshot > renders a consistent diff view 1`] = `
           <span
             class="text-xs text-[var(--text-tertiary)]"
           >
-            12/4/2024, 7:03:20 PM
+            2024-12-04, 19:03:20
           </span>
         </div>
         <div
@@ -40,6 +40,8 @@ exports[`BedsideNoteHistory snapshot > renders a consistent diff view 1`] = `
             initial
           </span>
           <button
+            aria-label="Pin version 1"
+            aria-pressed="false"
             class="px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--text-secondary)]"
             type="button"
           >
@@ -79,7 +81,7 @@ exports[`BedsideNoteHistory snapshot > renders a consistent diff view 1`] = `
           <span
             class="text-xs text-[var(--text-tertiary)]"
           >
-            12/4/2024, 7:13:20 PM
+            2024-12-04, 19:13:20
           </span>
         </div>
         <div
@@ -96,6 +98,8 @@ exports[`BedsideNoteHistory snapshot > renders a consistent diff view 1`] = `
             update
           </span>
           <button
+            aria-label="Pin version 2"
+            aria-pressed="false"
             class="px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--text-secondary)]"
             type="button"
           >

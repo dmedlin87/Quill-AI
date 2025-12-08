@@ -154,7 +154,7 @@ describe('AnalysisPanel', () => {
     );
 
     expect(screen.getByText('Intelligence HUD')).toBeInTheDocument();
-    expect(screen.getByText('character attribute')).toBeInTheDocument();
+    expect(screen.getByText(/character attribute/i)).toBeInTheDocument();
     await user.click(screen.getByText('Jump to text'));
     expect(onNavigate).toHaveBeenCalledWith(42, 92);
     expect(screen.getByText('Magic requires balance')).toBeInTheDocument();

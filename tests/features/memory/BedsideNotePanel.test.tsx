@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BedsideNotePanel } from '@/features/memory/components/BedsideNotePanel';
 import { BedsideNoteHistory } from '@/features/memory/components/BedsideNoteHistory';
 import { applyBedsideNoteMutation } from '@/services/memory/bedsideNoteMutations';
@@ -123,6 +123,19 @@ describe('BedsideNotePanel', () => {
 });
 
 describe('BedsideNoteHistory snapshot', () => {
+  const originalToLocaleString = Date.prototype.toLocaleString;
+
+  beforeEach(() => {
+    // Mock toLocaleString for consistent snapshot output across timezones
+    Date.prototype.toLocaleString = function () {
+      return new Date(this.getTime()).toISOString().replace('T', ', ').slice(0, 20);
+    };
+  });
+
+  afterEach(() => {
+    Date.prototype.toLocaleString = originalToLocaleString;
+  });
+
   it('renders a consistent diff view', () => {
     const { container } = render(
       <BedsideNoteHistory

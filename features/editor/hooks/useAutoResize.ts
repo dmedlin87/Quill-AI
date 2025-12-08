@@ -66,7 +66,7 @@ export function useAutoResize(
   // Cancel any pending resize when leaving editor mode
   useLayoutEffect(() => {
     if (mode === 'EDITOR') return;
-    if (rafIdRef.current !== null) {
+    if (rafIdRef.current !== null && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
@@ -114,7 +114,7 @@ export function useResizeObserver(
 
     return () => {
       observer.disconnect();
-      if (rafIdRef.current !== null) {
+      if (rafIdRef.current !== null && typeof cancelAnimationFrame === 'function') {
         cancelAnimationFrame(rafIdRef.current);
       }
     };

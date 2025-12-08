@@ -164,7 +164,7 @@ describe('AnalysisContext', () => {
         await result.current.analyzePacing('Sample text');
       });
       
-      expect(mockFetchPacingAnalysis).toHaveBeenCalledWith('Sample text', undefined, undefined);
+      expect(mockFetchPacingAnalysis).toHaveBeenCalledWith('Sample text', undefined, expect.any(AbortSignal));
       expect(result.current.analysisStatus.pacing).toBe('complete');
       expect(result.current.incrementalAnalysis.pacing).toEqual(mockPacingResult.pacing);
     });
@@ -204,7 +204,7 @@ describe('AnalysisContext', () => {
         await result.current.analyzeSetting('Sample text', setting);
       });
       
-      expect(mockFetchSettingAnalysis).toHaveBeenCalledWith('Sample text', setting, undefined);
+      expect(mockFetchSettingAnalysis).toHaveBeenCalledWith('Sample text', setting, expect.any(AbortSignal));
       expect(result.current.analysisStatus.setting).toBe('complete');
       expect(result.current.incrementalAnalysis.settingAnalysis).toEqual(mockSettingResult.settingAnalysis);
     });

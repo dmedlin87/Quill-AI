@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryManager } from '@/features/memory/MemoryManager';
@@ -121,17 +121,20 @@ describe('MemoryManager', () => {
   });
 
   it('submits a new memory with normalized payload', async () => {
-    const user = userEvent.setup();
     render(<MemoryManager projectId="proj-1" />);
 
     await waitFor(() => expect(mocks.getMemories).toHaveBeenCalled());
 
-    const scopeForm = screen.getByRole('form', { name: /memories/i });
-    await user.type(screen.getByLabelText('Memory Text', { selector: 'textarea' }), 'New memory text');
-    await user.type(screen.getByLabelText('Tags (comma separated)', { selector: 'input' }), 'tag-one, tag-two');
-    await user.clear(screen.getByLabelText('Importance (0-1)', { selector: 'input' }));
-    await user.type(screen.getByLabelText('Importance (0-1)', { selector: 'input' }), '1');
-    await user.click(screen.getByRole('button', { name: /Add Memory/i }));
+    const form = screen.getByRole('form', { name: /memories/i });
+    const textarea = screen.getByLabelText('Memory Text', { selector: 'textarea' });
+    const tagsInput = screen.getByLabelText('Tags (comma separated)', { selector: 'input' });
+    const importanceInput = screen.getByLabelText('Importance (0-1)', { selector: 'input' });
+
+    // Use fireEvent for more reliable controlled input updates
+    fireEvent.change(textarea, { target: { value: 'New memory text' } });
+    fireEvent.change(tagsInput, { target: { value: 'tag-one, tag-two' } });
+    fireEvent.change(importanceInput, { target: { value: '1' } });
+    fireEvent.submit(form);
 
     await waitFor(() => expect(mocks.createMemory).toHaveBeenCalled());
     expect(mocks.createMemory).toHaveBeenCalledWith({

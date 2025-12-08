@@ -28,7 +28,7 @@ describe('AIPresenceOrb', () => {
       <AIPresenceOrb status="idle" persona={persona} analysisReady={false} isActive />
     );
 
-    const activeIndicator = container.querySelector('div[style*="height: 20px"]');
+    const activeIndicator = container.querySelector('div[class*="h-5"]');
     expect(activeIndicator).not.toBeNull();
   });
 
@@ -43,7 +43,7 @@ describe('AIPresenceOrb', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    fireEvent.click(screen.getByRole('button', { name: /Agent .* idle/i }));
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 

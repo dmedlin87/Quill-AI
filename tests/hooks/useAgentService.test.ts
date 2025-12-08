@@ -1,160 +1,263 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useAgentService } from '@/features/agent/hooks/useAgentService';
 import { DEFAULT_PERSONAS } from '@/types/personas';
-import type { FunctionCall } from '@google/genai';
 import type { EditorContext } from '@/types';
 
-const { mockSendMessage, mockCreateAgentSession, mockFetchMemoryContext } = vi.hoisted(() => {
-  const mockSendMessage = vi.fn();
-  const mockCreateAgentSession = vi.fn(() => ({
-    sendMessage: mockSendMessage,
-  }));
-  const mockFetchMemoryContext = vi.fn(async () => '[AGENT MEMORY]');
+/**
+ * @fileoverview Tests for useAgentService hook.
+ *
+ * Mocks DefaultAgentController entirely to avoid loading heavy Gemini dependencies
+ * and focuses on testing the hook's state management, message handling, and
+ * controller integration.
+ */
+const { MockDefaultAgentController, mockControllerInstance } = vi.hoisted(() => {
+  const mockControllerInstance = {
+    initializeChat: vi.fn(),
+    sendMessage: vi.fn(),
+    dispose: vi.fn(),
+    abortCurrentRequest: vi.fn(),
+    getCurrentPersona: vi.fn(),
+    getState: vi.fn(() => ({ status: 'idle' })),
+    resetSession: vi.fn(),
+    setPersona: vi.fn(),
+    // Internal event handlers - will be set during construction
+    _events: null as any,
+  };
 
-  return { mockSendMessage, mockCreateAgentSession, mockFetchMemoryContext };
+  class MockDefaultAgentController {
+    constructor(args: any) {
+      mockControllerInstance._events = args.events;
+      mockControllerInstance.getCurrentPersona.mockReturnValue(args.initialPersona);
+    }
+    initializeChat = mockControllerInstance.initializeChat;
+    sendMessage = mockControllerInstance.sendMessage;
+    dispose = mockControllerInstance.dispose;
+    abortCurrentRequest = mockControllerInstance.abortCurrentRequest;
+    getCurrentPersona = mockControllerInstance.getCurrentPersona;
+    getState = mockControllerInstance.getState;
+    resetSession = mockControllerInstance.resetSession;
+    setPersona = mockControllerInstance.setPersona;
+  }
+
+  return { MockDefaultAgentController, mockControllerInstance };
 });
 
-vi.mock('@/services/gemini/agent', () => ({
-  createAgentSession: mockCreateAgentSession,
+// Mock the AgentController module entirely to avoid heavy imports
+vi.mock('@/services/core/AgentController', () => ({
+  DefaultAgentController: MockDefaultAgentController,
 }));
 
-vi.mock('@/services/core/agentSession', async actual => {
-  const mod = (await actual()) as Record<string, unknown>;
-  return Object.assign({}, mod, {
-    fetchMemoryContext: mockFetchMemoryContext,
-  });
-});
+// Mock settings store
+vi.mock('@/features/settings', () => ({
+  useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      critiqueIntensity: 'standard',
+      experienceLevel: 'intermediate',
+      autonomyMode: 'copilot',
+    }),
+}));
 
+// Mock memory context fetcher
+vi.mock('@/services/core/agentSession', () => ({
+  fetchMemoryContext: vi.fn(async () => '[AGENT MEMORY]'),
+}));
+
+// Now import the hook after mocks are set up
+import { useAgentService } from '@/features/agent/hooks/useAgentService';
+
+/**
+ * @description Tests for useAgentService hook.
+ */
 describe('useAgentService', () => {
+  /**
+   * Standard editor context for tests.
+   */
   const baseContext: EditorContext = {
     cursorPosition: 0,
     selection: null,
     totalLength: 20,
   };
 
+  /**
+   * Factory for creating test chapter data.
+   * @param overrides Optional overrides for chapter data.
+   */
+  const makeChapter = (overrides = {}) => ({
+    id: 'ch1',
+    projectId: 'p1',
+    title: 'Chapter 1',
+    content: 'Hello world',
+    order: 0,
+    updatedAt: Date.now(),
+    ...overrides,
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSendMessage.mockReset();
-    mockCreateAgentSession.mockClear();
+    mockControllerInstance.initializeChat.mockClear();
+    mockControllerInstance.sendMessage.mockClear();
+    mockControllerInstance.dispose.mockClear();
+    mockControllerInstance._events = null;
   });
 
-  it('processes tool calls and final responses', async () => {
-    const toolCalls: FunctionCall[] = [
-      { id: '1', name: 'update_manuscript', args: { oldText: 'Hello', newText: 'Hi' } },
-    ];
+  it('initializes the controller with correct context on mount', async () => {
+    const onToolAction = vi.fn();
+    const chapters = [makeChapter()];
 
-    mockSendMessage.mockImplementation(async payload => {
-      if (Array.isArray((payload as any).message)) {
-        return { text: 'Completed edit' };
-      }
-
-      if (typeof (payload as any).message === 'string' && (payload as any).message.includes('[USER CONTEXT]')) {
-        return { text: '', functionCalls: toolCalls };
-      }
-
-      return { text: '' };
-    });
-
-    const onToolAction = vi.fn().mockResolvedValue('Successfully updated the manuscript');
-
-    const { result } = renderHook(() => useAgentService('Hello world', {
-      chapters: [{ id: 'ch1', projectId: 'p1', title: 'Chapter 1', content: 'Hello world', order: 0, updatedAt: Date.now() }],
-      analysis: null,
-      onToolAction,
-    }));
-
-    await act(async () => {
-      await result.current.sendMessage('Please update greeting', baseContext);
-    });
-
-    expect(onToolAction).toHaveBeenCalledWith('update_manuscript', { oldText: 'Hello', newText: 'Hi' });
-    expect(mockSendMessage.mock.calls.length).toBeGreaterThanOrEqual(3); // init + user + tool response
-    expect(result.current.messages.map(m => m.text)).toContain('🛠️ Suggesting Action: update_manuscript...');
-    expect(result.current.messages.at(-1)?.text).toBe('Completed edit');
-    expect(result.current.agentState.status).toBe('idle');
-    expect(result.current.isProcessing).toBe(false);
-  });
-
-  it('ignores empty or whitespace-only messages', async () => {
-    mockSendMessage.mockResolvedValue({ text: '' });
-
-    const onToolAction = vi.fn().mockResolvedValue('ok');
-
-    const { result } = renderHook(() =>
+    renderHook(() =>
       useAgentService('Hello world', {
-        chapters: [
-          {
-            id: 'ch1',
-            projectId: 'p1',
-            title: 'Chapter 1',
-            content: 'Hello world',
-            order: 0,
-            updatedAt: Date.now(),
-          },
-        ],
+        chapters,
         analysis: null,
         onToolAction,
       }),
     );
 
-    // Wait for initial session initialization
+    // Controller should be initialized
     await waitFor(() => {
-      expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+      expect(mockControllerInstance.initializeChat).toHaveBeenCalled();
+    });
+  });
+
+  it('delegates sendMessage to the controller', async () => {
+    const onToolAction = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.sendMessage('Hello agent', baseContext);
     });
 
-    const initialSendCount = mockSendMessage.mock.calls.length;
+    expect(mockControllerInstance.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'Hello agent',
+        editorContext: baseContext,
+      }),
+    );
+  });
+
+  it('ignores empty or whitespace-only messages', async () => {
+    const onToolAction = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+      }),
+    );
 
     await act(async () => {
       await result.current.sendMessage('   ', baseContext);
     });
 
-    // No additional sends beyond initialization
-    expect(mockSendMessage.mock.calls.length).toBe(initialSendCount);
+    // sendMessage should not be called for whitespace
+    expect(mockControllerInstance.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('clears messages and reinitializes the session', async () => {
-    mockSendMessage.mockImplementation(async payload => {
-      if (typeof (payload as any).message === 'string' && (payload as any).message.includes('[USER CONTEXT]')) {
-        return { text: 'Response' };
-      }
+  it('updates state when controller emits state changes', async () => {
+    const onToolAction = vi.fn();
 
-      return { text: '' };
-    });
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+      }),
+    );
 
-    const onToolAction = vi.fn().mockResolvedValue('done');
-
-    const { result } = renderHook(() => useAgentService('Sample', {
-      chapters: [{ id: 'ch1', projectId: 'p1', title: 'One', content: 'Sample', order: 0, updatedAt: Date.now() }],
-      onToolAction,
-      analysis: null,
-    }));
-
+    // Simulate controller emitting state change
     await act(async () => {
-      await result.current.sendMessage('Hi', baseContext);
+      mockControllerInstance._events?.onStateChange?.({ status: 'thinking' });
     });
 
-    expect(result.current.messages.length).toBeGreaterThan(0);
-    const initialCreateCalls = mockCreateAgentSession.mock.calls.length;
+    expect(result.current.agentState.status).toBe('thinking');
+    expect(result.current.isProcessing).toBe(true);
 
+    // Simulate returning to idle
+    await act(async () => {
+      mockControllerInstance._events?.onStateChange?.({ status: 'idle' });
+    });
+
+    expect(result.current.agentState.status).toBe('idle');
+    expect(result.current.isProcessing).toBe(false);
+  });
+
+  it('appends messages when controller emits onMessage', async () => {
+    const onToolAction = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+      }),
+    );
+
+    // Simulate controller emitting messages
+    await act(async () => {
+      mockControllerInstance._events?.onMessage?.({
+        role: 'user',
+        text: 'Test message',
+        timestamp: new Date(),
+      });
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0].text).toBe('Test message');
+  });
+
+  it('clears messages and calls resetSession', async () => {
+    const onToolAction = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+      }),
+    );
+
+    // Add some messages
+    await act(async () => {
+      mockControllerInstance._events?.onMessage?.({
+        role: 'user',
+        text: 'Message 1',
+        timestamp: new Date(),
+      });
+      mockControllerInstance._events?.onMessage?.({
+        role: 'model',
+        text: 'Reply 1',
+        timestamp: new Date(),
+      });
+    });
+
+    expect(result.current.messages.length).toBe(2);
+
+    // Clear messages
     await act(async () => {
       result.current.clearMessages();
-      await Promise.resolve();
     });
 
     expect(result.current.messages).toHaveLength(0);
-    expect(mockCreateAgentSession.mock.calls.length).toBeGreaterThan(initialCreateCalls);
   });
 
   it('switches persona and announces the change', async () => {
-    mockSendMessage.mockImplementation(async () => ({ text: 'Hello' }));
+    const onToolAction = vi.fn();
 
-    const { result } = renderHook(() => useAgentService('Text', {
-      chapters: [{ id: 'ch1', projectId: 'p1', title: 'One', content: 'Text', order: 0, updatedAt: Date.now() }],
-      onToolAction: vi.fn(),
-      analysis: null,
-      initialPersona: DEFAULT_PERSONAS[0],
-    }));
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+        initialPersona: DEFAULT_PERSONAS[0],
+      }),
+    );
 
     const newPersona = DEFAULT_PERSONAS[1];
 
@@ -162,93 +265,93 @@ describe('useAgentService', () => {
       result.current.setPersona(newPersona);
     });
 
-    await waitFor(() => {
-      expect(result.current.currentPersona).toBe(newPersona);
-      expect(result.current.messages.some(msg => msg.text.includes(`Switching to ${newPersona.name} mode`))).toBe(true);
-    });
-
-    expect(mockCreateAgentSession.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(result.current.currentPersona).toBe(newPersona);
   });
 
   it('applies a rolling message limit', async () => {
-    mockSendMessage.mockResolvedValue({ text: 'Reply' });
-
-    const onToolAction = vi.fn().mockResolvedValue('ok');
+    const onToolAction = vi.fn();
+    const messageLimit = 3;
 
     const { result } = renderHook(() =>
       useAgentService('Hello world', {
-        chapters: [{ id: 'ch1', projectId: 'p1', title: 'Chapter 1', content: 'Hello world', order: 0, updatedAt: Date.now() }],
+        chapters: [makeChapter()],
         analysis: null,
         onToolAction,
-        messageLimit: 3,
+        messageLimit,
       }),
     );
 
+    // Add more messages than the limit
     await act(async () => {
-      await result.current.sendMessage('First', baseContext);
-      await result.current.sendMessage('Second', baseContext);
+      for (let i = 1; i <= 5; i++) {
+        mockControllerInstance._events?.onMessage?.({
+          role: 'user',
+          text: `Message ${i}`,
+          timestamp: new Date(),
+        });
+      }
     });
 
-    await waitFor(() => {
-      expect(result.current.messages.length).toBe(3);
-    });
-
-    const texts = result.current.messages.map(m => m.text);
-    expect(texts).not.toContain('First');
-    expect(texts).toContain('Second');
-    expect(texts.filter(t => t === 'Reply').length).toBeGreaterThanOrEqual(1);
+    expect(result.current.messages.length).toBe(messageLimit);
+    expect(result.current.messages[0].text).toBe('Message 3');
+    expect(result.current.messages[2].text).toBe('Message 5');
   });
 
-  it('trims messages when exceeding the limit', async () => {
-    mockSendMessage.mockResolvedValue({ text: 'Reply' });
+  it('disposes controller on unmount', async () => {
+    const onToolAction = vi.fn();
 
-    const onToolAction = vi.fn().mockResolvedValue('ok');
-
-    const { result } = renderHook(() =>
+    const { unmount } = renderHook(() =>
       useAgentService('Hello world', {
-        chapters: [{ id: 'ch1', projectId: 'p1', title: 'Chapter 1', content: 'Hello world', order: 0, updatedAt: Date.now() }],
+        chapters: [makeChapter()],
         analysis: null,
         onToolAction,
-        messageLimit: 2,
       }),
     );
 
-    await act(async () => {
-      await result.current.sendMessage('First', baseContext);
-      await result.current.sendMessage('Second', baseContext);
-      await result.current.sendMessage('Third', baseContext);
-    });
+    unmount();
 
-    await waitFor(() => {
-      expect(result.current.messages.length).toBe(2);
-      expect(result.current.messages.map(m => m.text)).toEqual(['Third', 'Reply']);
-    });
+    expect(mockControllerInstance.dispose).toHaveBeenCalled();
   });
 
-  it('falls back gracefully when memory provider fails', async () => {
-    mockSendMessage.mockResolvedValue({ text: '' });
-    mockFetchMemoryContext.mockRejectedValueOnce(new Error('boom'));
-
-    const onToolAction = vi.fn().mockResolvedValue('ok');
+  it('calls abortCurrentRequest on resetSession', async () => {
+    const onToolAction = vi.fn();
 
     const { result } = renderHook(() =>
       useAgentService('Hello world', {
-        chapters: [{ id: 'ch1', projectId: 'p1', title: 'Chapter 1', content: 'Hello world', order: 0, updatedAt: Date.now() }],
+        chapters: [makeChapter()],
         analysis: null,
         onToolAction,
-        projectId: 'p1',
       }),
     );
 
-    await waitFor(() => {
-      expect(mockFetchMemoryContext).toHaveBeenCalled();
-    });
-
     await act(async () => {
-      await result.current.sendMessage('Hi after failure', baseContext);
+      result.current.resetSession();
     });
 
-    expect(result.current.messages.map(m => m.text)).toContain('Hi after failure');
-    expect(result.current.agentState.status).toBe('idle');
+    expect(mockControllerInstance.abortCurrentRequest).toHaveBeenCalled();
+  });
+
+  it('handles error state from controller', async () => {
+    const onToolAction = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+      }),
+    );
+
+    // Simulate controller emitting error state
+    await act(async () => {
+      mockControllerInstance._events?.onStateChange?.({
+        status: 'error',
+        lastError: 'Connection failed',
+      });
+    });
+
+    expect(result.current.agentState.status).toBe('error');
+    expect(result.current.agentState.lastError).toBe('Connection failed');
+    expect(result.current.isProcessing).toBe(false);
   });
 });

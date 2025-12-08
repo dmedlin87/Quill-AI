@@ -404,8 +404,11 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-[var(--text-secondary)] block mb-1">Tags (comma separated)</label>
+              <label className="text-xs text-[var(--text-secondary)] block mb-1" htmlFor={memoryTagsId}>
+                Tags (comma separated)
+              </label>
               <input
+                id={memoryTagsId}
                 type="text"
                 value={memoryForm.topicTags}
                 onChange={(e) => setMemoryForm((prev) => ({ ...prev, topicTags: e.target.value }))}
@@ -414,8 +417,11 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
               />
             </div>
             <div>
-              <label className="text-xs text-[var(--text-secondary)] block mb-1">Importance (0-1)</label>
+              <label className="text-xs text-[var(--text-secondary)] block mb-1" htmlFor={memoryImportanceId}>
+                Importance (0-1)
+              </label>
               <input
+                id={memoryImportanceId}
                 type="number"
                 min={0}
                 max={1}

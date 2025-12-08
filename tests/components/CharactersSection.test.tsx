@@ -83,7 +83,8 @@ describe('CharactersSection', () => {
       />
     );
 
-    expect(screen.getByText('Character Development')).toBeInTheDocument();
+    // Empty state message should be shown
+    expect(screen.getByText(/No character insights yet/)).toBeInTheDocument();
     // No character cards rendered
     expect(screen.queryByText('Key Character')).not.toBeInTheDocument();
   });
