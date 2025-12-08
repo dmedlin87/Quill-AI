@@ -21,6 +21,34 @@ describe('voiceProfiler - generateVoiceProfile', () => {
     expect(profile.lineCount).toBe(lines.length);
   });
 
+  it('produces a punchy, urgent, and casual impression for short excited lines', () => {
+    const lines = makeLinesForSpeaker('Rex', [
+      "Wow!",
+      "We can't wait!",
+      "We're racing ahead!",
+    ]);
+
+    const profile = generateVoiceProfile(lines);
+
+    expect(profile.impression).toContain('Casual');
+    expect(profile.impression).toContain('Urgent');
+    expect(profile.impression).toContain('Punchy');
+  });
+
+  it('marks verbose and formal voices with inquisitive tone', () => {
+    const lines = makeLinesForSpeaker('Professor', [
+      'The elaboration of coordination, justification, orientation, determination, and consideration is necessary for civilization transformation and revitalization of cooperation in organization, is it not?',
+      'In this deliberation, the implication of cooperation and optimization in our communication and organization remains essential for preservation, articulation, and accumulation of shared information.',
+      'Does this continuation of exploration and adaptation reinforce our collective imagination and aspiration for innovation?',
+    ]);
+
+    const profile = generateVoiceProfile(lines);
+
+    expect(profile.impression).toContain('Formal');
+    expect(profile.impression).toContain('Verbose');
+    expect(profile.impression).toContain('Inquisitive');
+  });
+
   it('falls back to Unknown when no speaker provided', () => {
     const lines = makeLinesForSpeaker('', ['Hello there.']);
     const profile = generateVoiceProfile(lines);
@@ -34,6 +62,15 @@ describe('voiceProfiler - generateVoiceProfile', () => {
     expect(profile.metrics.uniqueWordCount).toBe(0);
     expect(profile.impression).toBe('Balanced');
     expect(profile.lineCount).toBe(0);
+  });
+
+  it('ignores punctuation-only sentences when computing metrics', () => {
+    const lines = makeLinesForSpeaker('Loud', ['!!!', '?!?']);
+    const profile = generateVoiceProfile(lines);
+
+    expect(profile.metrics.avgSentenceLength).toBe(0);
+    expect(profile.metrics.exclamationRatio).toBe(0);
+    expect(profile.impression).toBe('Balanced');
   });
 });
 
@@ -90,5 +127,51 @@ describe('voiceProfiler - analyzeVoices', () => {
 
     expect(result.consistencyAlerts.length).toBeGreaterThan(0);
     expect(result.consistencyAlerts[0]).toContain('Professor');
+  });
+
+  it('skips profiles for speakers without enough lines', () => {
+    const result = analyzeVoices([
+      ...makeLinesForSpeaker('Short', ['Line one.', 'Line two.', 'Line three.']),
+      ...makeLinesForSpeaker(
+        'Long',
+        Array.from({ length: 6 }, () => 'Steady statement with no surprises or punctuation'),
+      ),
+    ]);
+
+    expect(Object.keys(result.profiles)).toHaveLength(1);
+    const onlyProfile = Object.values(result.profiles)[0];
+    expect(onlyProfile.speakerName).toBe('Long');
+    expect(result.consistencyAlerts).toHaveLength(0);
+  });
+
+  it('handles empty quotes while still creating profiles without alerts', () => {
+    const lines = makeLinesForSpeaker('Silent', Array.from({ length: 6 }, () => ''));
+
+    const result = analyzeVoices(lines);
+
+    const profileKeys = Object.keys(result.profiles);
+    expect(profileKeys).toHaveLength(1);
+    const profile = result.profiles[profileKeys[0]];
+    expect(profile.metrics.avgSentenceLength).toBe(0);
+    expect(profile.signatureWords).toEqual([]);
+    expect(result.consistencyAlerts).toEqual([]);
+  });
+
+  it('ignores entries without speakers and tolerates undefined quotes', () => {
+    const lines: DialogueLine[] = [
+      { speaker: '', quote: 'ignored', offset: 0 } as any,
+      { speaker: 'Ghost', quote: undefined as any, offset: 1 },
+      { speaker: 'Ghost', quote: '!!!', offset: 2 } as any,
+      { speaker: 'Ghost', quote: undefined as any, offset: 3 },
+      { speaker: 'Ghost', quote: '', offset: 4 } as any,
+      { speaker: 'Ghost', quote: undefined as any, offset: 5 },
+    ];
+
+    const result = analyzeVoices(lines);
+
+    const ghostProfile = Object.values(result.profiles)[0];
+    expect(ghostProfile.speakerName).toBe('Ghost');
+    expect(ghostProfile.impression).toBe('Balanced');
+    expect(result.consistencyAlerts).toEqual([]);
   });
 });
