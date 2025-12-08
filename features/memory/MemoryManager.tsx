@@ -386,8 +386,14 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
           </div>
 
           <div>
-            <label className="text-xs text-[var(--text-secondary)] block mb-1">Memory Text</label>
+            <label
+              className="text-xs text-[var(--text-secondary)] block mb-1"
+              htmlFor="memory-text"
+            >
+              Memory Text
+            </label>
             <textarea
+              id="memory-text"
               required
               value={memoryForm.text}
               onChange={(e) => setMemoryForm((prev) => ({ ...prev, text: e.target.value }))}

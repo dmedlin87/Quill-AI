@@ -7,10 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
+    "test": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest",
+    "test:run": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest run",
+    "test:ui": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest --ui",
+    "test:coverage": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest run --coverage",
     "test:mutation": "stryker run",
     "test:status": "node scripts/generate-test-status.mjs",
     "test:audit": "node scripts/audit-test-gaps.mjs",
@@ -18,7 +18,7 @@
     "test:full": "npm run test:coverage && npm run test:status && npm run test:audit",
     "test:docs": "node scripts/check-coverage-docs-fresh.mjs",
     "test:docs:strict": "node scripts/check-coverage-docs-strict.mjs",
-    "test:quick": "vitest run --reporter=dot"
+    "test:quick": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest run --reporter=dot"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
@@ -39,6 +39,7 @@
     "zustand": "4.5.2"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^14.2.1",
     "@testing-library/user-event": "^14.6.1",

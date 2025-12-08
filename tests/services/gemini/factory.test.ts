@@ -4,11 +4,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockChatCreate = vi.hoisted(() => vi.fn());
 const mockChatSend = vi.hoisted(() => vi.fn());
 
-const mockAi = {
+const mockAi = vi.hoisted(() => ({
   chats: {
     create: mockChatCreate,
   },
-};
+}));
 
 const mockNormalize = vi.hoisted(() =>
   vi.fn((err: Error, ctx: Record<string, unknown>) => new AIError(`normalized:${err.message}`, { cause: ctx })),
@@ -118,7 +118,9 @@ describe('createAgentSession', () => {
     expect(params.model).toBe('agent-model');
     expect(params.config.tools[0].functionDeclarations).toEqual([{ name: 'all-tool' }]);
     expect(params.history).toEqual(history);
-    expect(String(params.config.systemInstruction)).toContain('SYS');
+    expect(String(params.config.systemInstruction)).toContain(
+      'You are Quill AI Agent, an advanced AI editor embedded in a text editor.',
+    );
   });
 
   it('uses voice-safe toolset and model for voice mode', async () => {

@@ -289,13 +289,14 @@ describe('Timeline Tracker', () => {
 
       it('should link sequential "after" events', () => {
         const text = `
-          First event. After that, second event. Later, third event.
+          At dawn the journey began. After that, second event. Later, third event.
         `;
 
         const events = extractTimelineEvents(text, [], 'ch1');
 
         // Events with "after" should depend on previous event
         const afterEvents = events.filter(e => e.relativePosition === 'after');
+        expect(afterEvents.length).toBeGreaterThan(0);
         afterEvents.forEach(event => {
           expect(event.dependsOn.length).toBeGreaterThan(0);
         });
@@ -440,7 +441,7 @@ describe('Timeline Tracker', () => {
 
         const chains = extractCausalChains(text, events);
 
-        const ifThenChain = chains.find(c => c.marker === 'if');
+        const ifThenChain = chains.find(c => c.marker === 'If');
         expect(ifThenChain).toBeDefined();
         expect(ifThenChain?.confidence).toBe(0.5);
       });

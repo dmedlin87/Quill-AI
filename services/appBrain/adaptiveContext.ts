@@ -603,7 +603,7 @@ const buildMemorySection = async (
     );
     const firstBedsideNote = bedsideNotes[0];
 
-    if (firstBedsideNote) {
+    if (firstBedsideNote && (state.analysis.result || goals.length > 0)) {
       // Consider either updatedAt or createdAt (whichever is earlier) for staleness.
       const lastTouched = Math.min(
         firstBedsideNote.updatedAt ?? Infinity,
@@ -628,26 +628,27 @@ const buildMemorySection = async (
       !note.topicTags.includes(BEDSIDE_NOTE_TAG)
     );
 
-    const conflictNotes = refreshedBedsideNotes.filter(note =>
+    const conflictNotes = memories.project.filter(note =>
       note.topicTags.includes('conflict:detected')
     );
+    let conflictSection = '';
     if (conflictNotes.length > 0) {
-      content += '[CONFLICT ALERT]\n';
+      conflictSection += '[CONFLICT ALERT]\n';
       for (const note of conflictNotes) {
         const structured = (note.structuredContent || {}) as BedsideNoteContent;
         const conflicts = structured.conflicts || [];
 
         if (conflicts.length === 0) {
-          content += `• Conflicting updates detected in bedside note ${note.id}. Review history.\n`;
+          conflictSection += `• Conflicting updates detected in bedside note ${note.id}. Review history.\n`;
           continue;
         }
 
         for (const conflict of conflicts) {
           const resolution = conflict.resolution ?? 'unresolved';
-          content += `• Previous: "${conflict.previous}" | New: "${conflict.current}" (resolution: ${resolution})\n`;
+          conflictSection += `• Previous: "${conflict.previous}" | New: "${conflict.current}" (resolution: ${resolution})\n`;
         }
       }
-      content += '\n';
+      conflictSection += '\n';
     }
 
     const activeChapterId = state.manuscript.activeChapterId || undefined;
@@ -660,21 +661,23 @@ const buildMemorySection = async (
       : [];
     const arcNames = Object.fromEntries(arcs.map(arc => [arc.id, arc.title]));
 
-    const orderedBedsideNotes = [...refreshedBedsideNotes].sort((a, b) => {
-      const tagPriority = (note: typeof a) => {
-        const hasChapter = activeChapterId
-          ? note.topicTags.some(tag => tag === `chapter:${activeChapterId}`)
-          : false;
-        const hasArc = activeArcId
-          ? note.topicTags.some(tag => tag === `arc:${activeArcId}`)
-          : false;
-        if (hasChapter) return 0;
-        if (hasArc) return 1;
-        return 2;
-      };
+    // Preserve order when provided by memory service; otherwise apply chapter→arc→project heuristic.
+    let orderedBedsideNotes = refreshedBedsideNotes;
+    if (refreshedBedsideNotes.length > 1) {
+      const chapterNotes = refreshedBedsideNotes.filter(note =>
+        activeChapterId ? note.topicTags.includes(`chapter:${activeChapterId}`) : false
+      );
+      const arcNotes = refreshedBedsideNotes.filter(note =>
+        activeArcId ? note.topicTags.includes(`arc:${activeArcId}`) : false
+      );
+      const projectNotes = refreshedBedsideNotes.filter(note =>
+        !note.topicTags.some(tag => tag.startsWith('chapter:') || tag.startsWith('arc:'))
+      );
 
-      return tagPriority(a) - tagPriority(b);
-    });
+      if (chapterNotes.length + arcNotes.length + projectNotes.length === refreshedBedsideNotes.length) {
+        orderedBedsideNotes = [...chapterNotes, ...arcNotes, ...projectNotes];
+      }
+    }
 
     const prioritizedMemories = {
       author: memories.author,
@@ -689,9 +692,10 @@ const buildMemorySection = async (
       activeArcId,
     });
     if (formattedMemories) {
+      content += conflictSection;
       content += formattedMemories + '\n';
     } else {
-      content += 'No memories stored yet.\n';
+      content += conflictSection || 'No memories stored yet.\n';
     }
     
     const formattedGoals = formatGoalsForPrompt(goals);

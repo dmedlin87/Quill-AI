@@ -53,17 +53,17 @@ const TIME_OF_DAY_PATTERNS = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CAUSAL_MARKERS: Array<{ pattern: RegExp; confidence: number }> = [
-  // Strong causal indicators
-  { pattern: /\bbecause\s+(.{10,100})\b/gi, confidence: 0.9 },
-  { pattern: /\btherefore\s+(.{10,100})\b/gi, confidence: 0.9 },
-  { pattern: /\bas a result\s+(.{10,100})\b/gi, confidence: 0.9 },
-  { pattern: /\bconsequently\s+(.{10,100})\b/gi, confidence: 0.9 },
+  // Strong causal indicators (allow comma/semicolon after marker)
+  { pattern: /\bbecause[,;\s]+(.{10,100})\b/gi, confidence: 0.9 },
+  { pattern: /\btherefore[,;\s]+(.{10,100})\b/gi, confidence: 0.9 },
+  { pattern: /\bas a result[,;\s]+(.{10,100})\b/gi, confidence: 0.9 },
+  { pattern: /\bconsequently[,;\s]+(.{10,100})\b/gi, confidence: 0.9 },
   
   // Medium causal indicators
-  { pattern: /\bso\s+(.{10,80})\b/gi, confidence: 0.7 },
-  { pattern: /\bthus\s+(.{10,80})\b/gi, confidence: 0.7 },
-  { pattern: /\bhence\s+(.{10,80})\b/gi, confidence: 0.7 },
-  { pattern: /\bsince\s+(.{10,100}),/gi, confidence: 0.6 },
+  { pattern: /\bso[,;\s]+(.{10,80})\b/gi, confidence: 0.7 },
+  { pattern: /\bthus[,;\s]+(.{10,80})\b/gi, confidence: 0.7 },
+  { pattern: /\bhence[,;\s]+(.{10,80})\b/gi, confidence: 0.7 },
+  { pattern: /\bsince[,;\s]+(.{10,100}),/gi, confidence: 0.6 },
   
   // Weaker causal indicators
   { pattern: /\bif\s+(.{10,80}),\s*then\s+(.{10,80})\b/gi, confidence: 0.5 },
@@ -87,23 +87,26 @@ const PROMISE_PATTERNS: Array<{ pattern: RegExp; type: PlotPromise['type'] }> = 
   { pattern: /\b(\w+ made a mental note)\b/gi, type: 'setup' },
   { pattern: /\b(kept (?:a|the) \w+ hidden)\b/gi, type: 'setup' },
   
-  // Questions/mysteries
-  { pattern: /\b(what (?:had|could|would) \w+\?)/gi, type: 'question' },
-  { pattern: /\b(who (?:was|had|could) \w+\?)/gi, type: 'question' },
-  { pattern: /\b(why (?:had|did|would) \w+\?)/gi, type: 'question' },
+  // Questions/mysteries (allow multiple words before question mark)
+  { pattern: /\b(what (?:had|could|would)\s+.+?\?)/gi, type: 'question' },
+  { pattern: /\b(who (?:was|had|could)\s+.+?\?)/gi, type: 'question' },
+  { pattern: /\b(why (?:had|did|would)\s+.+?\?)/gi, type: 'question' },
   { pattern: /\b(the mystery of)\b/gi, type: 'question' },
   { pattern: /\b(the mystery (?:remained|remains|still|persisted)(?:\s+\w+)*)\b/gi, type: 'question' },
   { pattern: /\b(remained a (?:mystery|secret|puzzle))\b/gi, type: 'question' },
   
-  // Conflicts
-  { pattern: /\b(\w+ (vowed|swore|promised) to)\b/gi, type: 'conflict' },
-  { pattern: /\b(would not rest until)\b/gi, type: 'conflict' },
-  { pattern: /\b(\w+ (must|had to) (find|stop|save|destroy))\b/gi, type: 'conflict' },
+  // Conflicts (capture full phrase up to sentence end)
+  { pattern: /\b(\w+ (?:vowed|swore|promised) to [^.!?]+)/gi, type: 'conflict' },
+  { pattern: /\b(would not rest until [^.!?]+)/gi, type: 'conflict' },
+  { pattern: /\b(\w+ (?:must|had to) (?:find|stop|save|destroy) [^.!?]+)/gi, type: 'conflict' },
   
-  // Goals
-  { pattern: /\b(\w+ (needed|wanted|intended) to)\b/gi, type: 'goal' },
-  { pattern: /\b(the only way to \w+ was)\b/gi, type: 'goal' },
-  { pattern: /\b(\w+ set out to)\b/gi, type: 'goal' },
+  // Goals (capture full phrase up to sentence end)
+  { pattern: /\b(\w+ (?:needed|wanted|intended) to [^.!?]+)/gi, type: 'goal' },
+  { pattern: /\b(the only way to [^.!?]+ was [^.!?]+)/gi, type: 'goal' },
+  { pattern: /\b(\w+ set out to [^.!?]+)/gi, type: 'goal' },
+  
+  // Generic question pattern for statements about questions
+  { pattern: /\b(the (?:question|puzzle|riddle) (?:was|remained|persisted)[^.!?]*)/gi, type: 'question' },
 ];
 
 // Payoff/resolution patterns
@@ -198,8 +201,9 @@ export const extractTimelineEvents = (
     while ((match = pattern.exec(text)) !== null) {
       const sentence = extractSentence(text, match.index);
       
-      // Avoid duplicates
-      if (!events.find(e => Math.abs(e.offset - match!.index) < 20)) {
+      // Avoid duplicates within 30 characters (only compare against other time-of-day events)
+      const existingTimeOfDay = events.filter(e => e.relativePosition === 'unknown');
+      if (!existingTimeOfDay.find(e => Math.abs(e.offset - match!.index) < 30)) {
         events.push({
           id: generateId(),
           description: truncate(sentence, 150),
@@ -266,30 +270,38 @@ export const extractCausalChains = (
     while ((match = pattern.exec(text)) !== null) {
       const offset = match.index;
       
-      // Find cause (before the marker) and effect (the matched content)
-      const causeSentenceEnd = offset;
-      let causeSentenceStart = causeSentenceEnd - 1;
-      while (causeSentenceStart > 0 && !/[.!?]/.test(text[causeSentenceStart - 1])) {
-        causeSentenceStart--;
+      // Find cause (the previous sentence before the marker)
+      let causeEnd = offset - 1;
+      // Skip whitespace and punctuation between sentences
+      while (causeEnd > 0 && /[\s.!?,;]/.test(text[causeEnd])) {
+        causeEnd--;
+      }
+      // Find the start of the cause sentence
+      let causeStart = causeEnd;
+      while (causeStart > 0 && !/[.!?]/.test(text[causeStart - 1])) {
+        causeStart--;
       }
       
-      const causeQuote = text.slice(causeSentenceStart, causeSentenceEnd).trim();
+      const causeQuote = text.slice(causeStart, causeEnd + 1).trim();
       const effectQuote = getMatchedContent(match);
       
       // Find related events
       const causeEvent = events.find(e => 
-        Math.abs(e.offset - causeSentenceStart) < 100
+        Math.abs(e.offset - causeStart) < 100
       );
       const effectEvent = events.find(e => 
         Math.abs(e.offset - offset) < 100
       );
+      
+      // Extract marker word without punctuation (preserve original case)
+      const markerWord = match[0].split(/[\s,;]+/)[0].replace(/[,;]/g, '');
       
       chains.push({
         id: generateId(),
         cause: {
           eventId: causeEvent?.id || '',
           quote: truncate(causeQuote, 100),
-          offset: causeSentenceStart,
+          offset: causeStart,
         },
         effect: {
           eventId: effectEvent?.id || '',
@@ -297,7 +309,7 @@ export const extractCausalChains = (
           offset: offset,
         },
         confidence,
-        marker: match[0].split(/\s+/)[0], // First word of match
+        marker: markerWord,
       });
     }
   }

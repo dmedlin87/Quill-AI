@@ -198,7 +198,7 @@ describe('analyzeDraft', () => {
     const result = await analyzeDraft('Sample text');
 
     expect(result.result.summary).toBe('Analysis could not be completed.');
-    expect(result.warning).toBe('AI response failed validation - using default analysis');
+    expect(result.warning).toEqual({ message: 'AI response failed validation - using default analysis' });
   });
 
   it('includes warning when response requires sanitization', async () => {
@@ -222,7 +222,7 @@ describe('analyzeDraft', () => {
     const result = await analyzeDraft('Sample text');
 
     expect(result.result).toEqual(mockAnalysisResult);
-    expect(result.warning).toBe('AI response needed cleanup; results may be incomplete.');
+    expect(result.warning).toEqual({ message: 'AI response needed cleanup; results may be incomplete.' });
   });
 
   it('supports explicit suggestion type without user instruction', async () => {
@@ -265,7 +265,7 @@ describe('analyzeDraft', () => {
     const result = await analyzeDraft('Sample text');
 
     expect(result.result).toEqual(mockAnalysisResult);
-    expect(result.warning).toBe('AI response needed cleanup; results may be incomplete.');
+    expect(result.warning).toEqual({ message: 'AI response needed cleanup; results may be incomplete.' });
   });
 
   it('propagates rate limit errors from analyzeDraft', async () => {
@@ -796,7 +796,7 @@ describe('generatePlotIdeas', () => {
     const result = await generatePlotIdeas('Sample text');
 
     expect(result.result).toEqual([{ title: 'Idea' }]);
-    expect(result.warning).toBe('Response required sanitization');
+    expect(result.warning).toEqual({ message: 'Response required sanitization' });
   });
 
   it('supports abort signal', async () => {
@@ -842,7 +842,7 @@ describe('generatePlotIdeas', () => {
     const result = await generatePlotIdeas('Sample text');
 
     expect(result.result).toEqual(ideas);
-    expect(result.warning).toBe('Response required sanitization');
+    expect(result.warning).toEqual({ message: 'Response required sanitization' });
   });
 
   it('propagates rate limit errors from generatePlotIdeas', async () => {

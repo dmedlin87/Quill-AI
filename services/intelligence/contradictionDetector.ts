@@ -60,11 +60,17 @@ interface AttributePattern {
 }
 
 const ATTRIBUTE_PATTERNS: AttributePattern[] = [
-  // Eye color
+  // Eye color - possessive pattern
   {
     category: 'eye_color',
-    pattern: /(\w+)'s?\s+(\w+)\s+eyes|eyes\s+(?:were|are)\s+(\w+)/gi,
-    extractor: (m) => m[2] || m[3],
+    pattern: /(\w+)'s?\s+(\w+)\s+eyes/gi,
+    extractor: (m) => m[2],
+  },
+  // Eye color - "eyes were/are X" pattern (entity from preceding context)
+  {
+    category: 'eye_color',
+    pattern: /\b(\w+)(?:'s)?\s+eyes\s+(?:were|are)\s+(\w+)/gi,
+    extractor: (m) => m[2],
   },
   // Hair color
   {
@@ -292,8 +298,10 @@ const detectTimelineContradictions = (
     
     for (const mention of postDeathMentions) {
       // Check if this is an action (speaking, moving, etc.)
-      const mentionContext = text.slice(mention.offset, mention.offset + 100);
-      const actionPatterns = /(?:said|asked|walked|ran|looked|smiled|nodded|shook)/i;
+      // Include context before and after the mention to catch memory/flashback patterns
+      const contextStart = Math.max(0, mention.offset - 50);
+      const mentionContext = text.slice(contextStart, mention.offset + 100);
+      const actionPatterns = /(?:said|asked|walked|ran|looked|smiled|nodded|shook|laughed|jumped|grabbed|stood)/i;
       
       if (actionPatterns.test(mentionContext)) {
         // Calculate confidence based on distance and action type
@@ -462,8 +470,8 @@ const calculateTimelineConfidence = (
     confidence -= 0.15;
   }
   
-  // Lower confidence for thought/memory patterns
-  const memoryPatterns = /\b(remembered|recalled|thought of|dreamed)\b/i;
+  // Lower confidence for thought/memory patterns (check broader context around the mention)
+  const memoryPatterns = /\b(remembered|recalled|thought of|dreamed|memory|memories)\b/i;
   if (memoryPatterns.test(mentionContext)) {
     confidence -= 0.3;
   }
@@ -574,13 +582,57 @@ export const detectContradictionsWithLore = (
   // Extract manuscript attributes
   const manuscriptAttrs = extractAttributes(text);
   
+  // Infer category from lore predicate or object
+  const inferCategoryFromLore = (predicate: string, obj: string): string | null => {
+    const pred = predicate.toLowerCase().replace(/\s+/g, '_');
+    const objLower = obj.toLowerCase();
+    
+    // Check predicate for category hints
+    if (pred.includes('eye') || pred.includes('eye_color')) return 'eye_color';
+    if (pred.includes('hair') || pred.includes('hair_color')) return 'hair_color';
+    if (pred.includes('height')) return 'height';
+    if (pred.includes('build') || pred.includes('body')) return 'build';
+    if (pred.includes('age')) return 'age';
+    
+    // Check object for category hints
+    const heightTerms = ['tall', 'short', 'average height'];
+    const buildTerms = ['slender', 'muscular', 'thin', 'stocky', 'athletic', 'heavyset'];
+    const colorTerms = ['blue', 'green', 'brown', 'black', 'blonde', 'red', 'auburn', 'golden', 'dark'];
+    
+    if (heightTerms.some(t => objLower.includes(t))) return 'height';
+    if (buildTerms.some(t => objLower.includes(t))) return 'build';
+    // Colors could be eye or hair - return null to match either
+    if (colorTerms.some(t => objLower.includes(t))) return null;
+    
+    return null;
+  };
+
   // Compare manuscript against lore
   for (const loreFact of loreFacts) {
+    const inferredCategory = inferCategoryFromLore(loreFact.predicate, loreFact.object);
+    
     // Find matching manuscript attributes
-    const matchingAttrs = manuscriptAttrs.filter(attr =>
-      attr.entityName.toLowerCase() === loreFact.subject &&
-      attr.category.includes(loreFact.predicate.replace(/\s+/g, '_'))
-    );
+    const matchingAttrs = manuscriptAttrs.filter(attr => {
+      const nameMatch = attr.entityName.toLowerCase() === loreFact.subject;
+      if (!nameMatch) return false;
+      
+      // Match by inferred category
+      if (inferredCategory && attr.category === inferredCategory) return true;
+      
+      // If category is null (could be eye or hair color), match either
+      if (inferredCategory === null) {
+        const colorCategories = ['eye_color', 'hair_color'];
+        if (colorCategories.includes(attr.category)) return true;
+      }
+      
+      // Also match height terms directly
+      const loreHeightTerms = ['tall', 'short'];
+      if (loreHeightTerms.includes(loreFact.object) && loreHeightTerms.includes(attr.value)) {
+        return true;
+      }
+      
+      return false;
+    });
     
     for (const attr of matchingAttrs) {
       if (!areValuesCompatible(attr.category, attr.value, loreFact.object)) {

@@ -26,7 +26,7 @@ vi.mock('@/services/appBrain/eventBus', () => ({
 
 describe('adaptiveContext', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   const baseState: any = {

@@ -57,7 +57,7 @@ export function buildAgentContextPrompt(input: AgentContextPromptInput): string 
   const baseContext = smartContext
     ? `[CONTEXT]\nSource: Smart Context\n${smartContext}`
     : editorContext
-      ? `[CONTEXT]\nSource: Editor Fallback\nCursor Index: ${editorContext.cursorPosition}\nSelection: ${
+      ? `[CONTEXT]\nSource: Editor Fallback\n[USER CONTEXT]\nCursor Index: ${editorContext.cursorPosition}\nSelection: ${
           editorContext.selection ? `"${editorContext.selection.text}"` : 'None'
         }\nSelection Range: ${
           editorContext.selection

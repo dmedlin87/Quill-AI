@@ -336,14 +336,14 @@ describe('ChunkIndex', () => {
       });
 
       it('should mark chapter dirty if content changed', () => {
-        index.registerChunk('chapter-ch1', 'chapter', 0, 100, 'old content', 'book');
+        index.registerChunk('chapter-ch1', 'chapter', 0, 100, 'old content here', 'book');
         const chunk = index.getChunk('chapter-ch1');
         if (chunk) chunk.status = 'fresh';
 
         const edit: ChunkEdit = {
           chapterId: 'ch1',
           start: 0,
-          end: 11,
+          end: 16,
           newLength: 11,
           timestamp: Date.now(),
         };
@@ -440,6 +440,8 @@ describe('ChunkIndex', () => {
       it('should add to dirty queue', () => {
         index.registerChunk('chapter-1', 'chapter', 0, 100, 'content', null);
 
+        // Dequeue to properly simulate fresh state (removes from queue)
+        index.dequeueNext();
         const chunk = index.getChunk('chapter-1');
         if (chunk) chunk.status = 'fresh';
 
@@ -505,7 +507,7 @@ describe('ChunkIndex', () => {
 
       it('should prioritize scenes over chapters', () => {
         index.registerChunk('chapter-1', 'chapter', 0, 100, 'content', null);
-        index.registerChunk('scene-1', 'scene', 0, 50, 'scene', 'chapter-1');
+        index.registerChunk('chapter-1-scene-1', 'scene', 0, 50, 'scene', 'chapter-1');
 
         const next = index.dequeueNext();
         const parsed = parseChunkId(next!);
@@ -526,7 +528,7 @@ describe('ChunkIndex', () => {
         index.registerChunk('book', 'book', 0, 0, '', null);
         index.registerChunk('act-1', 'act', 0, 0, '', 'book');
         index.registerChunk('chapter-1', 'chapter', 0, 100, 'c', 'act-1');
-        index.registerChunk('scene-1', 'scene', 0, 50, 's', 'chapter-1');
+        index.registerChunk('chapter-1-scene-1', 'scene', 0, 50, 's', 'chapter-1');
 
         const first = index.dequeueNext();
         expect(parseChunkId(first!).level).toBe('scene');

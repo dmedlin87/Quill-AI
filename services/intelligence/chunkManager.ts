@@ -99,6 +99,9 @@ export class ChunkManager {
       this.onQueueChange = callbacks.onQueueChange;
     }
     
+    // Initialize lastEditTime to prevent immediate processing on construction
+    this.lastEditTime = Date.now();
+    
     this.index = createChunkIndex(undefined, {
       onChunkDirty: () => this.scheduleProcessing(),
       onQueueUpdated: (queue) => this.onQueueChange?.(queue.length),

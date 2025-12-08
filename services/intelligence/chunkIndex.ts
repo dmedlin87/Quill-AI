@@ -125,8 +125,9 @@ export class ChunkIndex {
       }
     }
     
-    // Add to dirty queue
+    // Add to dirty queue and notify
     this.enqueueDirty(id);
+    this.onChunkDirty?.(id);
     
     return record;
   }

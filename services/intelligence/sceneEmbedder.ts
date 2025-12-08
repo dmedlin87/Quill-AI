@@ -67,8 +67,9 @@ const SEMANTIC_CATEGORIES: Record<string, string[]> = {
 
 // Emotional valence words
 const POSITIVE_WORDS = new Set([
-  'happy', 'joy', 'love', 'hope', 'peace', 'smile', 'laugh', 'beautiful', 'wonderful', 'amazing',
+  'happy', 'joy', 'love', 'hope', 'peace', 'smile', 'smiling', 'laugh', 'laughing', 'beautiful', 'wonderful', 'amazing',
   'excited', 'delighted', 'pleased', 'grateful', 'relief', 'triumph', 'success', 'warm', 'bright', 'gentle',
+  'embrace', 'kiss', 'kissing', 'cherish', 'adore', 'tender', 'loving',
 ]);
 
 const NEGATIVE_WORDS = new Set([
@@ -245,7 +246,7 @@ const detectEmotionalTone = (text: string): SceneEmbedding['emotionalTone'] => {
   }
   
   const total = positive + negative;
-  if (total < 3) return 'neutral';
+  if (total < 2) return 'neutral';
   
   const ratio = positive / total;
   if (ratio > 0.65) return 'positive';

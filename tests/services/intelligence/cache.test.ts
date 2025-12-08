@@ -41,7 +41,8 @@ vi.mock('@/services/intelligence/styleAnalyzer', () => ({
 }));
 
 vi.mock('@/services/intelligence/deltaTracker', () => ({
-  hashContent: vi.fn((text: string) => `hash-${text.length}`),
+  // Use a hash that includes content, not just length, to differentiate similar-length strings
+  hashContent: vi.fn((text: string) => `hash-${text.length}-${text.slice(0, 20).replace(/\s+/g, '_')}`),
 }));
 
 describe('Intelligence Cache', () => {
@@ -534,13 +535,15 @@ Para 3.`;
     });
 
     it('should handle deleted sections', () => {
-      const oldText = `Para 1.
+      // Text must be long enough to exceed SECTION_SIZE (500 chars) to create multiple sections
+      const longPara = 'A'.repeat(300);
+      const oldText = `${longPara} first paragraph content.
 
-Para 2.
+${longPara} second paragraph content.
 
-Para 3.`;
+${longPara} third paragraph content.`;
 
-      const newText = `Para 1.`;
+      const newText = `${longPara} first paragraph content.`;
 
       const oldSections = splitIntoSections(oldText);
       const result = processIncrementally(newText, oldSections, new Set());
@@ -550,13 +553,15 @@ Para 3.`;
     });
 
     it('should handle added sections', () => {
-      const oldText = `Para 1.`;
+      // Text must be long enough to exceed SECTION_SIZE (500 chars) to create multiple sections
+      const longPara = 'A'.repeat(300);
+      const oldText = `${longPara} first paragraph content.`;
 
-      const newText = `Para 1.
+      const newText = `${longPara} first paragraph content.
 
-Para 2.
+${longPara} second paragraph content.
 
-Para 3.`;
+${longPara} third paragraph content.`;
 
       const oldSections = splitIntoSections(oldText);
       const result = processIncrementally(newText, oldSections, new Set());
@@ -622,17 +627,19 @@ Another unchanged para.`;
     });
 
     it('should provide accurate incremental processing metrics', () => {
-      const originalText = `Para 1.
+      // Text must be long enough to exceed SECTION_SIZE (500 chars) to create multiple sections
+      const longPara = 'A'.repeat(300);
+      const originalText = `${longPara} first paragraph.
 
-Para 2.
+${longPara} second paragraph.
 
-Para 3.`;
+${longPara} third paragraph.`;
 
-      const modifiedText = `Para 1.
+      const modifiedText = `${longPara} first paragraph.
 
-Para 2 MODIFIED.
+${longPara} MODIFIED paragraph.
 
-Para 3.`;
+${longPara} third paragraph.`;
 
       const oldSections = splitIntoSections(originalText);
       const result = processIncrementally(modifiedText, oldSections, new Set());
