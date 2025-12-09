@@ -8,6 +8,7 @@ import { KnowledgeGraph, LoreManager } from '@/features/lore';
 import { MemoryManager } from '@/features/memory';
 import { Contradiction, Lore } from '@/types/schema';
 import { useLayoutStore } from './store/useLayoutStore';
+import { DeveloperModeToggle } from '@/features/settings';
 
 interface ToolsPanelProps {
   isZenMode: boolean;
@@ -97,10 +98,11 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
           aria-label={`${activeTab} panel`}
         >
           {/* Panel Header */}
-          <div className="h-14 border-b border-[var(--glass-border)] flex items-center px-5 shrink-0">
+          <div className="h-14 border-b border-[var(--glass-border)] flex items-center justify-between px-5 shrink-0">
             <h3 className="text-[var(--text-sm)] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
               {activeTab}
             </h3>
+            <DeveloperModeToggle />
           </div>
 
           {/* Panel Content */}

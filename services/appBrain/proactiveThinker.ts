@@ -352,26 +352,31 @@ export class ProactiveThinker {
     this.state.isThinking = true;
     const startTime = Date.now();
     
+    const events = [...this.state.pendingEvents];
+
     // Emit thinking started event
     eventBus.emit({
       type: 'PROACTIVE_THINKING_STARTED',
-      payload: { trigger: this.state.pendingEvents[0]?.type ?? 'manual' },
+      payload: {
+        trigger: events[0]?.type ?? 'manual',
+        pendingEvents: events,
+        contextPreview: events.map(event => event.type).join(', '),
+      },
     });
-    
+
     try {
       const state = this.getState();
-      const events = [...this.state.pendingEvents];
-      
+
       // Clear pending events
       this.state.pendingEvents = [];
-      
+
       // Build context
       const context = buildCompressedContext(state);
       const formattedEvents = this.formatEventsForPrompt(events);
-      
+
       // Get long-term memory context from BedsideHistorySearch
       const longTermMemory = await this.fetchLongTermMemoryContext(state);
-      
+
       // Get conflicts from intelligence-memory bridge
       let conflictsSection = '';
       if (state.intelligence.hud) {
@@ -385,7 +390,7 @@ export class ProactiveThinker {
       // Build prompt
       const prompt = PROACTIVE_THINKING_PROMPT
         .replace('{{CONTEXT}}', context)
-        .replace('{{LONG_TERM_MEMORY}}', longTermMemory)
+        .replace('{{LONG_TERM_MEMORY}}', longTermMemory.text)
         .replace('{{EVENTS}}', formattedEvents)
         .replace('{{CONFLICTS}}', conflictsSection ? `\nDETECTED CONFLICTS:\n${conflictsSection}` : '');
       
@@ -411,6 +416,20 @@ export class ProactiveThinker {
         payload: {
           suggestionsCount: result.suggestions.length,
           thinkingTime: Date.now() - startTime,
+          suggestions: result.suggestions,
+          rawThinking: result.rawThinking,
+          memoryContext: {
+            longTermMemoryIds: longTermMemory.matches.map(match => match.note.id),
+            longTermMemoryPreview: longTermMemory.matches.map(match =>
+              `${match.note.id}: ${match.note.text.slice(0, 160)}`
+            ),
+          },
+          contextUsed: {
+            compressedContext: context,
+            longTermMemory: longTermMemory.text,
+            formattedEvents,
+            events,
+          },
         },
       });
 
@@ -529,8 +548,10 @@ export class ProactiveThinker {
    * Fetch long-term memory context from BedsideHistorySearch.
    * Provides thematic insights, character arcs, and historical context to the thinker.
    */
-  private async fetchLongTermMemoryContext(state: AppBrainState): Promise<string> {
-    if (!this.projectId) return '';
+  private async fetchLongTermMemoryContext(
+    state: AppBrainState,
+  ): Promise<{ text: string; matches: BedsideHistoryMatch[] }> {
+    if (!this.projectId) return { text: '', matches: [] };
 
     try {
       // Build a query based on current context (active entities, scene type)
@@ -553,7 +574,7 @@ export class ProactiveThinker {
       const matches = await searchBedsideHistory(this.projectId, query, { limit: 5 });
 
       if (matches.length === 0) {
-        return '';
+        return { text: '', matches };
       }
 
       const lines: string[] = ['LONG-TERM MEMORY (Bedside Notes):'];
@@ -563,10 +584,10 @@ export class ProactiveThinker {
         lines.push(`- [${relevance}% relevant, ${age}]: ${match.note.text.slice(0, 150)}${match.note.text.length > 150 ? '...' : ''}`);
       }
 
-      return lines.join('\n');
+      return { text: lines.join('\n'), matches };
     } catch (error) {
       console.warn('[ProactiveThinker] Failed to fetch long-term memory:', error);
-      return '';
+      return { text: '', matches: [] };
     }
   }
 
