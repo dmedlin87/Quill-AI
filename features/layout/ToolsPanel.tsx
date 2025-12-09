@@ -9,6 +9,7 @@ import { MemoryManager } from '@/features/memory';
 import { Contradiction, Lore } from '@/types/schema';
 import { useLayoutStore } from './store/useLayoutStore';
 import { DeveloperModeToggle } from '@/features/settings';
+import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
 
 interface ToolsPanelProps {
   isZenMode: boolean;
@@ -127,19 +128,29 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
             )}
 
             {activeTab === SidebarTab.CHAT && (
-              <ChatInterface
-                editorContext={editorContext}
-                fullText={currentText}
-                onAgentAction={onAgentAction}
-                lore={lore}
-                chapters={chapters}
-                analysis={analysis}
-                initialMessage={chatInitialMessage}
-                onInitialMessageProcessed={clearChatInitialMessage}
-                interviewTarget={interviewTarget}
-                onExitInterview={exitInterview}
-                projectId={projectId}
-              />
+              <div className="flex flex-col h-full">
+                <div className="flex-1 overflow-hidden">
+                  <ChatInterface
+                    editorContext={editorContext}
+                    fullText={currentText}
+                    onAgentAction={onAgentAction}
+                    lore={lore}
+                    chapters={chapters}
+                    analysis={analysis}
+                    initialMessage={chatInitialMessage}
+                    onInitialMessageProcessed={clearChatInitialMessage}
+                    interviewTarget={interviewTarget}
+                    onExitInterview={exitInterview}
+                    projectId={projectId}
+                  />
+                </div>
+                {/* Collapsible Tuning Panel could go here or within ChatInterface.
+                    For now, I'll assume we want it accessible in Settings or a specific panel.
+                    However, the request was "In the Settings panel".
+                    Since I don't see a dedicated "Settings Panel", I will not embed it here directly.
+                    Wait, ChatInterface has ExperienceSelector and CritiqueIntensitySelector.
+                */}
+              </div>
             )}
 
             {activeTab === SidebarTab.HISTORY && (

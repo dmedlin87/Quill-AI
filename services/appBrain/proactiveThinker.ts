@@ -22,6 +22,8 @@ import { searchBedsideHistory, type BedsideHistoryMatch } from '../memory/bedsid
 import { extractTemporalMarkers, type TemporalMarker } from '../intelligence/timelineTracker';
 import { generateVoiceProfile } from '../intelligence/voiceProfiler';
 import type { DialogueLine, VoiceMetrics } from '../../types/intelligence';
+import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
+import { SuggestionCategory, SuggestionWeights } from '@/types/experienceSettings';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -645,8 +647,11 @@ export class ProactiveThinker {
       const result = this.parseThinkingResult(text);
       const combinedSuggestions = [...loreSuggestions, ...result.suggestions];
 
+      // Filter and prioritize based on adaptive weights
+      const weightedSuggestions = this.applyAdaptiveRelevance(combinedSuggestions);
+
       this.state.lastThinkTime = Date.now();
-      this.state.suggestionsGenerated += combinedSuggestions.length;
+      this.state.suggestionsGenerated += weightedSuggestions.length;
 
       // Emit thinking completed event
       eventBus.emit({
@@ -672,7 +677,7 @@ export class ProactiveThinker {
       });
 
       if (this.onSuggestion) {
-        for (const suggestion of combinedSuggestions) {
+        for (const suggestion of weightedSuggestions) {
           this.onSuggestion(suggestion);
         }
       }
@@ -682,9 +687,9 @@ export class ProactiveThinker {
           const reminders = await getImportantReminders(this.projectId);
           const lines: string[] = [];
 
-          if (combinedSuggestions.length > 0) {
+          if (weightedSuggestions.length > 0) {
             lines.push('Proactive opportunities to focus on next:');
-            for (const suggestion of combinedSuggestions.slice(0, 3)) {
+            for (const suggestion of weightedSuggestions.slice(0, 3)) {
               lines.push(`- ${suggestion.title}: ${suggestion.description}`);
             }
           }
@@ -709,7 +714,7 @@ export class ProactiveThinker {
 
       return {
         ...result,
-        suggestions: combinedSuggestions,
+        suggestions: weightedSuggestions,
         significant: result.significant || loreSuggestions.length > 0,
         thinkingTime: Date.now() - startTime,
       };
@@ -914,6 +919,51 @@ export class ProactiveThinker {
     } catch (error) {
       console.warn('[ProactiveThinker] Bedside evolve failed:', error);
     }
+  }
+
+  private applyAdaptiveRelevance(suggestions: ProactiveSuggestion[]): ProactiveSuggestion[] {
+    const weights = useSettingsStore.getState().suggestionWeights;
+    const weightedSuggestions: ProactiveSuggestion[] = [];
+
+    for (const suggestion of suggestions) {
+      const category = this.getSuggestionCategory(suggestion);
+      const weight = weights[category] ?? 1.0;
+
+      // Hard mute
+      if (weight <= 0.05) continue;
+
+      // Adjust priority if weight is significantly low or high
+      if (weight < 0.5 && suggestion.priority === 'high') {
+        suggestion.priority = 'medium';
+      } else if (weight < 0.3) {
+        suggestion.priority = 'low';
+      } else if (weight > 1.5 && suggestion.priority === 'low') {
+        suggestion.priority = 'medium';
+      } else if (weight > 1.8) {
+        suggestion.priority = 'high';
+      }
+
+      weightedSuggestions.push(suggestion);
+    }
+
+    // Sort by priority after adjustment
+    const priorityScore = { high: 3, medium: 2, low: 1 };
+    weightedSuggestions.sort((a, b) => priorityScore[b.priority] - priorityScore[a.priority]);
+
+    return weightedSuggestions;
+  }
+
+  private getSuggestionCategory(suggestion: ProactiveSuggestion): SuggestionCategory {
+    if (suggestion.type === 'related_memory') {
+      const tags = suggestion.tags || [];
+      if (tags.includes('plot')) return 'plot';
+      if (tags.includes('character')) return 'character';
+      if (tags.includes('pacing')) return 'pacing';
+      if (tags.includes('style')) return 'style';
+      if (tags.includes('continuity')) return 'continuity';
+      return 'other';
+    }
+    return suggestion.type as SuggestionCategory;
   }
 }
 

@@ -17,6 +17,7 @@ import {
 } from '@/types/intelligence';
 import { Persona } from '@/types/personas';
 import type { ProactiveSuggestion } from '../memory/proactive';
+import { SuggestionCategory } from '@/types/experienceSettings';
 export type { ProactiveSuggestion } from '../memory/proactive';
 
 export type SuggestionType =
@@ -214,6 +215,14 @@ export type AppEvent =
         rawThinking?: string;
         memoryContext?: MemoryContextSnapshot;
         contextUsed?: ThinkingContextSnapshot;
+      };
+    }
+  | AppEventBase & {
+      type: 'PROACTIVE_SUGGESTION_ACTION';
+      payload: {
+        suggestionId: string;
+        action: 'applied' | 'dismissed' | 'muted';
+        suggestionCategory: SuggestionCategory;
       };
     };
 
