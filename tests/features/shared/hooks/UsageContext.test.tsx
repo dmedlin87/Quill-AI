@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderHook } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { useUsage, UsageProvider } from '@/features/shared/context/UsageContext';
 
 describe('UsageContext', () => {

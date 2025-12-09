@@ -3,6 +3,14 @@
  * Covers editor state, selection, branching, and comments
  */
 
+import { renderHook, act } from '@testing-library/react';
+import React from 'react';
+
+// Unmock EditorContext since this test needs the real implementation
+vi.unmock('@/features/core/context/EditorContext');
+
+import { EditorProvider, useEditor, useEditorState, useEditorActions } from '@/features/core/context/EditorContext';
+
 const {
   emitCursorMoved,
   emitEditMade,
@@ -29,13 +37,6 @@ vi.mock('@/services/appBrain', async () => {
     emitZenModeToggled,
   };
 });
-import { renderHook, act } from '@testing-library/react';
-import React from 'react';
-
-// Unmock EditorContext since this test needs the real implementation
-vi.unmock('@/features/core/context/EditorContext');
-
-import { EditorProvider, useEditor, useEditorState, useEditorActions } from '@/features/core/context/EditorContext';
 
 // Mock useProjectStore
 const mockGetActiveChapter = vi.fn(() => ({
@@ -85,6 +86,15 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 );
 
 describe('EditorContext', () => {
+  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  beforeAll(() => {
+    // Avoid random nanoid in history mock
+    vi.mock('nanoid', () => ({
+      nanoid: () => 'random-id',
+    }));
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetActiveChapter.mockReturnValue({
