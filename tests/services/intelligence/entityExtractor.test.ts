@@ -10,6 +10,7 @@ import {
   extractEntities,
   getEntitiesInRange,
   getRelatedEntities,
+  mergeEntityGraphs,
 } from '@/services/intelligence/entityExtractor';
 import { ClassifiedParagraph, DialogueLine } from '@/types/intelligence';
 
@@ -199,6 +200,44 @@ describe('entityExtractor', () => {
       expect(sarahMarcusEdge).toBeDefined();
     });
 
+    it('upgrades relationship type from co-occurrence when explicit pattern appears later', () => {
+      const text = `Sarah and Marcus walked together. Later, Sarah loved Marcus.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+
+      const edge = result.edges.find(e => {
+        const src = result.nodes.find(n => n.id === e.source);
+        const tgt = result.nodes.find(n => n.id === e.target);
+        return (src?.name === 'Sarah' && tgt?.name === 'Marcus') ||
+               (src?.name === 'Marcus' && tgt?.name === 'Sarah');
+      });
+
+      expect(edge?.type).toBe('related_to'); // upgraded from initial interacts
+      expect(edge?.evidence.length).toBeGreaterThan(0);
+    });
+
+    it('creates relationship and entities from explicit pattern when names were not previously detected', () => {
+      const text = `alice attacked bob in the alley.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+
+      // Entities should be created even though names were lowercase
+      const names = result.nodes.map(n => n.name.toLowerCase());
+      expect(names).toContain('alice');
+      expect(names).toContain('bob');
+
+      const edge = result.edges.find(e => {
+        const src = result.nodes.find(n => n.id === e.source);
+        const tgt = result.nodes.find(n => n.id === e.target);
+        return src && tgt && ['alice', 'bob'].includes(src.name.toLowerCase()) && ['alice', 'bob'].includes(tgt.name.toLowerCase());
+      });
+
+      expect(edge?.type).toBe('opposes');
+      expect(edge?.sentiment).toBeLessThan(0);
+    });
+
     it('tracks co-occurrence count', () => {
       const text = `Sarah and Marcus talked. Sarah and Marcus laughed. Sarah and Marcus left.`;
       const paragraphs = [createTestParagraph(0, text.length)];
@@ -241,6 +280,18 @@ describe('entityExtractor', () => {
       
       // Should be consolidated
       expect(smithEntities.length).toBeLessThanOrEqual(2);
+    });
+
+    it('adds aliases from known-as patterns and skips incomplete captures', () => {
+      const text = `Marcus, known as The Wolf, prowled. The Wolf, whose real name was Marcus, waited. Marcus walked. the knight commander was feared.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+      const marcus = result.nodes.find(n => n.name.startsWith('Marcus'));
+
+      expect(marcus?.aliases.some(a => a.toLowerCase().includes('wolf'))).toBe(true);
+      // "the knight commander was feared" should not add an alias because the pattern lacks a second capture
+      expect(marcus?.aliases.some(a => a.toLowerCase().includes('knight'))).toBeFalsy();
     });
   });
 
@@ -326,6 +377,34 @@ describe('entityExtractor', () => {
       const result = extractEntities(text, paragraphs, [], 'chapter1');
       
       expect(result.nodes.length).toBeGreaterThan(0);
+    });
+
+    it('resolves pronouns to nearest gender-matching entity and increments mentions', () => {
+      const text = `Marcus went to town. Anna waited by the gate. He returned home.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+      const marcus = result.nodes.find(n => n.name === 'Marcus');
+
+      expect(marcus?.mentionCount).toBeGreaterThan(1); // pronoun resolution should add another mention
+      expect(marcus?.mentions.length).toBe(marcus?.mentionCount);
+    });
+
+    it('merges entity graphs upgrading relationship types and evidence', () => {
+      const base = extractEntities(`Sarah and Marcus walked together.`, [createTestParagraph(0, 40)], [], 'c1');
+      const extra = extractEntities(`Sarah loves Marcus deeply.`, [createTestParagraph(0, 30)], [], 'c2');
+
+      const merged = mergeEntityGraphs([base, extra]);
+
+      const edge = merged.edges.find(e => {
+        const src = merged.nodes.find(n => n.id === e.source);
+        const tgt = merged.nodes.find(n => n.id === e.target);
+        return (src?.name === 'Sarah' && tgt?.name === 'Marcus') ||
+               (src?.name === 'Marcus' && tgt?.name === 'Sarah');
+      });
+
+      expect(edge?.type).toBe('related_to'); // upgraded from interacts
+      expect(edge?.evidence.length).toBeGreaterThan(0);
     });
   });
 });
