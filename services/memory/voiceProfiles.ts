@@ -92,7 +92,8 @@ export async function upsertVoiceProfile(
     return incoming;
   }
 
-  const mergedProfile = mergeVoiceMetrics((existingNote.structuredContent as any)?.voiceProfile ?? incoming, incoming);
+  const existingProfile = (existingNote.structuredContent as any)?.voiceProfile;
+  const mergedProfile = existingProfile ? mergeVoiceMetrics(existingProfile, incoming) : incoming;
 
   await updateMemory(existingNote.id, {
     text: buildVoiceNoteText(characterName, mergedProfile),

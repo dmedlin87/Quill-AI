@@ -6,6 +6,12 @@ import { useUsage, UsageProvider } from '@/features/shared/context/UsageContext'
 describe('UsageContext', () => {
   it('throws when useUsage is called outside of provider', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const preventDefault = (e: ErrorEvent) => {
+      if (e.error?.message === 'useUsage must be used within UsageProvider') {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('error', preventDefault);
 
     // Prevent unhandled error noise in jsdom
     const errorHandler = (e: Event) => e.preventDefault();
