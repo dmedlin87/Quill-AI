@@ -33,6 +33,7 @@ const eventBusMock = vi.hoisted(() => {
 vi.mock('@/services/appBrain/eventBus', () => ({
   eventBus: {
     subscribe: eventBusMock.subscribe,
+    emit: eventBusMock.emit,
   },
   emitTextChanged: (length: number, delta: number) =>
     eventBusMock.emit('TEXT_CHANGED', { length, delta }),
