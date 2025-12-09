@@ -113,38 +113,43 @@ export const findQuoteRange = (fullText: string, quote: string): TextRange | nul
     }
   }
 
+  // Try normalized search first (better for whitespace differences)
   const matcher = new diff_match_patch();
-  const fuzzyIndex = matcher.match_main(fullText, trimmedQuote, 0);
-  if (fuzzyIndex !== -1) {
-    return clampRange(fuzzyIndex, trimmedQuote.length, fullText.length);
-  }
-
   const normalizedQuote = collapseWhitespace(trimmedQuote);
-  if (!normalizedQuote) {
-    return null;
-  }
 
-  const normalizedMap = buildNormalizedMap(fullText);
-  if (!normalizedMap.length) {
-    return null;
-  }
-
-  const normalizedFull = buildNormalizedString(normalizedMap);
-  if (!normalizedFull) {
-    return null;
-  }
-
-  const normalizedIndex = matcher.match_main(normalizedFull, normalizedQuote, 0);
-  if (normalizedIndex !== -1) {
-    const normalizedRange = mapNormalizedRangeToOriginal(
-      normalizedMap,
-      normalizedIndex,
-      normalizedQuote.length,
-      fullText.length
-    );
-    if (normalizedRange) {
-      return normalizedRange;
+  if (normalizedQuote) {
+    const normalizedMap = buildNormalizedMap(fullText);
+    if (normalizedMap.length) {
+      const normalizedFull = buildNormalizedString(normalizedMap);
+      if (normalizedFull) {
+        try {
+          const normalizedIndex = matcher.match_main(normalizedFull, normalizedQuote, 0);
+          if (normalizedIndex !== -1) {
+            const normalizedRange = mapNormalizedRangeToOriginal(
+              normalizedMap,
+              normalizedIndex,
+              normalizedQuote.length,
+              fullText.length
+            );
+            if (normalizedRange) {
+              return normalizedRange;
+            }
+          }
+        } catch (e) {
+          // Ignore normalized fuzzy match errors
+        }
+      }
     }
+  }
+
+  // Fallback to direct fuzzy search (better for typos)
+  try {
+    const fuzzyIndex = matcher.match_main(fullText, trimmedQuote, 0);
+    if (fuzzyIndex !== -1) {
+      return clampRange(fuzzyIndex, trimmedQuote.length, fullText.length);
+    }
+  } catch (e) {
+    // Ignore fuzzy match errors (e.g. pattern too long)
   }
 
   return null;

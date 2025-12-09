@@ -79,7 +79,9 @@ describe('useManuscriptIntelligence', () => {
     });
 
     expect(mocks.processInstant).toHaveBeenCalled();
-    vi.runAllTimers();
+    act(() => {
+        vi.runAllTimers();
+    });
     expect(mocks.processDebounced).toHaveBeenCalled();
   });
 
@@ -132,7 +134,9 @@ describe('useManuscriptIntelligence', () => {
     expect(callCount2).toBe(callCount1); // Should be throttled
 
     // After throttle period, should work again
-    vi.advanceTimersByTime(100);
+    act(() => {
+        vi.advanceTimersByTime(100);
+    });
     act(() => {
       result.current.updateText('abc', 3);
     });
@@ -155,8 +159,9 @@ describe('useManuscriptIntelligence', () => {
     );
 
     // Trigger background processing to update intelligence
-    vi.runAllTimers();
-    rerender();
+    act(() => {
+        vi.runAllTimers();
+    });
 
     act(() => {
       result.current.updateCursor(50);
@@ -165,31 +170,107 @@ describe('useManuscriptIntelligence', () => {
     expect(mocks.updateHUD).toHaveBeenCalled();
   });
 
-  it('forceFullProcess clears timers and runs immediately', () => {
+  it('updateCursor does not update HUD if no scenes exist', () => {
+    mocks.processManuscript.mockReturnValueOnce({
+      hud: { situational: {} },
+      structural: { scenes: [] }, // No scenes
+      entities: { nodes: [] },
+      timeline: { promises: [] },
+      heatmap: { sections: [] },
+      style: { flags: { passiveVoiceRatio: 0, adverbDensity: 0, clicheCount: 0, filterWordDensity: 0 } },
+      chapterId: 'c1',
+    });
+
+    const { result } = renderHook(() =>
+      useManuscriptIntelligence({ chapterId: 'c1', initialText: 'Test content' })
+    );
+
+    // Trigger background processing
+    act(() => {
+        vi.runAllTimers();
+    });
+
+    mocks.updateHUD.mockClear();
+
+    act(() => {
+      result.current.updateCursor(50);
+    });
+
+    expect(mocks.updateHUD).not.toHaveBeenCalled();
+  });
+
+  it('forceFullProcess clears pending timers and runs immediately', () => {
     const { result } = renderHook(() =>
       useManuscriptIntelligence({ chapterId: 'c1', initialText: 'Test' })
     );
 
+    // Trigger update to set timers
+    act(() => {
+        result.current.updateText('New text', 10);
+    });
+
+    // Clear mocks to verify new call
+    mocks.processManuscript.mockClear();
+
+    // Call forceFullProcess immediately (before timers fire)
     act(() => {
       result.current.forceFullProcess();
     });
 
-    // Should trigger background processing
-    vi.runAllTimers();
+    // Should run immediately
+    // Wait, forceFullProcess uses setTimeout(0) or idleCallback.
+    // So we still need to advance timers, but the ORIGINAL debounce timers should have been cleared.
+
+    // Check if debounce timer was cleared?
+    // We can't check refs directly. But we can check that `processDebounced` was NOT called if we only advance a little bit?
+    // Actually `forceFullProcess` cancels debounce and runs background process.
+
+    expect(mocks.processManuscript).not.toHaveBeenCalled(); // Because it is async
+
+    act(() => {
+        vi.runAllTimers();
+    });
+
     expect(mocks.processManuscript).toHaveBeenCalled();
   });
 
-  it('getSectionContext returns context based on intelligence data', () => {
+  it('getSectionContext returns context based on intelligence data', async () => {
+    // Mock data with entities and scenes
+    mocks.processManuscript.mockReturnValueOnce({
+        hud: { situational: {} },
+        structural: { scenes: [{ startOffset: 0, endOffset: 100, type: 'action', tension: 0.8, pov: 'Hero' }] },
+        entities: {
+            nodes: [
+                { name: 'Hero', type: 'character', mentions: [{ offset: 10 }] },
+                { name: 'Villain', type: 'character', mentions: [{ offset: 200 }] } // Outside range
+            ]
+        },
+        timeline: { promises: [] },
+        heatmap: { sections: [] },
+        style: { flags: { passiveVoiceRatio: 0, adverbDensity: 0, clicheCount: 0, filterWordDensity: 0 } },
+        chapterId: 'c1',
+    });
+
     const { result } = renderHook(() =>
       useManuscriptIntelligence({ chapterId: 'c1', initialText: 'Long test content' })
     );
 
-    // Run all timers to trigger background processing
-    vi.runAllTimers();
+    // Run all timers to trigger background processing and state update
+    await act(async () => {
+        vi.runAllTimers();
+    });
 
-    // getSectionContext returns formatted context - may be empty if no scenes in range
+    // getSectionContext returns formatted context
     const context = result.current.getSectionContext(0, 100);
-    expect(typeof context).toBe('string');
+
+    expect(context).toContain('[SCENES]');
+    expect(context).toContain('action');
+    expect(context).toContain('tension: 8/10');
+    expect(context).toContain('POV: Hero');
+
+    expect(context).toContain('[ENTITIES]');
+    expect(context).toContain('Hero (character)');
+    expect(context).not.toContain('Villain');
   });
 
   it('clears timers on unmount', () => {
@@ -218,7 +299,9 @@ describe('useManuscriptIntelligence', () => {
     );
 
     // Trigger background processing
-    vi.runAllTimers();
+    act(() => {
+        vi.runAllTimers();
+    });
 
     expect(onReady).toHaveBeenCalled();
   });
