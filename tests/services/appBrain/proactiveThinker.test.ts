@@ -228,6 +228,45 @@ describe('proactiveThinker', () => {
       const status = thinker.getStatus();
       expect(status.pendingEvents).toHaveLength(0);
     });
+
+    it('emits a timeline conflict suggestion when temporal markers contradict timeline', async () => {
+      const thinker = new ProactiveThinker({ debounceMs: 5000 });
+      const state = createMockState();
+
+      state.intelligence.timeline = {
+        events: [
+          {
+            id: 'evt-1',
+            description: 'Established on Friday',
+            offset: 0,
+            chapterId: 'c1',
+            temporalMarker: 'Friday',
+            relativePosition: 'after',
+            dependsOn: [],
+          },
+        ],
+        causalChains: [],
+        promises: [],
+        processedAt: Date.now(),
+      };
+
+      state.manuscript.currentText = 'The city slept. It was Tuesday when the alarms started.';
+
+      const getState = () => state;
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      eventBus.emit({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 800, chapterId: 'c1' } });
+
+      await Promise.resolve();
+
+      expect(onSuggestion).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'timeline_conflict' })
+      );
+
+      thinker.stop();
+    });
   });
 
   describe('singleton functions', () => {
