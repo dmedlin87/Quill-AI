@@ -20,6 +20,11 @@ const ThrowError: React.FC<{ shouldThrow?: boolean }> = ({ shouldThrow = true })
 const originalError = console.error;
 beforeAll(() => {
   console.error = vi.fn();
+  window.addEventListener('error', (e) => {
+    if (e.error?.message === 'Test error message') {
+      e.preventDefault();
+    }
+  });
 });
 afterAll(() => {
   console.error = originalError;
