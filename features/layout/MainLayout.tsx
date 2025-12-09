@@ -17,7 +17,8 @@ import { BrainActivityMonitor } from '@/features/debug';
 /**
  * Derive orb status from engine state
  */
-function deriveOrbStatus(isAnalyzing: boolean, isMagicLoading: boolean): OrbStatus {
+function deriveOrbStatus(isAnalyzing: boolean, isMagicLoading: boolean, isDreaming?: boolean): OrbStatus {
+  if (isDreaming) return 'dreaming';
   if (isMagicLoading) return 'writing';
   if (isAnalyzing) return 'thinking';
   return 'idle';
@@ -65,7 +66,7 @@ export const MainLayout: React.FC = () => {
     return <UploadLayout />;
   }
 
-  const orbStatus = deriveOrbStatus(engineState.isAnalyzing, engineState.isMagicLoading);
+  const orbStatus = deriveOrbStatus(engineState.isAnalyzing, engineState.isMagicLoading, engineState.isDreaming);
 
   return (
     <div className="flex w-full h-full bg-[var(--surface-tertiary)] text-[var(--text-primary)] font-sans relative overflow-hidden">

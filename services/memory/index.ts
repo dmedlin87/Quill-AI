@@ -23,6 +23,7 @@ export * from './types';
 export * from './bedsideNoteMutations';
 export * from './bedsideHistorySearch';
 export * from './bedsideEmbeddings';
+export * from './dreaming';
 
 // Lightweight collection helper so Dexie-like mocks (arrays or { data: [] }) work
 // in tests without requiring full index support.

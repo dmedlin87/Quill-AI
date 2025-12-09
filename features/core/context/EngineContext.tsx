@@ -26,6 +26,7 @@ export interface EngineState {
   magicHelpType?: 'Explain' | 'Thesaurus' | null;
   isMagicLoading: boolean;
   magicError?: string | null;
+  isDreaming?: boolean;
   pendingDiff: PendingDiff | null;
   grammarSuggestions: import('@/types').GrammarSuggestion[];
   grammarHighlights: import('@/features/editor/hooks/useTiptapSync').HighlightItem[];

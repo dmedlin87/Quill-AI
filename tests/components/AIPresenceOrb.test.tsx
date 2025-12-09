@@ -78,7 +78,23 @@ describe('AIPresenceOrb', () => {
     expect(writingDot).toBeDefined();
     const writingColor = writingDot!.style.backgroundColor;
 
+    rerender(
+      <AIPresenceOrb status="dreaming" persona={persona} analysisReady={false} />
+    );
+    const dreamingDot = getStatusDot();
+    expect(dreamingDot).toBeDefined();
+    const dreamingColor = dreamingDot!.style.backgroundColor;
+
     expect(idleColor).not.toBe(thinkingColor);
     expect(thinkingColor).not.toBe(writingColor);
+    expect(writingColor).not.toBe(dreamingColor);
+  });
+
+  it('renders a dreaming indicator when in maintenance mode', () => {
+    render(
+      <AIPresenceOrb status="dreaming" persona={persona} analysisReady={false} />
+    );
+
+    expect(screen.getByText(/zzz/i)).toBeInTheDocument();
   });
 });

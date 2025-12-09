@@ -310,6 +310,14 @@ export const emitTextChanged = (length: number, delta: number) => {
   eventBus.emit({ type: 'TEXT_CHANGED', payload: { length, delta } });
 };
 
+export const emitIdleStatusChanged = (idle: boolean) => {
+  eventBus.emit({ type: 'IDLE_STATUS_CHANGED', payload: { idle } });
+};
+
+export const emitDreamingStateChanged = (active: boolean) => {
+  eventBus.emit({ type: 'DREAMING_STATE_CHANGED', payload: { active } });
+};
+
 export const emitEditMade = (author: 'user' | 'agent', description: string) => {
   eventBus.emit({ type: 'EDIT_MADE', payload: { author, description } });
 };
