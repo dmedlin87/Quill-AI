@@ -11,6 +11,10 @@ import { extractTemporalMarkers } from '../../../services/intelligence/timelineT
 import { extractFacts } from '../../../services/memory/factExtractor';
 import { filterNovelLoreEntities } from '../../../services/memory/relevance';
 
+const memoryMocks = vi.hoisted(() => ({
+  evolveBedsideNote: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock dependencies
 vi.mock('../../../services/gemini/client', () => ({
   ai: {
@@ -46,7 +50,7 @@ vi.mock('../../../services/memory/bedsideHistorySearch', () => ({
 // Mock the core memory service bedside-note evolution
 vi.mock('@/services/memory', () => {
   return {
-    evolveBedsideNote: (...args: any[]) => memoryMocks.evolveBedsideNote(...args),
+    evolveBedsideNote: memoryMocks.evolveBedsideNote,
     getVoiceProfileForCharacter: vi.fn(),
     upsertVoiceProfile: vi.fn(),
   };
@@ -187,7 +191,7 @@ describe('ProactiveThinker', () => {
       timestamp: Date.now()
     });
 
-    expect(evolveBedsideNote).toHaveBeenCalledWith(
+    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
       mockProjectId,
       expect.stringContaining('Now in chapter: "Chapter 1"'),
       expect.objectContaining({ changeReason: 'chapter_transition' })
@@ -202,7 +206,7 @@ describe('ProactiveThinker', () => {
     // Needs > 500 delta accumulation
     callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
 
-    expect(evolveBedsideNote).toHaveBeenCalledWith(
+    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
       mockProjectId,
       expect.stringContaining('Significant edits detected'),
       expect.objectContaining({ changeReason: 'significant_edit' })
@@ -408,12 +412,12 @@ describe('ProactiveThinker', () => {
       timestamp: Date.now()
     });
 
-    expect(evolveBedsideNote).toHaveBeenCalledWith(
+    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
       mockProjectId,
       expect.stringContaining('Pacing issue'),
       expect.any(Object)
     );
-    expect(evolveBedsideNote).toHaveBeenCalledWith(
+    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
       mockProjectId,
       expect.stringContaining('Hero'),
       expect.any(Object)
@@ -441,7 +445,7 @@ describe('ProactiveThinker', () => {
 
     await thinker.forceThink();
 
-    expect(evolveBedsideNote).toHaveBeenCalledWith(
+    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
         mockProjectId,
         expect.stringContaining('Unresolved Plot'),
         expect.objectContaining({ changeReason: 'proactive_thinking' })
