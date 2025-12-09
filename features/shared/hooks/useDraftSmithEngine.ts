@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { analyzeDraft } from '@/services/gemini/analysis';
 import { AnalysisResult, AnalysisWarning } from '@/types';
 import { Lore, ManuscriptIndex } from '@/types/schema';
@@ -6,7 +6,7 @@ import { useUsage } from '../context/UsageContext';
 import { ModelConfig } from '@/config/models';
 import { useMagicEditor } from '@/features/editor';
 import { isMemoryTool, executeMemoryTool } from '@/services/gemini/memoryToolHandlers';
-import { emitAnalysisCompleted } from '@/services/appBrain';
+import { emitAnalysisCompleted, eventBus } from '@/services/appBrain';
 
 // Define proper types
 interface ProjectContext {
@@ -96,8 +96,22 @@ export function useQuillAIEngine({
     projectSetting
   });
 
+  // Background dreaming indicator
+  const [isDreaming, setIsDreaming] = useState(false);
+
   // Review Mode State
   const [pendingDiff, setPendingDiff] = useState<PendingDiff | null>(null);
+
+  // Listen for dreaming state changes
+  useEffect(() => {
+    const unsubscribe = eventBus.subscribe('DREAMING_STATE_CHANGED', (event) => {
+      setIsDreaming(event.payload.active);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // --- 1. Analysis Logic ---
   const performAnalysis = useCallback(async (
@@ -273,6 +287,7 @@ export function useQuillAIEngine({
       isAnalyzing,
       analysisError,
       ...magicState,
+      isDreaming,
       pendingDiff,
       analysisWarning,
     },

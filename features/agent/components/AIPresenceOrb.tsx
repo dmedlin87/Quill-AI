@@ -17,8 +17,9 @@ const EASE_IN_OUT: Easing = [0.42, 0, 0.58, 1];
  * - thinking: Agent is processing a user request
  * - writing: Agent is generating text
  * - processing: Background proactive thinking is active
+ * - dreaming: Background consolidation/maintenance mode
  */
-export type OrbStatus = 'idle' | 'thinking' | 'writing' | 'processing';
+export type OrbStatus = 'idle' | 'thinking' | 'writing' | 'processing' | 'dreaming';
 
 export interface AIPresenceOrbProps {
   status: OrbStatus;
@@ -46,6 +47,7 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
     glowVariants,
     shimmerVariants,
     badgeVariants,
+    sleepIndicatorVariants,
   } = useMemo(() => {
     const repeat = prefersReducedMotion ? 0 : Infinity;
 
@@ -77,6 +79,17 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
             opacity: [0.85, 0.95, 0.85],
             transition: {
               duration: 2.5,
+              repeat,
+              ease: EASE_IN_OUT,
+            },
+          },
+      dreaming: prefersReducedMotion
+        ? { scale: 1, opacity: 0.85 }
+        : {
+            scale: [1, 1.05, 1],
+            opacity: [0.7, 0.9, 0.7],
+            transition: {
+              duration: 3.5,
               repeat,
               ease: EASE_IN_OUT,
             },
@@ -122,6 +135,17 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
               ease: EASE_IN_OUT,
             },
           },
+      dreaming: prefersReducedMotion
+        ? { opacity: 0.3, scale: 1 }
+        : {
+            opacity: [0.2, 0.35, 0.2],
+            scale: [1, 1.06, 1],
+            transition: {
+              duration: 3.5,
+              repeat,
+              ease: EASE_IN_OUT,
+            },
+          },
     };
 
     // Shimmer effect for writing state
@@ -150,6 +174,7 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
               ease: 'linear' as Easing,
             },
           },
+      dreaming: { opacity: 0, rotate: 0 },
     };
 
     // Analysis ready badge animation
@@ -168,11 +193,27 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
       },
     };
 
+    const computedSleepIndicatorVariants: Variants = {
+      idle: { opacity: 0, scale: 0.8, y: 6 },
+      thinking: { opacity: 0, scale: 0.8, y: 6 },
+      writing: { opacity: 0, scale: 0.8, y: 6 },
+      processing: { opacity: 0, scale: 0.8, y: 6 },
+      dreaming: prefersReducedMotion
+        ? { opacity: 0.6, scale: 1, y: 0 }
+        : {
+            opacity: [0.15, 0.55, 0.15],
+            scale: [0.95, 1.05, 0.95],
+            y: [6, 0, 6],
+            transition: { duration: 3, repeat, ease: EASE_IN_OUT },
+          },
+    };
+
     return {
       orbVariants: computedOrbVariants,
       glowVariants: computedGlowVariants,
       shimmerVariants: computedShimmerVariants,
       badgeVariants: computedBadgeVariants,
+      sleepIndicatorVariants: computedSleepIndicatorVariants,
     };
   }, [prefersReducedMotion]);
 
@@ -228,6 +269,16 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
         <span className="text-xs select-none" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.3))' }}>
           {persona.icon}
         </span>
+      </motion.div>
+
+      {/* Dreaming indicator */}
+      <motion.div
+        className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-semibold text-[var(--text-primary)]"
+        variants={sleepIndicatorVariants}
+        animate={status}
+        aria-hidden
+      >
+        zZz
       </motion.div>
 
       {/* Active indicator */}
@@ -313,6 +364,8 @@ function getStatusColor(status: OrbStatus): string {
       return '#10b981'; // Emerald
     case 'processing':
       return '#8b5cf6'; // Purple - indicates background processing
+    case 'dreaming':
+      return '#60a5fa'; // Soft blue for maintenance
     default:
       return '#6b7280';
   }

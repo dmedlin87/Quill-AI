@@ -181,6 +181,8 @@ export type AppEvent =
       };
     }
   | AppEventBase & { type: 'TEXT_CHANGED'; payload: { length: number; delta: number } }
+  | AppEventBase & { type: 'IDLE_STATUS_CHANGED'; payload: { idle: boolean } }
+  | AppEventBase & { type: 'DREAMING_STATE_CHANGED'; payload: { active: boolean } }
   | AppEventBase & {
       type: 'ANALYSIS_COMPLETED';
       payload: { section: string; status?: 'success' | 'error'; detail?: string };

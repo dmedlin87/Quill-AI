@@ -20,6 +20,8 @@ export {
   emitNavigationRequested,
   emitPanelSwitched,
   emitZenModeToggled,
+  emitIdleStatusChanged,
+  emitDreamingStateChanged,
   emitSignificantEditDetected,
   emitProactiveThinkingStarted,
   emitProactiveThinkingCompleted,
@@ -94,6 +96,12 @@ export {
   type ThinkerConfig,
   type ThinkerState,
 } from './proactiveThinker';
+
+export {
+  getDreamingService,
+  startDreamingService,
+  stopDreamingService,
+} from './dreamingService';
 
 // Smartness Upgrade: Significant Edit Monitor
 export {
