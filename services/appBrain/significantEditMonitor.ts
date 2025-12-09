@@ -2,6 +2,7 @@ import type { AppEvent, AppBrainState } from './types';
 import { evolveBedsideNote } from '../memory';
 import { eventBus } from './eventBus';
 import { getProactiveThinker } from './proactiveThinker';
+import { runNarrativeAlignmentCheck } from './narrativeAlignment';
 
 interface SignificantEditOptions {
   threshold?: number;
@@ -46,6 +47,20 @@ class SignificantEditMonitor {
     this.unsubscribe = eventBus.subscribe('TEXT_CHANGED', (event) => {
       this.handleTextChanged(event);
     });
+
+    // Also track chapter changes to provide context for significant edits
+    const chapterUnsub = eventBus.subscribe('CHAPTER_CHANGED', (event) => {
+       if (event.type === 'CHAPTER_CHANGED' && event.payload.chapterId) {
+         this.setActiveChapter(event.payload.chapterId);
+       }
+    });
+    
+    // Chain original unsubscribe
+    const originalUnsub = this.unsubscribe;
+    this.unsubscribe = () => {
+      originalUnsub();
+      chapterUnsub();
+    };
   }
 
   stop() {
@@ -108,11 +123,17 @@ class SignificantEditMonitor {
       this.triggerProactiveThinking();
 
       try {
-        await evolveBedsideNote(
-          this.projectId,
-          'Significant edits detected — analysis may be stale. Run analysis to refresh.',
-          { changeReason: 'significant_edit' },
-        );
+        if (this.activeChapterId) {
+          // Phase 7: Run full drift detection
+          await runNarrativeAlignmentCheck(this.projectId, this.activeChapterId);
+        } else {
+          // Fallback legacy behavior
+          await evolveBedsideNote(
+            this.projectId,
+            'Significant edits detected — analysis may be stale. Run analysis to refresh.',
+            { changeReason: 'significant_edit' },
+          );
+        }
         this.lastTriggerTime = now;
       } catch (error) {
         console.warn('[SignificantEditMonitor] Failed to evolve bedside note', error);

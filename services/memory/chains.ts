@@ -17,6 +17,7 @@ import {
 import { createMemory, updateMemory } from './memoryService';
 import { getMemory, getMemories } from './memoryQueries';
 import { embedBedsideNoteText } from './bedsideEmbeddings';
+import { serializeBedsideNote } from './bedsideNoteSerializer';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -441,9 +442,17 @@ export const evolveBedsideNote = async (
     ];
   }
 
-  const embedding = await embedBedsideNoteText(newText);
+  // If we have conflicts or structured content updates, regenerate the text to ensure consistency
+  // This ensures the PROMPT sees the conflicts/warnings we just added.
+  let finalText = newText;
+  if ((structuredContent.conflicts?.length ?? 0) > 0) {
+    const { text } = serializeBedsideNote(structuredContent);
+    finalText = text;
+  }
 
-  let evolved = await evolveMemory(base.id, newText, {
+  const embedding = await embedBedsideNoteText(finalText);
+
+  let evolved = await evolveMemory(base.id, finalText, {
     changeType: 'update',
     changeReason: options.changeReason,
     keepOriginal: true,
