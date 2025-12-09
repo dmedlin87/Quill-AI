@@ -256,6 +256,17 @@ describe('KnowledgeGraph', () => {
     });
 
     const observerInstance = resizeObserve.mock.instances?.[0] as ResizeObserverMock | undefined;
+    getRectMock.mockReturnValue({
+      width: 700,
+      height: 420,
+      top: 0,
+      left: 0,
+      right: 700,
+      bottom: 420,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
     observerInstance?.trigger(createObserverEntry(700, 420));
 
     await waitFor(() => {
