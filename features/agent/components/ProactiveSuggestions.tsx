@@ -14,6 +14,10 @@ interface ProactiveSuggestionsProps {
   onDismiss: (id: string) => void;
   onDismissAll: () => void;
   onAction?: (suggestion: ProactiveSuggestion) => void;
+  /** Called when user applies a suggestion (positive feedback) */
+  onApply?: (suggestion: ProactiveSuggestion) => void;
+  /** Whether the proactive thinker is currently active */
+  isThinking?: boolean;
 }
 
 const suggestionVariants = {
@@ -51,6 +55,8 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
   onDismiss,
   onDismissAll,
   onAction,
+  onApply,
+  isThinking = false,
 }) => {
   if (suggestions.length === 0) return null;
 
@@ -59,13 +65,15 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-indigo-600">✨</span>
+          <span className="text-indigo-600">{isThinking ? '🧠' : '✨'}</span>
           <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-            Suggestions
+            {isThinking ? 'Thinking...' : 'Suggestions'}
           </span>
-          <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
-            {suggestions.length}
-          </span>
+          {suggestions.length > 0 && (
+            <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
+              {suggestions.length}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -123,6 +131,16 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
               
               {/* Actions */}
               <div className="flex items-center gap-3 mt-2 ml-6">
+                {onApply && (
+                  <button
+                    type="button"
+                    onClick={() => onApply(suggestion)}
+                    className="text-[10px] text-emerald-600 hover:text-emerald-800 font-medium transition-colors"
+                    aria-label={`Apply suggestion: ${suggestion.title}`}
+                  >
+                    ✓ Apply
+                  </button>
+                )}
                 {onAction && suggestion.suggestedAction && (
                   <button
                     type="button"
@@ -130,7 +148,7 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                     className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
                     aria-label={`Take action on suggestion: ${suggestion.title}`}
                   >
-                    Take action →
+                    Details →
                   </button>
                 )}
                 <button

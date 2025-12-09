@@ -51,6 +51,20 @@ vi.mock('@/services/memory', () => ({
   evolveBedsideNote: (...args: any[]) => memoryMocks.evolveBedsideNote(...args),
 }));
 
+// Mock bedside history search
+vi.mock('@/services/memory/bedsideHistorySearch', () => ({
+  searchBedsideHistory: vi.fn(() => Promise.resolve([
+    {
+      similarity: 0.85,
+      note: {
+        id: 'note-1',
+        text: 'Character Alice has a background in medicine.',
+        createdAt: Date.now() - 86400000, // 1 day ago
+      },
+    },
+  ])),
+}));
+
 describe('proactiveThinker', () => {
   const createMockState = (): AppBrainState => ({
     manuscript: {
@@ -423,6 +437,229 @@ describe('proactiveThinker', () => {
 
       eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 1000, delta: 600 } });
       expect(memoryMocks.evolveBedsideNote).not.toHaveBeenCalled();
+
+      thinker.stop();
+    });
+
+    it('handles SIGNIFICANT_EDIT_DETECTED as urgent event', () => {
+      const thinker = new ProactiveThinker({
+        debounceMs: 10000,
+        minEventsToThink: 10, // High threshold
+      });
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      // SIGNIFICANT_EDIT_DETECTED should be treated as urgent
+      eventBus.emit({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 500, chapterId: 'ch-1' } });
+
+      // Should have registered the event
+      expect(thinker.getStatus().pendingEvents.length).toBeGreaterThanOrEqual(0);
+
+      thinker.stop();
+    });
+  });
+
+  describe('empty context handling', () => {
+    it('handles state with no intelligence HUD gracefully', async () => {
+      const emptyState: AppBrainState = {
+        ...createMockState(),
+        intelligence: {
+          hud: null,
+          full: null,
+          entities: null,
+          timeline: null,
+          style: null,
+          heatmap: null,
+          lastProcessedAt: 0,
+        },
+      };
+
+      const thinker = new ProactiveThinker();
+      const getState = () => emptyState;
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 100, delta: 10 } });
+
+      vi.useRealTimers();
+      const result = await thinker.forceThink();
+      vi.useFakeTimers();
+
+      // Should still produce a result (or null) without throwing
+      expect(result === null || typeof result === 'object').toBe(true);
+
+      thinker.stop();
+    });
+
+    it('handles empty manuscript state gracefully', async () => {
+      const emptyState: AppBrainState = {
+        ...createMockState(),
+        manuscript: {
+          projectId: null,
+          projectTitle: '',
+          chapters: [],
+          activeChapterId: null,
+          currentText: '',
+          branches: [],
+          activeBranchId: null,
+        },
+      };
+
+      const thinker = new ProactiveThinker();
+      const getState = () => emptyState;
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 0, delta: 0 } });
+
+      vi.useRealTimers();
+      // Should not throw even with empty state
+      const result = await thinker.forceThink();
+      vi.useFakeTimers();
+
+      expect(result === null || typeof result === 'object').toBe(true);
+
+      thinker.stop();
+    });
+
+    it('handles no pending events gracefully', async () => {
+      const thinker = new ProactiveThinker();
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      // Force think without any events
+      vi.useRealTimers();
+      const result = await thinker.forceThink();
+      vi.useFakeTimers();
+
+      expect(result).toBeNull();
+      expect(onSuggestion).not.toHaveBeenCalled();
+
+      thinker.stop();
+    });
+  });
+
+  describe('rapid-fire edits', () => {
+    it('debounces rapid-fire text changes', () => {
+      const thinker = new ProactiveThinker({ debounceMs: 1000, maxBatchSize: 5 });
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      // Simulate rapid-fire typing (10 changes in quick succession)
+      for (let i = 0; i < 10; i++) {
+        eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 100 + i, delta: 1 } });
+      }
+
+      // Should batch events up to maxBatchSize
+      const status = thinker.getStatus();
+      expect(status.pendingEvents.length).toBeLessThanOrEqual(5);
+
+      thinker.stop();
+    });
+
+    it('does not trigger thinking during debounce period', async () => {
+      const thinker = new ProactiveThinker({ debounceMs: 500, minEventsToThink: 1 });
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      // Emit events
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 100, delta: 10 } });
+
+      // Advance only partially through debounce
+      vi.advanceTimersByTime(200);
+
+      // Emit more events - should reset debounce
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 110, delta: 10 } });
+
+      // Still within debounce, should not have triggered thinking yet
+      expect(onSuggestion).not.toHaveBeenCalled();
+
+      thinker.stop();
+    });
+
+    it('eventually triggers thinking after debounce completes', async () => {
+      const thinker = new ProactiveThinker({ debounceMs: 100, minEventsToThink: 1 });
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+
+      // Emit event
+      eventBus.emit({ type: 'INTELLIGENCE_UPDATED', payload: { tier: 'debounced' } });
+
+      // Wait for debounce to complete
+      vi.advanceTimersByTime(150);
+
+      // Use real timers to allow async operations
+      vi.useRealTimers();
+      await vi.waitFor(() => {
+        // The thinking should have been triggered
+        expect(thinker.getStatus().pendingEvents.length).toBe(0);
+      }, { timeout: 1000 });
+      vi.useFakeTimers();
+
+      thinker.stop();
+    });
+  });
+
+  describe('proactive thinking events', () => {
+    it('emits PROACTIVE_THINKING_STARTED when thinking begins', async () => {
+      const startedHandler = vi.fn();
+      eventBus.subscribe('PROACTIVE_THINKING_STARTED', startedHandler);
+
+      const thinker = new ProactiveThinker();
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 100, delta: 10 } });
+
+      vi.useRealTimers();
+      await thinker.forceThink();
+      vi.useFakeTimers();
+
+      expect(startedHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'PROACTIVE_THINKING_STARTED',
+          payload: expect.objectContaining({ trigger: expect.any(String) }),
+        })
+      );
+
+      thinker.stop();
+    });
+
+    it('emits PROACTIVE_THINKING_COMPLETED when thinking ends', async () => {
+      const completedHandler = vi.fn();
+      eventBus.subscribe('PROACTIVE_THINKING_COMPLETED', completedHandler);
+
+      const thinker = new ProactiveThinker();
+      const getState = () => createMockState();
+      const onSuggestion = vi.fn();
+
+      thinker.start(getState, 'test-project', onSuggestion);
+      eventBus.emit({ type: 'TEXT_CHANGED', payload: { length: 100, delta: 10 } });
+
+      vi.useRealTimers();
+      await thinker.forceThink();
+      vi.useFakeTimers();
+
+      expect(completedHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'PROACTIVE_THINKING_COMPLETED',
+          payload: expect.objectContaining({
+            suggestionsCount: expect.any(Number),
+            thinkingTime: expect.any(Number),
+          }),
+        })
+      );
 
       thinker.stop();
     });

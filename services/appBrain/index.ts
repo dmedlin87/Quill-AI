@@ -20,6 +20,9 @@ export {
   emitNavigationRequested,
   emitPanelSwitched,
   emitZenModeToggled,
+  emitSignificantEditDetected,
+  emitProactiveThinkingStarted,
+  emitProactiveThinkingCompleted,
 } from './eventBus';
 
 export { startAppBrainEventObserver } from './eventObserver';

@@ -237,6 +237,12 @@ class EventBusImpl {
         return `Panel switched to ${event.payload.panel}`;
       case 'ZEN_MODE_TOGGLED':
         return `Zen mode ${event.payload.enabled ? 'enabled' : 'disabled'}`;
+      case 'SIGNIFICANT_EDIT_DETECTED':
+        return `Significant edit detected (${event.payload.delta} chars)`;
+      case 'PROACTIVE_THINKING_STARTED':
+        return `AI thinking started (trigger: ${event.payload.trigger})`;
+      case 'PROACTIVE_THINKING_COMPLETED':
+        return `AI thinking complete (${event.payload.suggestionsCount} suggestions in ${event.payload.thinkingTime}ms)`;
       default:
         return `Unknown event`;
     }
@@ -318,4 +324,16 @@ export const emitPanelSwitched = (panel: string) => {
 
 export const emitZenModeToggled = (enabled: boolean) => {
   eventBus.emit({ type: 'ZEN_MODE_TOGGLED', payload: { enabled } });
+};
+
+export const emitSignificantEditDetected = (delta: number, chapterId?: string) => {
+  eventBus.emit({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta, chapterId } });
+};
+
+export const emitProactiveThinkingStarted = (trigger: string) => {
+  eventBus.emit({ type: 'PROACTIVE_THINKING_STARTED', payload: { trigger } });
+};
+
+export const emitProactiveThinkingCompleted = (suggestionsCount: number, thinkingTime: number) => {
+  eventBus.emit({ type: 'PROACTIVE_THINKING_COMPLETED', payload: { suggestionsCount, thinkingTime } });
 };

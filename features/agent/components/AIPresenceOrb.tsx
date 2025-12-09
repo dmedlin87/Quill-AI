@@ -11,7 +11,14 @@ import { Persona } from '@/types/personas';
 
 const EASE_IN_OUT: Easing = [0.42, 0, 0.58, 1];
 
-export type OrbStatus = 'idle' | 'thinking' | 'writing';
+/**
+ * Orb status states:
+ * - idle: No active processing
+ * - thinking: Agent is processing a user request
+ * - writing: Agent is generating text
+ * - processing: Background proactive thinking is active
+ */
+export type OrbStatus = 'idle' | 'thinking' | 'writing' | 'processing';
 
 export interface AIPresenceOrbProps {
   status: OrbStatus;
@@ -19,6 +26,8 @@ export interface AIPresenceOrbProps {
   analysisReady: boolean;
   onClick?: () => void;
   isActive?: boolean;
+  /** Number of pending proactive suggestions */
+  pendingSuggestions?: number;
 }
 
 export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
@@ -27,6 +36,7 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
   analysisReady,
   onClick,
   isActive = false,
+  pendingSuggestions = 0,
 }) => {
   const baseColor = persona.color;
   const prefersReducedMotion = useReducedMotion();
@@ -60,6 +70,17 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
         scale: 1,
         opacity: 1,
       },
+      processing: prefersReducedMotion
+        ? { scale: 1, opacity: 0.9 }
+        : {
+            scale: [1, 1.03, 1],
+            opacity: [0.85, 0.95, 0.85],
+            transition: {
+              duration: 2.5,
+              repeat,
+              ease: EASE_IN_OUT,
+            },
+          },
     };
 
     // Glow animation for the outer ring
@@ -90,6 +111,17 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
               ease: EASE_IN_OUT,
             },
           },
+      processing: prefersReducedMotion
+        ? { opacity: 0.35, scale: 1 }
+        : {
+            opacity: [0.25, 0.4, 0.25],
+            scale: [1, 1.08, 1],
+            transition: {
+              duration: 3,
+              repeat,
+              ease: EASE_IN_OUT,
+            },
+          },
     };
 
     // Shimmer effect for writing state
@@ -103,6 +135,17 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
             rotate: [0, 180, 360],
             transition: {
               duration: 2,
+              repeat,
+              ease: 'linear' as Easing,
+            },
+          },
+      processing: prefersReducedMotion
+        ? { opacity: 0, rotate: 0 }
+        : {
+            opacity: [0, 0.3, 0],
+            rotate: [0, 360],
+            transition: {
+              duration: 4,
               repeat,
               ease: 'linear' as Easing,
             },
@@ -224,8 +267,8 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
       <motion.div
         className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
         style={{
-          backgroundColor: status === 'idle' ? '#6b7280' : status === 'thinking' ? '#f59e0b' : '#10b981',
-          boxShadow: status !== 'idle' ? `0 0 4px ${status === 'thinking' ? '#f59e0b' : '#10b981'}` : 'none',
+          backgroundColor: getStatusColor(status),
+          boxShadow: status !== 'idle' ? `0 0 4px ${getStatusColor(status)}` : 'none',
         }}
         animate={
           prefersReducedMotion
@@ -233,14 +276,47 @@ export const AIPresenceOrb: React.FC<AIPresenceOrbProps> = ({
             : { opacity: status === 'idle' ? 0.6 : [0.6, 1, 0.6], scale: status === 'idle' ? 1 : [1, 1.2, 1] }
         }
         transition={{
-          duration: 1,
+          duration: status === 'processing' ? 2 : 1,
           repeat: status === 'idle' || prefersReducedMotion ? 0 : Infinity,
           ease: 'easeInOut',
         }}
       />
+
+      {/* Pending suggestions badge */}
+      {pendingSuggestions > 0 && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+          style={{
+            background: '#8b5cf6', // Purple for suggestions
+            boxShadow: '0 0 6px rgba(139, 92, 246, 0.6)',
+          }}
+        >
+          {pendingSuggestions > 9 ? '9+' : pendingSuggestions}
+        </motion.div>
+      )}
     </motion.button>
   );
 };
+
+/**
+ * Get the status indicator color based on orb status
+ */
+function getStatusColor(status: OrbStatus): string {
+  switch (status) {
+    case 'idle':
+      return '#6b7280'; // Gray
+    case 'thinking':
+      return '#f59e0b'; // Amber
+    case 'writing':
+      return '#10b981'; // Emerald
+    case 'processing':
+      return '#8b5cf6'; // Purple - indicates background processing
+    default:
+      return '#6b7280';
+  }
+}
 
 /**
  * Adjust the brightness of a hex color

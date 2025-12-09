@@ -173,7 +173,10 @@ export type AppEvent =
   | AppEventBase & { type: 'PANEL_SWITCHED'; payload: { panel: string } }
   | AppEventBase & { type: 'LORE_UPDATED'; payload: { changeType: 'character' | 'rule'; id?: string } }
   | AppEventBase & { type: 'DOCUMENT_SAVED'; payload: { chapterId: string } }
-  | AppEventBase & { type: 'ZEN_MODE_TOGGLED'; payload: { enabled: boolean } };
+  | AppEventBase & { type: 'ZEN_MODE_TOGGLED'; payload: { enabled: boolean } }
+  | AppEventBase & { type: 'SIGNIFICANT_EDIT_DETECTED'; payload: { delta: number; chapterId?: string } }
+  | AppEventBase & { type: 'PROACTIVE_THINKING_STARTED'; payload: { trigger: string } }
+  | AppEventBase & { type: 'PROACTIVE_THINKING_COMPLETED'; payload: { suggestionsCount: number; thinkingTime: number } };
 
 export type EventHandler = (event: AppEvent) => void;
 

@@ -8,6 +8,7 @@ import {
   formatGoalsForPrompt,
 } from '@/services/memory';
 import { getMemoriesForContext } from '@/services/memory/memoryQueries';
+import { searchBedsideHistory, type BedsideHistoryMatch } from '@/services/memory/bedsideHistorySearch';
 
 export const buildManuscriptContext = (
   chapters: AgentContextInput['chapters'],
@@ -41,22 +42,55 @@ export const buildMemoryContext = async (
 };
 
 /**
- * Default memory builder used by the UI hook (pulls from memory service).
- * Kept here so AgentController consumers can share the logic.
+ * Fetch long-term memory context from BedsideHistorySearch.
+ * Returns thematic insights, character arcs, and historical context.
  */
+export const fetchBedsideHistoryContext = async (
+  projectId: string,
+  options: { query?: string; limit?: number } = {},
+): Promise<{ matches: BedsideHistoryMatch[]; formatted: string }> => {
+  const { query = 'themes character arcs plot developments conflicts', limit = 5 } = options;
+
+  try {
+    const matches = await searchBedsideHistory(projectId, query, { limit });
+
+    if (matches.length === 0) {
+      return { matches: [], formatted: '' };
+    }
+
+    const lines: string[] = ['## Long-Term Memory (Bedside Notes)'];
+    for (const match of matches) {
+      const relevance = Math.round(match.similarity * 100);
+      const date = new Date(match.note.createdAt).toLocaleDateString();
+      lines.push(`- [${relevance}% match, ${date}]: ${match.note.text.slice(0, 200)}${match.note.text.length > 200 ? '...' : ''}`);
+    }
+
+    return { matches, formatted: lines.join('\n') };
+  } catch (error) {
+    console.warn('[AgentSession] Failed to fetch bedside history:', error);
+    return { matches: [], formatted: '' };
+  }
+};
+
 export const fetchMemoryContext = async (projectId: string): Promise<string> => {
   try {
-    const [memories, goals] = await Promise.all([
+    const [memories, goals, bedsideHistory] = await Promise.all([
       getMemoriesForContext(projectId, { limit: 25 }),
       getActiveGoals(projectId),
+      fetchBedsideHistoryContext(projectId),
     ]);
 
     let memorySection = '[AGENT MEMORY]\n';
 
+    // Add long-term bedside history context first (most relevant)
+    if (bedsideHistory.formatted) {
+      memorySection += bedsideHistory.formatted + '\n\n';
+    }
+
     const formattedMemories = formatMemoriesForPrompt(memories, { maxLength: 3000 });
     if (formattedMemories) {
       memorySection += formattedMemories + '\n';
-    } else {
+    } else if (!bedsideHistory.formatted) {
       memorySection += '(No stored memories yet.)\n';
     }
 

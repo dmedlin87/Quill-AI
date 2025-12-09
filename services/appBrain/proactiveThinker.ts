@@ -16,6 +16,7 @@ import { buildCompressedContext } from './contextBuilder';
 import { formatConflictsForPrompt, getHighPriorityConflicts } from './intelligenceMemoryBridge';
 import { evolveBedsideNote } from '../memory';
 import { getImportantReminders, type ProactiveSuggestion } from '../memory/proactive';
+import { searchBedsideHistory, type BedsideHistoryMatch } from '../memory/bedsideHistorySearch';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -73,7 +74,7 @@ const DEFAULT_CONFIG: ThinkerConfig = {
   debounceMs: 10000, // 10 seconds between thinks
   maxBatchSize: 20,
   minEventsToThink: 3,
-  urgentEventTypes: ['ANALYSIS_COMPLETED', 'INTELLIGENCE_UPDATED'],
+  urgentEventTypes: ['ANALYSIS_COMPLETED', 'INTELLIGENCE_UPDATED', 'SIGNIFICANT_EDIT_DETECTED'],
   enabled: true,
   allowBedsideEvolve: true,
   bedsideCooldownMs: 60_000,
@@ -87,6 +88,8 @@ const PROACTIVE_THINKING_PROMPT = `You are a proactive writing assistant analyzi
 
 CURRENT CONTEXT:
 {{CONTEXT}}
+
+{{LONG_TERM_MEMORY}}
 
 RECENT ACTIVITY:
 {{EVENTS}}
@@ -349,6 +352,12 @@ export class ProactiveThinker {
     this.state.isThinking = true;
     const startTime = Date.now();
     
+    // Emit thinking started event
+    eventBus.emit({
+      type: 'PROACTIVE_THINKING_STARTED',
+      payload: { trigger: this.state.pendingEvents[0]?.type ?? 'manual' },
+    });
+    
     try {
       const state = this.getState();
       const events = [...this.state.pendingEvents];
@@ -359,6 +368,9 @@ export class ProactiveThinker {
       // Build context
       const context = buildCompressedContext(state);
       const formattedEvents = this.formatEventsForPrompt(events);
+      
+      // Get long-term memory context from BedsideHistorySearch
+      const longTermMemory = await this.fetchLongTermMemoryContext(state);
       
       // Get conflicts from intelligence-memory bridge
       let conflictsSection = '';
@@ -373,6 +385,7 @@ export class ProactiveThinker {
       // Build prompt
       const prompt = PROACTIVE_THINKING_PROMPT
         .replace('{{CONTEXT}}', context)
+        .replace('{{LONG_TERM_MEMORY}}', longTermMemory)
         .replace('{{EVENTS}}', formattedEvents)
         .replace('{{CONFLICTS}}', conflictsSection ? `\nDETECTED CONFLICTS:\n${conflictsSection}` : '');
       
@@ -391,6 +404,15 @@ export class ProactiveThinker {
 
       this.state.lastThinkTime = Date.now();
       this.state.suggestionsGenerated += result.suggestions.length;
+
+      // Emit thinking completed event
+      eventBus.emit({
+        type: 'PROACTIVE_THINKING_COMPLETED',
+        payload: {
+          suggestionsCount: result.suggestions.length,
+          thinkingTime: Date.now() - startTime,
+        },
+      });
 
       if (this.onSuggestion) {
         for (const suggestion of result.suggestions) {
@@ -501,6 +523,67 @@ export class ProactiveThinker {
     if (!this.debounceTimer) return;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
+  }
+
+  /**
+   * Fetch long-term memory context from BedsideHistorySearch.
+   * Provides thematic insights, character arcs, and historical context to the thinker.
+   */
+  private async fetchLongTermMemoryContext(state: AppBrainState): Promise<string> {
+    if (!this.projectId) return '';
+
+    try {
+      // Build a query based on current context (active entities, scene type)
+      const queryParts: string[] = ['themes', 'character arcs', 'plot developments'];
+      
+      // Add active entity names to the query
+      if (state.intelligence.hud?.context.activeEntities) {
+        const entityNames = state.intelligence.hud.context.activeEntities
+          .slice(0, 3)
+          .map(e => e.name);
+        queryParts.push(...entityNames);
+      }
+      
+      // Add current scene type if available
+      if (state.intelligence.hud?.situational.currentScene?.type) {
+        queryParts.push(state.intelligence.hud.situational.currentScene.type);
+      }
+
+      const query = queryParts.join(' ');
+      const matches = await searchBedsideHistory(this.projectId, query, { limit: 5 });
+
+      if (matches.length === 0) {
+        return '';
+      }
+
+      const lines: string[] = ['LONG-TERM MEMORY (Bedside Notes):'];
+      for (const match of matches) {
+        const relevance = Math.round(match.similarity * 100);
+        const age = this.formatAge(match.note.createdAt);
+        lines.push(`- [${relevance}% relevant, ${age}]: ${match.note.text.slice(0, 150)}${match.note.text.length > 150 ? '...' : ''}`);
+      }
+
+      return lines.join('\n');
+    } catch (error) {
+      console.warn('[ProactiveThinker] Failed to fetch long-term memory:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Format timestamp as human-readable age (e.g., "2 days ago", "1 hour ago")
+   */
+  private formatAge(timestamp: number): string {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'just now';
   }
 
   private canEvolveBedside(): boolean {
