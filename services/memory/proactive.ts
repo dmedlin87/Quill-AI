@@ -28,7 +28,12 @@ export interface ProactiveSuggestion {
     | 'reminder'
     | 'lore_discovery'
     | 'timeline_conflict'
-    | 'voice_inconsistency';
+    | 'voice_inconsistency'
+    | 'plot'
+    | 'character'
+    | 'pacing'
+    | 'style'
+    | 'continuity';
   priority: 'high' | 'medium' | 'low';
   title: string;
   description: string;
