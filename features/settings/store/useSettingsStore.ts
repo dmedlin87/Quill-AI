@@ -4,8 +4,10 @@ import { CritiqueIntensity, DEFAULT_CRITIQUE_INTENSITY } from '@/types/critiqueS
 import {
   ExperienceLevel,
   AutonomyMode,
+  SuggestionWeights,
   DEFAULT_EXPERIENCE,
   DEFAULT_AUTONOMY,
+  DEFAULT_SUGGESTION_WEIGHTS,
 } from '@/types/experienceSettings';
 
 interface SettingsState {
@@ -21,6 +23,9 @@ interface SettingsState {
   setNativeSpellcheckEnabled: (enabled: boolean) => void;
   developerModeEnabled: boolean;
   setDeveloperModeEnabled: (enabled: boolean) => void;
+  suggestionWeights: SuggestionWeights;
+  updateSuggestionWeight: (category: string, weight: number) => void;
+  resetSuggestionWeights: () => void;
 }
 
 const initialState: Omit<SettingsState, keyof SettingsActions> = {
@@ -30,6 +35,7 @@ const initialState: Omit<SettingsState, keyof SettingsActions> = {
   budgetThreshold: 1.0,
   nativeSpellcheckEnabled: true,
   developerModeEnabled: false,
+  suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
 };
 
 type SettingsActions = Pick<
@@ -40,6 +46,8 @@ type SettingsActions = Pick<
   | 'setBudgetThreshold'
   | 'setNativeSpellcheckEnabled'
   | 'setDeveloperModeEnabled'
+  | 'updateSuggestionWeight'
+  | 'resetSuggestionWeights'
 >;
 
 export const useSettingsStore = create<SettingsState>()(
@@ -70,6 +78,17 @@ export const useSettingsStore = create<SettingsState>()(
             ? state
             : { ...state, developerModeEnabled: enabled }
         ),
+      updateSuggestionWeight: (category, weight) =>
+        set((state) => ({
+          suggestionWeights: {
+            ...state.suggestionWeights,
+            [category]: weight,
+          },
+        })),
+      resetSuggestionWeights: () =>
+        set(() => ({
+          suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
+        })),
     }),
     {
       name: 'quill-settings',

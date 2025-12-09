@@ -5,9 +5,11 @@
  * with watched entities, related memories, or active goals.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProactiveSuggestion } from '@/services/memory/proactive';
+import { eventBus } from '@/services/appBrain';
+import { SuggestionCategory } from '@/types/experienceSettings';
 
 interface ProactiveSuggestionsProps {
   suggestions: ProactiveSuggestion[];
@@ -30,6 +32,19 @@ const suggestionVariants = {
   },
   exit: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.15 } }
 };
+
+function getSuggestionCategory(suggestion: ProactiveSuggestion): SuggestionCategory {
+  if (suggestion.type === 'related_memory') {
+    const tags = suggestion.tags || [];
+    if (tags.includes('plot')) return 'plot';
+    if (tags.includes('character')) return 'character';
+    if (tags.includes('pacing')) return 'pacing';
+    if (tags.includes('style')) return 'style';
+    if (tags.includes('continuity')) return 'continuity';
+    return 'other';
+  }
+  return suggestion.type as SuggestionCategory;
+}
 
 const typeIcons: Record<ProactiveSuggestion['type'], string> = {
   watched_entity: '👁️',
@@ -61,7 +76,27 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
   onApply,
   isThinking = false,
 }) => {
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
   if (suggestions.length === 0) return null;
+
+  const handleFeedback = (suggestion: ProactiveSuggestion, action: 'applied' | 'dismissed' | 'muted') => {
+    eventBus.emit({
+      type: 'PROACTIVE_SUGGESTION_ACTION',
+      payload: {
+        suggestionId: suggestion.id,
+        action,
+        suggestionCategory: getSuggestionCategory(suggestion),
+      },
+    });
+
+    if (action === 'applied' && onApply) {
+      onApply(suggestion);
+    } else if (action === 'dismissed' || action === 'muted') {
+      onDismiss(suggestion.id);
+    }
+    setActiveMenuId(null);
+  };
 
   return (
     <div className="p-3 space-y-2">
@@ -106,8 +141,33 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                   : ''
             }`}
           >
-            {/* Priority Indicator */}
-            <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${priorityDots[suggestion.priority]}`} />
+            {/* Options Menu (Top Right) */}
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+               <div className={`w-2 h-2 rounded-full ${priorityDots[suggestion.priority]}`} />
+               <button
+                 onClick={() => setActiveMenuId(activeMenuId === suggestion.id ? null : suggestion.id)}
+                 className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-black/5"
+               >
+                 ⋮
+               </button>
+
+               {activeMenuId === suggestion.id && (
+                 <div className="absolute right-0 top-6 bg-white shadow-lg rounded-lg border border-gray-100 py-1 w-32 z-10 text-xs">
+                   <button
+                     className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700"
+                     onClick={() => handleFeedback(suggestion, 'dismissed')}
+                   >
+                     Dismiss
+                   </button>
+                   <button
+                     className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700"
+                     onClick={() => handleFeedback(suggestion, 'muted')}
+                   >
+                     Don't show this again
+                   </button>
+                 </div>
+               )}
+            </div>
             
             {/* Content */}
             <div className="pr-6">
@@ -199,7 +259,7 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                 {onApply && (
                   <button
                     type="button"
-                    onClick={() => onApply(suggestion)}
+                    onClick={() => handleFeedback(suggestion, 'applied')}
                     className="text-[10px] text-emerald-600 hover:text-emerald-800 font-medium transition-colors"
                     aria-label={`Apply suggestion: ${suggestion.title}`}
                   >
@@ -218,7 +278,7 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                 )}
                 <button
                   type="button"
-                  onClick={() => onDismiss(suggestion.id)}
+                  onClick={() => handleFeedback(suggestion, 'dismissed')}
                   className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
                   aria-label={`Dismiss suggestion: ${suggestion.title}`}
                 >
