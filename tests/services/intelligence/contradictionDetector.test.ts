@@ -793,6 +793,66 @@ describe('Contradiction Detector', () => {
         const loreContradict = contradictions.find(c => c.category?.startsWith('lore_'));
         expect(loreContradict).toBeUndefined();
       });
+
+      it('should match Lore Object to Manuscript Attribute when Predicate implies wrong category (edge case)', () => {
+        // Lore: "Bob's age: short". Subject "Bob", Predicate "age".
+        // Predicate 'age' -> Inferred Category 'age'.
+        // Object 'short' is in loreHeightTerms.
+        // Manuscript: "Bob is tall". Category 'height'. Value 'tall'.
+        // This triggers the fallback check for loreHeightTerms when category mismatch occurs (age != height).
+
+        const loreMemories: MemoryNote[] = [
+          createMemoryNote('1', "Bob's age: short", 'fact'),
+        ];
+
+        const text = `Bob was tall.`; // extractAttributes detects category 'height', value 'tall'
+
+        const entities = createEntityGraph([
+          createEntity('Bob', [{ offset: 0, length: 3 }]),
+        ]);
+
+        const contradictions = detectContradictionsWithLore(
+          text,
+          entities,
+          createTimeline(),
+          loreMemories
+        );
+
+        // Should detect contradiction between "short" and "tall" despite category mismatch (age vs height)
+        const contradict = contradictions.find(c => c.entityName === 'Bob');
+        expect(contradict).toBeDefined();
+        expect(contradict?.claim1.value).toBe('short');
+        expect(contradict?.claim2.value).toBe('tall');
+      });
+
+      it('should handle ambiguous color categories (Lore object is color, inferred category null)', () => {
+         // Lore: "Alice has blue". Predicate 'has'. Object 'blue'.
+         // inferCategoryFromLore: pred doesn't match specific. object matches colorTerms -> returns NULL.
+         // Manuscript: "Alice's red hair". Category 'hair_color'.
+         // Filter: inferredCategory is null. colorCategories includes 'hair_color'. Match!
+         // Comparison: blue vs red -> Contradiction.
+
+         const loreMemories: MemoryNote[] = [
+          createMemoryNote('1', "Alice has blue", 'fact'),
+        ];
+
+        const text = `Alice's red hair was striking.`;
+
+        const entities = createEntityGraph([
+          createEntity('Alice', [{ offset: 0, length: 5 }]),
+        ]);
+
+        const contradictions = detectContradictionsWithLore(
+          text,
+          entities,
+          createTimeline(),
+          loreMemories
+        );
+
+        const contradict = contradictions.find(c => c.entityName === 'Alice');
+        expect(contradict).toBeDefined();
+        expect(contradict?.category).toBe('lore_hair_color');
+      });
     });
   });
 
