@@ -21,7 +21,7 @@ import { db } from '../db';
 
 export interface ProactiveSuggestion {
   id: string;
-  type: 'watched_entity' | 'related_memory' | 'active_goal' | 'reminder';
+  type: 'watched_entity' | 'related_memory' | 'active_goal' | 'reminder' | 'lore_discovery';
   priority: 'high' | 'medium' | 'low';
   title: string;
   description: string;
@@ -37,6 +37,8 @@ export interface ProactiveSuggestion {
   tags: string[];
   /** When this suggestion was generated */
   createdAt: number;
+  /** Additional data for downstream handlers */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChapterContext {

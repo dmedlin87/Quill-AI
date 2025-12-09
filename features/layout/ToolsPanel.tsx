@@ -66,6 +66,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
     isToolsCollapsed,
     chatInitialMessage,
     interviewTarget,
+    loreDraftCharacter,
+    consumeLoreDraft,
     clearChatInitialMessage,
     exitInterview,
     handleFixRequest,
@@ -76,6 +78,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
     isToolsCollapsed: state.isToolsCollapsed,
     chatInitialMessage: state.chatInitialMessage,
     interviewTarget: state.interviewTarget,
+    loreDraftCharacter: state.loreDraftCharacter,
+    consumeLoreDraft: state.consumeLoreDraft,
     clearChatInitialMessage: state.clearChatInitialMessage,
     exitInterview: state.exitInterview,
     handleFixRequest: state.handleFixRequest,
@@ -157,7 +161,11 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
             )}
 
             {activeTab === SidebarTab.LORE && (
-              <LoreManager onInterviewCharacter={handleInterviewCharacter} />
+              <LoreManager
+                onInterviewCharacter={handleInterviewCharacter}
+                draftCharacter={loreDraftCharacter}
+                onDraftConsumed={consumeLoreDraft}
+              />
             )}
           </div>
         </motion.aside>
