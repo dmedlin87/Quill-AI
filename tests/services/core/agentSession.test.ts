@@ -18,11 +18,13 @@ const {
   mockGetActiveGoals,
   mockFormatMemoriesForPrompt,
   mockFormatGoalsForPrompt,
+  mockSearchBedsideHistory,
 } = vi.hoisted(() => ({
   mockGetMemoriesForContext: vi.fn(),
   mockGetActiveGoals: vi.fn(),
   mockFormatMemoriesForPrompt: vi.fn(),
   mockFormatGoalsForPrompt: vi.fn(),
+  mockSearchBedsideHistory: vi.fn(),
 }));
 
 vi.mock('@/services/gemini/agent', () => ({
@@ -39,6 +41,11 @@ vi.mock('@/services/memory', () => ({
   formatGoalsForPrompt: mockFormatGoalsForPrompt,
 }));
 
+// Mock bedside history search to avoid DB access
+vi.mock('@/services/memory/bedsideHistorySearch', () => ({
+  searchBedsideHistory: mockSearchBedsideHistory,
+}));
+
 describe('agentSession helpers', () => {
   const chapters = [
     { id: 'c1', title: 'One', content: 'First', order: 0, updatedAt: 0 },
@@ -47,6 +54,7 @@ describe('agentSession helpers', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearchBedsideHistory.mockResolvedValue([]);
   });
 
   it('marks the active chapter in manuscript context', () => {

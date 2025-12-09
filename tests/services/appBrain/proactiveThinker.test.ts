@@ -47,9 +47,13 @@ vi.mock('@/services/memory/proactive', () => ({
 }));
 
 // Mock the core memory service bedside-note evolution
-vi.mock('@/services/memory', () => ({
-  evolveBedsideNote: (...args: any[]) => memoryMocks.evolveBedsideNote(...args),
-}));
+vi.mock('@/services/memory', () => {
+  return {
+    evolveBedsideNote: (...args: any[]) => memoryMocks.evolveBedsideNote(...args),
+    getVoiceProfileForCharacter: vi.fn(),
+    upsertVoiceProfile: vi.fn(),
+  };
+});
 
 // Mock bedside history search
 vi.mock('@/services/memory/bedsideHistorySearch', () => ({

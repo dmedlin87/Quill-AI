@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock framer-motion
 vi.mock('framer-motion', () => ({
   motion: {
-    header: ({ children, onMouseEnter, onMouseLeave, ...props }: any) => (
+    header: ({ children, onMouseEnter, onMouseLeave, initial, animate, transition, ...props }: any) => (
       <header onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} {...props}>
         {children}
       </header>
