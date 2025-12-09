@@ -935,11 +935,15 @@ export class ProactiveThinker {
       // Adjust priority if weight is significantly low or high
       if (weight < 0.5 && suggestion.priority === 'high') {
         suggestion.priority = 'medium';
-      } else if (weight < 0.3) {
+      }
+
+      if (weight < 0.3) {
         suggestion.priority = 'low';
       } else if (weight > 1.5 && suggestion.priority === 'low') {
         suggestion.priority = 'medium';
-      } else if (weight > 1.8) {
+      }
+
+      if (weight > 1.8) {
         suggestion.priority = 'high';
       }
 
