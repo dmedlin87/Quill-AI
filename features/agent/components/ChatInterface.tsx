@@ -132,6 +132,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const isInterviewMode = Boolean(interviewTarget);
 
   const initGenRef = useRef(0);
+  const initialMessageTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const initialMessageSentRef = useRef(false);
 
   const isMountedRef = useRef(true);
 
@@ -256,6 +258,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       message: intro,
     } as any);
 
+    if (
+      initialMessage &&
+      !initialMessageSentRef.current &&
+      chatRef.current &&
+      !isLoading
+    ) {
+      initialMessageSentRef.current = true;
+      setInput(initialMessage);
+      if (initialMessageTimerRef.current) {
+        clearTimeout(initialMessageTimerRef.current);
+      }
+      initialMessageTimerRef.current = setTimeout(() => {
+        sendMessageWithText(initialMessage);
+        onInitialMessageProcessed?.();
+      }, 100);
+    }
+
   }, [analysis, buildMemoryContext, chapters, fullText, interviewTarget, isDeepMode, isInterviewMode, lore, projectId, voiceFingerprint]);
 
 
@@ -297,20 +316,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [messages]);
 
-  // Handle initial message from Smart Apply
   useEffect(() => {
-    if (initialMessage && chatRef.current && !isLoading) {
-      setInput(initialMessage);
-      // Auto-send after a brief delay to ensure UI is ready
-      const timer = setTimeout(() => {
-        sendMessageWithText(initialMessage);
-        if (onInitialMessageProcessed) {
-          onInitialMessageProcessed();
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [initialMessage]);
+    return () => {
+      if (initialMessageTimerRef.current) {
+        clearTimeout(initialMessageTimerRef.current);
+      }
+    };
+  }, []);
 
   const sendMessageWithText = async (messageText: string) => {
     if (!messageText.trim() || !chatRef.current || isLoading) return;

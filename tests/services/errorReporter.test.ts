@@ -65,6 +65,23 @@ describe('errorReporter', () => {
       expect(capturedError.message).toBe('{"custom":"error object"}');
     });
 
+    it('falls back to String() when JSON.stringify throws', () => {
+      const circular: any = {};
+      circular.self = circular;
+      
+      reportError(circular);
+      
+      const capturedError = mockConsoleError.mock.calls[0][1];
+      expect(capturedError.message).toBe('[object Object]');
+    });
+
+    it('extracts message property from error-like objects', () => {
+      reportError({ message: 'Error-like message' });
+      
+      const capturedError = mockConsoleError.mock.calls[0][1];
+      expect(capturedError.message).toBe('Error-like message');
+    });
+
     it('uses custom reporter when set', () => {
       const customReporter = vi.fn();
       setErrorReporter(customReporter);

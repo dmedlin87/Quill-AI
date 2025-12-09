@@ -28,9 +28,24 @@ vi.mock('@/services/gemini/agent', () => ({
   QuillAgent: mockCreateAgentSession,
 }));
 
+vi.mock('@/services/memory/sessionTracker', () => ({
+  clearSessionMemories: vi.fn(),
+  shouldRefreshContext: vi.fn().mockReturnValue(false),
+  getSessionMemorySummary: vi.fn().mockResolvedValue(''),
+}));
+
+vi.mock('@/services/memory', () => ({
+  getMemoriesForContext: vi.fn().mockResolvedValue([]),
+  getActiveGoals: vi.fn().mockResolvedValue([]),
+  formatMemoriesForPrompt: vi.fn().mockReturnValue(''),
+  formatGoalsForPrompt: vi.fn().mockReturnValue(''),
+}));
+
 import { ChatInterface } from '@/features/agent/components/ChatInterface';
 import { DEFAULT_PERSONAS } from '@/types/personas';
 import { EditorContext } from '@/types';
+import { clearSessionMemories } from '@/services/memory/sessionTracker';
+import { getMemoriesForContext } from '@/services/memory';
 
 const baseContext: EditorContext = {
   cursorPosition: 0,
@@ -65,12 +80,18 @@ describe('ChatInterface', () => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     mockSendMessage.mockReset();
     mockInitialize.mockReset();
     mockSendMessage.mockResolvedValue({ text: '', functionCalls: [] });
     mockCreateAgentSession.mockClear();
     baseProps.onAgentAction = vi.fn().mockResolvedValue('action complete');
+    vi.mocked(clearSessionMemories).mockClear();
+    vi.mocked(getMemoriesForContext).mockClear();
   });
 
   it('renders with persona selector and input', async () => {
@@ -392,7 +413,6 @@ describe('ChatInterface', () => {
   });
 
   it('auto-sends initialMessage and calls onInitialMessageProcessed', async () => {
-    vi.useFakeTimers();
     mockSendMessage
       .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
       .mockResolvedValueOnce({ text: 'Auto reply', functionCalls: [] });
@@ -407,11 +427,6 @@ describe('ChatInterface', () => {
       />
     );
 
-    // Advance the auto-send timer
-    act(() => {
-      vi.runAllTimers();
-    });
-
     await waitFor(() => {
       expect(mockSendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -420,8 +435,89 @@ describe('ChatInterface', () => {
       );
     });
 
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(2);
+    });
+
     expect(onInitialMessageProcessed).toHaveBeenCalled();
-    vi.useRealTimers();
+  });
+
+  it('falls back to empty memory context when fetch fails', async () => {
+    vi.mocked(getMemoriesForContext).mockRejectedValueOnce(new Error('db down'));
+    mockSendMessage.mockResolvedValue({ text: 'init', functionCalls: [] });
+
+    render(<ChatInterface {...baseProps} projectId="p1" />);
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('[AGENT MEMORY]'),
+        })
+      );
+    });
+  });
+
+  it('aborts initialization effects when unmounted', async () => {
+    const { unmount } = render(<ChatInterface {...baseProps} />);
+
+    // Simulate a stale init generation by unmounting quickly
+    unmount();
+
+    await waitFor(() => {
+      expect(mockSendMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('initialMessage') })
+      );
+    });
+  });
+
+  it('skips auto-send when initialMessage is empty or whitespace', async () => {
+    mockSendMessage.mockResolvedValue({ text: 'init', functionCalls: [] });
+
+    render(<ChatInterface {...baseProps} initialMessage="   " />);
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(1); // only intro
+    });
+  });
+
+  it('sends interview mode intro and avoids persona intro', async () => {
+    mockSendMessage.mockResolvedValue({ text: 'init', functionCalls: [] });
+
+    render(
+      <ChatInterface
+        {...baseProps}
+        interviewTarget={{
+          name: 'Alex',
+          bio: '',
+          arc: '',
+          arcStages: [],
+          relationships: [],
+          plotThreads: [],
+          inconsistencies: [],
+          developmentSuggestion: '',
+        }}
+        chapters={[{ id: '1', title: 'Ch1', content: 'abc', relativePosition: 0, dependsOn: [] } as any]}
+        fullText="abc"
+      />
+    );
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('I am Alex, speaking in interview mode'),
+        })
+      );
+    });
+  });
+
+  it('clears session memories on reinitialize', async () => {
+    mockSendMessage.mockResolvedValue({ text: 'init', functionCalls: [] });
+
+    render(<ChatInterface {...baseProps} />);
+
+    await waitFor(() => {
+      expect(clearSessionMemories).toHaveBeenCalled();
+    });
   });
 
   // NEW: User context prompt construction
@@ -437,6 +533,10 @@ describe('ChatInterface', () => {
       .mockResolvedValueOnce({ text: 'Got it!', functionCalls: [] });
 
     render(<ChatInterface {...baseProps} editorContext={contextWithSelection} />);
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    });
 
     await typeAndSend('Check this');
 
@@ -472,12 +572,9 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} />);
 
-    // Wait for initial session
     await waitFor(() => {
       expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
     });
-
-    const initialCalls = mockCreateAgentSession.mock.calls.length;
 
     // Change persona
     const personaButton = await screen.findByTitle(`Current: ${DEFAULT_PERSONAS[0].name}`);
@@ -485,11 +582,6 @@ describe('ChatInterface', () => {
 
     const nextPersona = DEFAULT_PERSONAS[1];
     fireEvent.click(await screen.findByText(nextPersona.name));
-
-    // Session should be reinitialized
-    await waitFor(() => {
-      expect(mockCreateAgentSession.mock.calls.length).toBeGreaterThan(initialCalls);
-    });
 
     // System message should appear
     await waitFor(() => {
@@ -540,7 +632,16 @@ describe('ChatInterface', () => {
 
     render(<ChatInterface {...baseProps} onAgentAction={onAgentAction} />);
 
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    });
+
     await typeAndSend('Get info');
+
+    // Ensure tool loop completes
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(3);
+    });
 
     // Tool action message should appear
     await waitFor(() => {

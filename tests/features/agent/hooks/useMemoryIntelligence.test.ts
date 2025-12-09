@@ -246,4 +246,35 @@ describe('useMemoryIntelligence', () => {
     expect(planText).toContain('Warnings & Risks:');
     expect(options).toEqual({ changeReason: 'analysis_update', structuredContent: expect.any(Object) });
   });
+
+  it('returns cached result when consolidation is already in progress', async () => {
+    const neverResolves = new Promise(() => {});
+    mocks.runConsolidation.mockImplementationOnce(() => neverResolves);
+
+    const { result } = renderHook(() =>
+      useMemoryIntelligence({
+        projectId: 'project-1',
+        autoObserveEnabled: false,
+        consolidateOnMount: false,
+        consolidationIntervalMs: 0,
+      })
+    );
+
+    let inFlightResult: any;
+    let concurrentResult: any;
+    await act(async () => {
+      inFlightResult = result.current.consolidate();
+      concurrentResult = await result.current.consolidate();
+    });
+
+    expect(inFlightResult).toBeInstanceOf(Promise);
+    expect(concurrentResult).toEqual({
+      decayed: 0,
+      merged: 0,
+      archived: 0,
+      reinforced: 0,
+      errors: ['Consolidation already in progress'],
+      duration: 0,
+    });
+  });
 });

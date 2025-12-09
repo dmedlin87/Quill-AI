@@ -22,6 +22,12 @@ describe('geminiClient mocks', () => {
     await expect(chat.sendMessage({ notMessage: true })).rejects.toBeInstanceOf(Error);
   });
 
+  it('rejects non-string/non-array message types', async () => {
+    const chat = createMockChat(chaosResponses.emptyText);
+    // @ts-expect-error invalid message type to exercise error branch
+    await expect(chat.sendMessage({ message: 123 })).rejects.toThrow('must be a string or an array');
+  });
+
   it('creates generateContent mocks with expected response', async () => {
     const fn = createMockGenerateContent(chaosResponses.malformedJson);
     expect(await fn({ model: 'x', contents: 'y' } as any)).toEqual(chaosResponses.malformedJson);

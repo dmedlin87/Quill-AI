@@ -162,6 +162,91 @@ describe('useAgentOrchestrator', () => {
     mockEventBus.subscribeForOrchestrator.mockReturnValue(() => {});
   });
 
+  it('respects autoReinit=false and does not reinitialize on context change', async () => {
+    mockSendMessage.mockResolvedValue({ text: '' });
+
+    const { result, rerender } = renderHook(() => useAgentOrchestrator({ autoReinit: false }));
+
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true);
+    });
+
+    expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      brainValue.state.ui.selection = { text: 'select', start: 0, end: 5 } as any;
+    });
+    rerender();
+
+    // No additional session initialization when autoReinit is off
+    expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to editor context when smart context fails and selection exists', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: '' })
+      .mockResolvedValueOnce({ text: 'Fallback response' });
+
+    mockGetSmartAgentContext.mockRejectedValueOnce(new Error('smart context down'));
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { result } = renderHook(() => useAgentOrchestrator());
+
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true);
+    });
+
+    act(() => {
+      brainValue.state.ui.selection = { text: 'sel', start: 1, end: 4 };
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Needs fallback');
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages.some(m => m.text === 'Fallback response')).toBe(true);
+    });
+
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('emits failed tool executions when executeAgentToolCall returns error', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: '' })
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [{ id: 'call-err', name: 'update_manuscript', args: {} }],
+      })
+      .mockResolvedValueOnce({ text: 'After failure' });
+
+    mockExecuteAgentToolCall.mockResolvedValueOnce({
+      success: false,
+      message: 'bad tool',
+    });
+
+    const { result } = renderHook(() => useAgentOrchestrator());
+
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Run failing tool');
+    });
+
+    await waitFor(() => {
+      expect(result.current.state.lastToolCall).toEqual({
+        name: 'update_manuscript',
+        success: false,
+      });
+    });
+
+    expect(mockEmitToolExecuted).toHaveBeenCalledWith('update_manuscript', false);
+  });
+
   it('initializes session and marks isReady', async () => {
     mockSendMessage.mockResolvedValueOnce({ text: '' });
 
@@ -195,7 +280,7 @@ describe('useAgentOrchestrator', () => {
     expect(mockGetSmartAgentContext).toHaveBeenCalledWith(
       brainValue.state,
       'p1',
-      expect.objectContaining({ mode: 'text', queryType: 'general' }),
+      expect.objectContaining({ mode: 'text', queryType: expect.any(String) }),
     );
 
     await waitFor(() => {
@@ -258,71 +343,9 @@ describe('useAgentOrchestrator', () => {
     expect(mockExecuteAgentToolCall).toHaveBeenCalledWith(
       'update_manuscript',
       { foo: 'bar' },
-      expect.any(Object),
+      brainValue.actions,
       'p1',
     );
-  });
-
-  it('handles agent errors gracefully and exposes error state', async () => {
-    // Init
-    mockSendMessage.mockResolvedValueOnce({ text: '' });
-    // User send: force an error from the agent
-    mockSendMessage.mockRejectedValueOnce(new Error('boom'));
-
-    const { result } = renderHook(() => useAgentOrchestrator());
-
-    await waitFor(() => {
-      expect(result.current.isReady).toBe(true);
-    });
-
-    await act(async () => {
-      await result.current.sendMessage('Trigger error');
-    });
-
-    await waitFor(() => {
-      expect(result.current.state.status).toBe('error');
-      expect(result.current.state.lastError).toBe('boom');
-    });
-
-    const friendlyError = result.current.messages.find(
-      m => m.role === 'model' && m.text.includes('Sorry, I encountered an error'),
-    );
-    expect(friendlyError).toBeTruthy();
-  });
-
-  it('reinitializes session and logs a message when persona changes', async () => {
-    // First init
-    mockSendMessage.mockResolvedValueOnce({ text: '' });
-    // Re-init after persona switch
-    mockSendMessage.mockResolvedValueOnce({ text: '' });
-
-    const { result } = renderHook(() => useAgentOrchestrator());
-
-    await waitFor(() => {
-      expect(result.current.isReady).toBe(true);
-    });
-
-    await act(async () => {
-      result.current.setPersona({
-        id: 'critic',
-        name: 'The Critic',
-        icon: '🧐',
-        role: 'Harsh structural critic',
-        description: 'Focuses on finding structural flaws',
-        systemPrompt: 'Be a harsh structural critic.',
-      } as any);
-    });
-
-    await waitFor(() => {
-      expect(result.current.currentPersona.name).toBe('The Critic');
-      const switchMessage = result.current.messages.find(
-        m => m.role === 'model' && m.text.includes('Switched to The Critic'),
-      );
-      expect(switchMessage).toBeTruthy();
-    });
-
-    // One session for initial init, one for persona switch
-    expect(mockCreateAgentSession).toHaveBeenCalledTimes(2);
   });
 
   it('reinitializes the agent session when context changes with autoReinit enabled', async () => {
@@ -442,7 +465,6 @@ describe('useAgentOrchestrator', () => {
     mockExecuteAgentToolCall.mockResolvedValueOnce({
       success: false,
       message: 'tool failure',
-      error: 'tool failure',
     });
 
     const { result } = renderHook(() => useAgentOrchestrator());

@@ -165,6 +165,76 @@ describe('eventBus', () => {
     expect(setItem).not.toHaveBeenCalled();
     setItem.mockRestore();
   });
+
+  it('catches and logs errors from type-specific listeners', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failingHandler = vi.fn(() => {
+      throw new Error('Handler failed');
+    });
+
+    const unsubscribe = eventBus.subscribe('TEXT_CHANGED', failingHandler);
+    emitTextChanged(10, 1);
+
+    expect(failingHandler).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[EventBus] Listener error'),
+      expect.any(Error)
+    );
+
+    unsubscribe();
+    errorSpy.mockRestore();
+  });
+
+  it('catches and logs errors from global listeners', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failingGlobal = vi.fn(() => {
+      throw new Error('Global handler failed');
+    });
+
+    const unsubscribe = eventBus.subscribeAll(failingGlobal);
+    emitCursorMoved(5, null);
+
+    expect(failingGlobal).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[EventBus] Global listener error'),
+      expect.any(Error)
+    );
+
+    unsubscribe();
+    errorSpy.mockRestore();
+  });
+
+  it('handles localStorage errors gracefully on persist', () => {
+    enableEventPersistence();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Storage full');
+    });
+
+    emitTextChanged(1, 1);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[EventBus] Failed to persist'),
+      expect.any(Error)
+    );
+
+    setItem.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('handles malformed JSON in localStorage gracefully', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('not valid json');
+
+    enableEventPersistence();
+    // The loadChangeLog is called at module init, but we can verify
+    // the change log still works even with bad data
+    const log = eventBus.getChangeLog(5);
+    expect(Array.isArray(log)).toBe(true);
+
+    getItem.mockRestore();
+    warnSpy.mockRestore();
+  });
 });
 
 // Helper to avoid linter noise inside tests

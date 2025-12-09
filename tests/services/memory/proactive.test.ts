@@ -139,6 +139,22 @@ describe('Proactive Memory Suggestions', () => {
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('John');
     });
+
+    it('respects monitoringEnabled flag and filters disabled watched entities', async () => {
+      vi.mocked(db.watchedEntities.toArray).mockResolvedValue([
+        { id: 'w1', name: 'John', projectId: mockProjectId, priority: 'high', monitoringEnabled: false, createdAt: Date.now() },
+        { id: 'w2', name: 'Sarah', projectId: mockProjectId, priority: 'medium', createdAt: Date.now() },
+      ]);
+
+      const result = await getWatchedEntitiesInChapter(mockProjectId, {
+        chapterId: 'ch1',
+        chapterTitle: 'Chapter 1',
+        mentionedEntities: ['john', 'sarah'],
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Sarah');
+    });
   });
 
   describe('getRelatedMemories', () => {
@@ -222,6 +238,30 @@ describe('Proactive Memory Suggestions', () => {
       expect(memorySuggestions.length).toBeGreaterThanOrEqual(0);
     });
 
+    it('skips low-importance observation memories', async () => {
+      vi.mocked(searchMemoriesByTags).mockResolvedValue([
+        {
+          id: 'mem2',
+          text: 'Minor note',
+          type: 'observation' as const,
+          scope: 'project' as const,
+          projectId: mockProjectId,
+          topicTags: ['character:john'],
+          importance: 0.3,
+          createdAt: Date.now(),
+        },
+      ]);
+
+      const suggestions = await generateSuggestionsForChapter(mockProjectId, {
+        chapterId: 'ch1',
+        chapterTitle: 'Chapter 1',
+        content: 'John appears.',
+      });
+
+      const memorySuggestions = suggestions.filter(s => s.type === 'related_memory');
+      expect(memorySuggestions.length).toBe(0);
+    });
+
     it('generates suggestions for relevant goals', async () => {
       vi.mocked(getGoalsCached).mockResolvedValue([
         {
@@ -243,6 +283,29 @@ describe('Proactive Memory Suggestions', () => {
 
       const goalSuggestions = suggestions.filter(s => s.type === 'active_goal');
       expect(goalSuggestions.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('does not create goal suggestions when no relevance', async () => {
+      vi.mocked(getGoalsCached).mockResolvedValue([
+        {
+          id: 'goal2',
+          projectId: mockProjectId,
+          title: 'Unrelated goal',
+          description: 'Nothing about chapter',
+          status: 'active',
+          progress: 50,
+          createdAt: Date.now() - 1000,
+        },
+      ]);
+
+      const suggestions = await generateSuggestionsForChapter(mockProjectId, {
+        chapterId: 'ch1',
+        chapterTitle: 'Chapter 1',
+        content: 'No overlapping terms.',
+      });
+
+      const goalSuggestions = suggestions.filter(s => s.type === 'active_goal');
+      expect(goalSuggestions.length).toBe(0);
     });
 
     it('sorts suggestions by priority', async () => {
@@ -327,6 +390,23 @@ describe('Proactive Memory Suggestions', () => {
 
       const stalledGoals = reminders.filter(r => r.title.includes('Stalled goal'));
       expect(stalledGoals.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('returns empty when no issues or stalled goals qualify', async () => {
+      vi.mocked(getMemoriesCached).mockResolvedValue([]);
+      vi.mocked(getGoalsCached).mockResolvedValue([
+        {
+          id: 'goal-ok',
+          projectId: mockProjectId,
+          title: 'Fresh goal',
+          status: 'active',
+          progress: 80,
+          createdAt: Date.now(),
+        },
+      ]);
+
+      const reminders = await getImportantReminders(mockProjectId);
+      expect(reminders).toHaveLength(0);
     });
   });
 });

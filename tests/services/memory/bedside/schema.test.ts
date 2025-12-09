@@ -131,6 +131,38 @@ describe('BedsideNoteMutationSchema', () => {
       
       expect(() => BedsideNoteMutationSchema.parse(input)).toThrow();
     });
+
+    it('accepts goal with all optional fields', () => {
+      const input = {
+        section: 'activeGoals',
+        action: 'set',
+        content: {
+          title: 'Complete goal',
+          progress: 75,
+          status: 'active',
+          note: 'In progress',
+          updatedAt: Date.now(),
+        },
+      };
+      
+      const result = BedsideNoteMutationSchema.parse(input);
+      const goal = result.content[0] as { status?: string; note?: string };
+      expect(goal.status).toBe('active');
+      expect(goal.note).toBe('In progress');
+    });
+
+    it('accepts goal with only required title', () => {
+      const input = {
+        section: 'activeGoals',
+        action: 'set',
+        content: { title: 'Minimal goal' },
+      };
+      
+      const result = BedsideNoteMutationSchema.parse(input);
+      const goal = result.content[0] as { title: string; progress?: number };
+      expect(goal.title).toBe('Minimal goal');
+      expect(goal.progress).toBeUndefined();
+    });
   });
 
   describe('action types', () => {
