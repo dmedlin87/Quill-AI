@@ -45,7 +45,11 @@ import { ChatInterface } from '@/features/agent/components/ChatInterface';
 import { DEFAULT_PERSONAS } from '@/types/personas';
 import { EditorContext } from '@/types';
 import { clearSessionMemories } from '@/services/memory/sessionTracker';
-import { getMemoriesForContext } from '@/services/memory';
+import {
+  getMemoriesForContext,
+  formatMemoriesForPrompt,
+  formatGoalsForPrompt,
+} from '@/services/memory';
 
 const baseContext: EditorContext = {
   cursorPosition: 0,
@@ -66,10 +70,11 @@ const typeAndSend = async (text: string) => {
     input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
     const sendButton = screen.getAllByRole('button').at(-1);
 
-    expect(sendButton).toBeTruthy();
+    // STRICT: Verify button exists before clicking
+    if (!sendButton) throw new Error('Send button not found');
 
     fireEvent.change(input!, { target: { value: text } });
-    fireEvent.click(sendButton!);
+    fireEvent.click(sendButton);
   });
 
   return input!;
@@ -454,6 +459,40 @@ describe('ChatInterface', () => {
     });
   });
 
+  it('builds memory context placeholder when formatting returns empty', async () => {
+    vi.mocked(formatMemoriesForPrompt).mockReturnValueOnce('');
+    vi.mocked(formatGoalsForPrompt).mockReturnValueOnce('');
+
+    render(<ChatInterface {...baseProps} projectId="p1" />);
+
+    await waitFor(() => {
+      expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+    });
+
+    const firstCall = (mockCreateAgentSession.mock.calls as any[])[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) throw new Error('QuillAgent not initialized');
+    const [args] = firstCall as [ { memoryContext: string } ];
+    expect(args.memoryContext).toBe('[AGENT MEMORY]\n(No stored memories yet.)\n');
+  });
+
+  it('appends formatted goals to memory context when available', async () => {
+    vi.mocked(formatMemoriesForPrompt).mockReturnValueOnce('### Notes');
+    vi.mocked(formatGoalsForPrompt).mockReturnValueOnce('### Goals');
+
+    render(<ChatInterface {...baseProps} projectId="proj-123" />);
+
+    await waitFor(() => {
+      expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+    });
+
+    const firstCall = (mockCreateAgentSession.mock.calls as any[])[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) throw new Error('QuillAgent not initialized');
+    const [args] = firstCall as [ { memoryContext: string } ];
+    expect(args.memoryContext).toBe('[AGENT MEMORY]\n### Notes\n\n### Goals\n');
+  });
+
   it('aborts initialization effects when unmounted', async () => {
     const { unmount } = render(<ChatInterface {...baseProps} />);
 
@@ -514,6 +553,24 @@ describe('ChatInterface', () => {
 
     await waitFor(() => {
       expect(clearSessionMemories).toHaveBeenCalled();
+    });
+  });
+
+  it('clears session memories again when persona changes', async () => {
+    mockSendMessage.mockResolvedValue({ text: 'init', functionCalls: [] });
+
+    render(<ChatInterface {...baseProps} />);
+
+    await waitFor(() => {
+      expect(clearSessionMemories).toHaveBeenCalledTimes(1);
+    });
+
+    const personaButton = await screen.findByTitle(`Current: ${DEFAULT_PERSONAS[0].name}`);
+    fireEvent.click(personaButton);
+    fireEvent.click(await screen.findByText(DEFAULT_PERSONAS[1].name));
+
+    await waitFor(() => {
+      expect(clearSessionMemories).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -602,7 +659,7 @@ describe('ChatInterface', () => {
     const input = await screen.findByPlaceholderText(/Type \/ to use tools/i);
     const sendButton = screen.getAllByRole('button').at(-1);
 
-    expect(sendButton).toBeTruthy();
+    expect(sendButton).not.toBeNull();
 
     fireEvent.change(input, { target: { value: '   ' } });
     fireEvent.click(sendButton!);

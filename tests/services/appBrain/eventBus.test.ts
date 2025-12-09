@@ -241,3 +241,234 @@ describe('eventBus', () => {
 const emitPanelSwitch = () => {
   eventBus.emit({ type: 'PANEL_SWITCHED', payload: { panel: 'chat' }, timestamp: Date.now() });
 };
+
+describe('eventBus branch coverage', () => {
+  beforeEach(() => {
+    disableEventPersistence();
+    (eventBus as any).dispose?.();
+    (eventBus as any).clearHistory();
+    (eventBus as any).clearPersistentLog();
+  });
+
+  afterEach(() => {
+    (eventBus as any).dispose?.();
+    enableEventPersistence();
+  });
+
+  describe('formatEvent branches', () => {
+    it('formats COMMENT_ADDED event', () => {
+      eventBus.emit({
+        type: 'COMMENT_ADDED',
+        payload: { comment: { issue: 'This is a very long issue description that exceeds thirty characters' } as any },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Comment added:');
+      expect(formatted).toContain('...');
+    });
+
+    it('formats INTELLIGENCE_UPDATED event', () => {
+      eventBus.emit({
+        type: 'INTELLIGENCE_UPDATED',
+        payload: { tier: 'full' },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Intelligence updated (full)');
+    });
+
+    it('formats TEXT_CHANGED with negative delta (removed)', () => {
+      eventBus.emit({
+        type: 'TEXT_CHANGED',
+        payload: { length: 50, delta: -10 },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Text removed');
+      expect(formatted).toContain('10 chars');
+    });
+
+    it('formats TEXT_CHANGED with positive delta (added)', () => {
+      eventBus.emit({
+        type: 'TEXT_CHANGED',
+        payload: { length: 60, delta: 10 },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Text added');
+      expect(formatted).toContain('10 chars');
+    });
+
+    it('formats ANALYSIS_COMPLETED with error status', () => {
+      eventBus.emit({
+        type: 'ANALYSIS_COMPLETED',
+        payload: { section: 'chapter-1', status: 'error', detail: 'Parse failed' },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Analysis failed');
+      expect(formatted).toContain('Parse failed');
+    });
+
+    it('formats ANALYSIS_COMPLETED without detail', () => {
+      eventBus.emit({
+        type: 'ANALYSIS_COMPLETED',
+        payload: { section: 'chapter-2', status: 'success' },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Analysis complete');
+      expect(formatted).toContain('chapter-2');
+    });
+
+    it('formats CURSOR_MOVED without scene', () => {
+      emitCursorMoved(100, null);
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Cursor at position 100');
+      expect(formatted).not.toContain('scene');
+    });
+
+    it('formats CURSOR_MOVED with scene', () => {
+      emitCursorMoved(200, 'dialogue');
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Cursor at position 200');
+      expect(formatted).toContain('(dialogue scene)');
+    });
+
+    it('formats SELECTION_CHANGED with short text', () => {
+      emitSelectionChanged('Short text', 0, 10);
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Selected: "Short text"');
+      expect(formatted).not.toContain('...');
+    });
+
+    it('formats SELECTION_CHANGED with long text (truncated)', () => {
+      const longText = 'This is a very long selected text that exceeds thirty characters';
+      emitSelectionChanged(longText, 0, longText.length);
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Selected:');
+      expect(formatted).toContain('...');
+    });
+
+    it('formats CHAPTER_CHANGED event', () => {
+      eventBus.emit({
+        type: 'CHAPTER_CHANGED',
+        payload: { projectId: 'p1', chapterId: 'c1', title: 'My Chapter' },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Moved to chapter "My Chapter"');
+    });
+
+    it('formats TOOL_EXECUTED with failure', () => {
+      emitToolExecuted('apply_edit', false);
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Tool "apply_edit" failed');
+    });
+
+    it('formats ZEN_MODE_TOGGLED disabled', () => {
+      emitZenModeToggled(false as any);
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('Zen mode disabled');
+    });
+  });
+
+  describe('subscribeForOrchestrator branches', () => {
+    it('replays all events when types not specified', () => {
+      enableEventPersistence();
+      emitTextChanged(10, 1);
+      emitCursorMoved(5, null);
+      disableEventPersistence();
+
+      const handler = vi.fn();
+      const unsubscribe = eventBus.subscribeForOrchestrator(handler, { replay: true });
+
+      expect(handler).toHaveBeenCalledTimes(2);
+      unsubscribe();
+    });
+
+    it('filters events by types when specified', () => {
+      enableEventPersistence();
+      emitTextChanged(10, 1);
+      emitCursorMoved(5, null);
+      disableEventPersistence();
+
+      const handler = vi.fn();
+      const unsubscribe = eventBus.subscribeForOrchestrator(handler, {
+        types: ['CURSOR_MOVED'],
+        replay: true,
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      unsubscribe();
+    });
+
+    it('does not replay when replay is false', () => {
+      enableEventPersistence();
+      emitTextChanged(10, 1);
+      disableEventPersistence();
+
+      const handler = vi.fn();
+      const unsubscribe = eventBus.subscribeForOrchestrator(handler, { replay: false });
+
+      expect(handler).not.toHaveBeenCalled();
+
+      // But should receive new events
+      emitCursorMoved(20, null);
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      unsubscribe();
+    });
+  });
+
+  describe('persistence edge cases', () => {
+    it('loads empty array when localStorage returns null', () => {
+      const getItem = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+      enableEventPersistence();
+
+      const log = eventBus.getChangeLog();
+      expect(Array.isArray(log)).toBe(true);
+
+      getItem.mockRestore();
+    });
+
+    it('handles non-array JSON gracefully', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const getItem = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('{}');
+
+      enableEventPersistence();
+      const log = eventBus.getChangeLog();
+      expect(Array.isArray(log)).toBe(true);
+
+      getItem.mockRestore();
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('history bounds', () => {
+    it('trims history when exceeding MAX_HISTORY', () => {
+      for (let i = 0; i < 150; i++) {
+        emitCursorMoved(i, null);
+      }
+
+      const history = eventBus.getRecentEvents(200);
+      expect(history.length).toBeLessThanOrEqual(100);
+    });
+
+    it('trims change log when exceeding MAX_CHANGE_LOG', () => {
+      enableEventPersistence();
+      for (let i = 0; i < 550; i++) {
+        emitCursorMoved(i, null);
+      }
+
+      const log = eventBus.getChangeLog(1000);
+      expect(log.length).toBeLessThanOrEqual(500);
+    });
+  });
+});

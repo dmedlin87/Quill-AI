@@ -1,6 +1,6 @@
 import React, { forwardRef, useImperativeHandle } from 'react';
 import { act, render, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useMagicEditor } from '@/features/editor/hooks/useMagicEditor';
 
 type SelectionRange = {
@@ -60,6 +60,10 @@ describe('useMagicEditor', () => {
     currentText = 'Draft text';
   });
 
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   const renderHarness = (selectionRange: SelectionRange | null = baseSelection) => {
     const ref = React.createRef<ReturnType<typeof useMagicEditor>>();
     render(
@@ -78,7 +82,11 @@ describe('useMagicEditor', () => {
     rewriteTextMock.mockResolvedValue({ result: ['Improved'], usage: { tokens: 1 } });
     const ref = renderHarness();
 
-    await waitFor(() => expect(ref.current).toBeTruthy());
+    // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
     await act(async () => {
       await ref.current?.actions.handleRewrite('Rewrite');
     });
@@ -101,7 +109,11 @@ describe('useMagicEditor', () => {
     rewriteTextMock.mockResolvedValue({ result: ['Improved'], usage: { tokens: 1 } });
     const ref = renderHarness();
 
-    await waitFor(() => expect(ref.current).toBeTruthy());
+    // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
     await act(async () => {
       await ref.current?.actions.handleRewrite('Rewrite');
     });
@@ -119,7 +131,11 @@ describe('useMagicEditor', () => {
   it('returns an error when applying without a captured selection', async () => {
     const ref = renderHarness(null);
 
-    await waitFor(() => expect(ref.current).toBeTruthy());
+    // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
     await act(async () => {
       await ref.current?.actions.applyVariation('Anything');
     });
@@ -132,7 +148,11 @@ describe('useMagicEditor', () => {
     getContextualHelpMock.mockResolvedValue({ result: 'Answer', usage: { tokens: 2 } });
     const ref = renderHarness();
 
-    await waitFor(() => expect(ref.current).toBeTruthy());
+    // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
     await act(async () => {
       await ref.current?.actions.handleHelp('Explain');
     });
@@ -162,7 +182,11 @@ describe('useMagicEditor', () => {
       });
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -194,7 +218,11 @@ describe('useMagicEditor', () => {
       });
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -226,7 +254,11 @@ describe('useMagicEditor', () => {
       });
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -268,7 +300,11 @@ describe('useMagicEditor', () => {
       });
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -301,7 +337,11 @@ describe('useMagicEditor', () => {
       });
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -327,7 +367,11 @@ describe('useMagicEditor', () => {
       });
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -341,7 +385,11 @@ describe('useMagicEditor', () => {
       fetchGrammarSuggestionsMock.mockRejectedValue(new Error('Grammar service unavailable'));
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -368,7 +416,11 @@ describe('useMagicEditor', () => {
       });
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -380,7 +432,11 @@ describe('useMagicEditor', () => {
 
     it('shows error when no grammar suggestion to apply', async () => {
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.applyGrammarSuggestion(null);
@@ -401,7 +457,11 @@ describe('useMagicEditor', () => {
       );
 
       const ref = renderHarness();
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       act(() => {
         ref.current?.actions.handleRewrite('Rewrite');
@@ -422,7 +482,11 @@ describe('useMagicEditor', () => {
       const emptySelection: SelectionRange = { start: 0, end: 3, text: '   ' };
       const ref = renderHarness(emptySelection);
 
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleRewrite('Rewrite');
@@ -435,7 +499,11 @@ describe('useMagicEditor', () => {
       const emptySelection: SelectionRange = { start: 0, end: 3, text: '   ' };
       const ref = renderHarness(emptySelection);
 
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
 
       await act(async () => {
         await ref.current?.actions.handleGrammarCheck();
@@ -450,7 +518,11 @@ describe('useMagicEditor', () => {
       rewriteTextMock.mockResolvedValue({ result: ['Formal version'], usage: { tokens: 1 } });
       const ref = renderHarness();
 
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
       await act(async () => {
         await ref.current?.actions.handleRewrite('Tone Tuner', 'formal');
       });
@@ -471,7 +543,11 @@ describe('useMagicEditor', () => {
       getContextualHelpMock.mockResolvedValue({ result: 'synonym1, synonym2', usage: { tokens: 2 } });
       const ref = renderHarness();
 
-      await waitFor(() => expect(ref.current).toBeTruthy());
+      // STRICT: Verify hook ref is initialized with expected shape
+    await waitFor(() => {
+      expect(ref.current).not.toBeNull();
+      expect(ref.current?.actions).toHaveProperty('handleRewrite');
+    });
       await act(async () => {
         await ref.current?.actions.handleHelp('Thesaurus');
       });
