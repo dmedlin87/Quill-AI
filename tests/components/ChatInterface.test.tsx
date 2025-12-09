@@ -367,6 +367,63 @@ describe('ChatInterface', () => {
     });
   });
 
+  it('toggles deep mode and includes flag in prompt', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      .mockResolvedValueOnce({ text: 'Done.', functionCalls: [] });
+
+    render(<ChatInterface {...baseProps} />);
+
+    const deepButton = await screen.findByTitle('Deep Mode: Enables Voice Analysis.');
+    expect(deepButton).toHaveTextContent(/👻 Deep/);
+
+    fireEvent.click(deepButton);
+    expect(deepButton).toHaveTextContent(/🧠 Deep/);
+
+    await typeAndSend('Deep analyze');
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('[DEEP MODE]: ON'),
+        }),
+      );
+    });
+  });
+
+  it('auto-sends initialMessage and calls onInitialMessageProcessed', async () => {
+    vi.useFakeTimers();
+    mockSendMessage
+      .mockResolvedValueOnce({ text: 'init', functionCalls: [] })
+      .mockResolvedValueOnce({ text: 'Auto reply', functionCalls: [] });
+
+    const onInitialMessageProcessed = vi.fn();
+
+    render(
+      <ChatInterface
+        {...baseProps}
+        initialMessage="Auto-send me"
+        onInitialMessageProcessed={onInitialMessageProcessed}
+      />
+    );
+
+    // Advance the auto-send timer
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Auto-send me'),
+        }),
+      );
+    });
+
+    expect(onInitialMessageProcessed).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   // NEW: User context prompt construction
   it('constructs user context prompt with cursor position and selection', async () => {
     const contextWithSelection: EditorContext = {
