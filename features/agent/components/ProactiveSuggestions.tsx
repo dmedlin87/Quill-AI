@@ -38,6 +38,7 @@ const typeIcons: Record<ProactiveSuggestion['type'], string> = {
   reminder: '⚡',
   lore_discovery: '📖',
   timeline_conflict: '⏳',
+  voice_inconsistency: '🎙️',
 };
 
 const priorityColors: Record<ProactiveSuggestion['priority'], string> = {
@@ -133,6 +134,35 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                 {suggestion.description}
               </p>
 
+              {suggestion.type === 'voice_inconsistency' && (
+                <div className="mt-2 ml-6 rounded-md border border-indigo-100 bg-indigo-50/60 px-2 py-1.5 text-[11px] text-indigo-900">
+                  <div className="font-semibold flex items-center gap-1 text-indigo-700">
+                    <span>🗣️</span>
+                    <span>Voice consistency</span>
+                  </div>
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    <span>
+                      Speaker: <strong>{(suggestion.metadata as any)?.speaker ?? 'Unknown'}</strong>
+                    </span>
+                    <span>
+                      Historic tone: <strong>{(suggestion.metadata as any)?.historicImpression ?? '—'}</strong>
+                    </span>
+                    <span>
+                      Current tone: <strong>{(suggestion.metadata as any)?.currentImpression ?? '—'}</strong>
+                    </span>
+                  </div>
+                  {Array.isArray((suggestion.metadata as any)?.diffs) && (
+                    <ul className="mt-1 list-disc list-inside space-y-0.5 text-indigo-800">
+                      {(suggestion.metadata as any).diffs.slice(0, 3).map((diff: any, index: number) => (
+                        <li key={`${suggestion.id}-diff-${index}`}>
+                          {diff.label}: {(diff.current as number).toFixed(2)} vs {(diff.historic as number).toFixed(2)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
               {suggestion.type === 'timeline_conflict' && (
                 <div className="mt-2 ml-6 rounded-md border border-rose-100 bg-rose-50/60 px-2 py-1.5 text-[11px] text-rose-800">
                   <div className="font-semibold flex items-center gap-1 text-rose-700">
@@ -183,7 +213,7 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                     className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
                     aria-label={`Take action on suggestion: ${suggestion.title}`}
                   >
-                    Details →
+                    {suggestion.type === 'voice_inconsistency' ? 'Rephrase' : 'Details →'}
                   </button>
                 )}
                 <button

@@ -26,7 +26,8 @@ export type SuggestionType =
   | 'style'
   | 'continuity'
   | 'lore_discovery'
-  | 'timeline_conflict';
+  | 'timeline_conflict'
+  | 'voice_inconsistency';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CORE STATE

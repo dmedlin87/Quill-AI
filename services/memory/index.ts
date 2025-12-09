@@ -16,6 +16,7 @@ import type {
 export * from './memoryService';
 export * from './memoryQueries';
 export * from './memoryScoring';
+export * from './voiceProfiles';
 
 // Re-export types for convenience
 export * from './types';

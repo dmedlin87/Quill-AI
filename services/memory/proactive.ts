@@ -21,7 +21,14 @@ import { db } from '../db';
 
 export interface ProactiveSuggestion {
   id: string;
-  type: 'watched_entity' | 'related_memory' | 'active_goal' | 'reminder' | 'lore_discovery' | 'timeline_conflict';
+  type:
+    | 'watched_entity'
+    | 'related_memory'
+    | 'active_goal'
+    | 'reminder'
+    | 'lore_discovery'
+    | 'timeline_conflict'
+    | 'voice_inconsistency';
   priority: 'high' | 'medium' | 'low';
   title: string;
   description: string;
