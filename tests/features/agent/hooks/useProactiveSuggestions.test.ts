@@ -81,4 +81,94 @@ describe('useProactiveSuggestions', () => {
 
     expect(result.current.suggestions).toEqual([]);
   });
+
+  it('handles getReminders errors gracefully', async () => {
+    mocks.reminders.mockRejectedValueOnce(new Error('Network error'));
+
+    const { result } = renderHook(() =>
+      useProactiveSuggestions({ projectId: 'p1' })
+    );
+
+    await act(async () => {
+      const reminders = await result.current.getReminders();
+      expect(reminders).toEqual([]);
+    });
+  });
+
+  it('handles checkForSuggestions errors gracefully', async () => {
+    mocks.generate.mockRejectedValueOnce(new Error('Generation failed'));
+
+    const { result } = renderHook(() =>
+      useProactiveSuggestions({ projectId: 'p1' })
+    );
+
+    await act(async () => {
+      await result.current.checkForSuggestions('c1', 'Chapter 1');
+    });
+
+    // Should not crash, suggestions should be empty
+    expect(result.current.suggestions).toEqual([]);
+  });
+
+  it('responds to CHAPTER_SWITCHED events', async () => {
+    let eventCallback: ((event: any) => void) | null = null;
+    mocks.subscribe.mockImplementation((eventType: string, callback: any) => {
+      if (eventType === 'CHAPTER_SWITCHED') {
+        eventCallback = callback;
+      }
+      return () => {};
+    });
+
+    const { result } = renderHook(() =>
+      useProactiveSuggestions({ projectId: 'p1' })
+    );
+
+    // Simulate chapter switch event
+    if (eventCallback) {
+      await act(async () => {
+        await eventCallback!({
+          type: 'CHAPTER_SWITCHED',
+          payload: { chapterId: 'ch-2', title: 'Chapter 2' },
+          timestamp: Date.now(),
+        });
+      });
+    }
+
+    expect(mocks.generate).toHaveBeenCalledWith('p1', {
+      chapterId: 'ch-2',
+      chapterTitle: 'Chapter 2',
+      content: undefined,
+    });
+  });
+
+  it('returns empty reminders when no projectId', async () => {
+    const { result } = renderHook(() =>
+      useProactiveSuggestions({ projectId: null })
+    );
+
+    await act(async () => {
+      const reminders = await result.current.getReminders();
+      expect(reminders).toEqual([]);
+    });
+
+    expect(mocks.reminders).not.toHaveBeenCalled();
+  });
+
+  it('dismissAll clears all suggestions and timers', async () => {
+    const { result } = renderHook(() =>
+      useProactiveSuggestions({ projectId: 'p1', autoDismissMs: 10000 })
+    );
+
+    await act(async () => {
+      await result.current.checkForSuggestions('c1', 'Chapter 1');
+    });
+
+    expect(result.current.suggestions).toHaveLength(2);
+
+    act(() => {
+      result.current.dismissAll();
+    });
+
+    expect(result.current.suggestions).toEqual([]);
+  });
 });

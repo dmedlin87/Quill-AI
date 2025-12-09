@@ -30,6 +30,19 @@ function getEnvVar(name: string): string | undefined {
  * In production, this should be replaced with a secure key retrieval mechanism.
  */
 export function getApiKey(): string {
+  // Test override to allow isolation from real env keys
+  const testOverride = getEnvVar('TEST_API_KEY_OVERRIDE');
+  if (testOverride !== undefined) {
+    const trimmed = testOverride.trim();
+    if (!trimmed && !hasWarnedMissingKey) {
+      hasWarnedMissingKey = true;
+      console.warn(
+        '[Quill AI] No API key configured. Set GEMINI_API_KEY in your environment.'
+      );
+    }
+    return trimmed;
+  }
+
   const key =
     getEnvVar('API_KEY') ||
     getEnvVar('GEMINI_API_KEY') ||

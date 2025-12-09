@@ -34,4 +34,13 @@ describe('config/models', () => {
     expect(getModelPricing('gemini-1.5-pro')).toEqual({ inputPrice: 1.25, outputPrice: 5.0 });
     expect(getModelPricing('missing-model')).toBeNull();
   });
+
+  it('provides pro and flash aliases for backwards compatibility', async () => {
+    delete process.env.VITE_MODEL_BUILD;
+    const { ModelConfig } = await import('@/config/models');
+
+    // pro is alias for analysis, flash is alias for agent
+    expect(ModelConfig.pro).toBe(ModelConfig.analysis);
+    expect(ModelConfig.flash).toBe(ModelConfig.agent);
+  });
 });

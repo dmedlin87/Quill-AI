@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getApiKey, validateApiKey, estimateTokens, ApiDefaults } from '@/config/api';
+import { validateApiKey, estimateTokens, ApiDefaults } from '@/config/api';
 
 describe('validateApiKey', () => {
   it('returns error for empty key', () => {
@@ -93,29 +93,94 @@ describe('ApiDefaults', () => {
 });
 
 describe('getApiKey', () => {
+  const originalEnv = { ...process.env };
+  const originalImportMeta = (globalThis as any).import?.meta;
+
+  beforeEach(() => {
+    vi.resetModules();
+    // Start from a clean env to avoid leaking real keys into tests
+    for (const key of Object.keys(process.env)) {
+      delete (process.env as any)[key];
+    }
+    delete (process.env as any).TEST_API_KEY_OVERRIDE;
+    (globalThis as any).import = { meta: { env: {} } };
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      delete (process.env as any)[key];
+    }
+    Object.assign(process.env, originalEnv);
+    if (originalImportMeta) {
+      (globalThis as any).import = { meta: { ...originalImportMeta } };
+    } else {
+      delete (globalThis as any).import;
+    }
+  });
+
   it('returns key from environment when available', () => {
-    // Test that getApiKey returns the test key from setup.ts
-    const key = getApiKey();
-    // Should return either the test key or the real key from .env
-    expect(key.length).toBeGreaterThan(0);
+    process.env.API_KEY = 'from-env';
+    return import('@/config/api').then(({ getApiKey }) => {
+      const key = getApiKey();
+      expect(key).toBe('from-env');
+    });
   });
 
   it('logs warning only once for missing key', () => {
-    // This tests the warning behavior by checking console.warn is called
-    // when the module determines no key is set. Since we can't fully clear
-    // import.meta.env in Vitest, we verify the warning mechanism exists.
     const consoleSpy = vi.spyOn(console, 'warn');
-    
-    // The warning should only be emitted once per module load
-    // Even calling getApiKey multiple times shouldn't produce multiple warnings
-    getApiKey();
-    getApiKey();
-    
-    // Count should be 0 or 1, not more (the hasWarnedMissingKey flag)
-    expect(consoleSpy.mock.calls.filter(c => 
-      String(c[0]).includes('No API key configured')
-    ).length).toBeLessThanOrEqual(1);
-    
-    consoleSpy.mockRestore();
+    process.env.TEST_API_KEY_OVERRIDE = ' '; // trigger warning path
+
+    return import('@/config/api').then(({ getApiKey }) => {
+      getApiKey();
+      getApiKey();
+
+      const warningCalls = consoleSpy.mock.calls.filter(c =>
+        String(c[0]).includes('No API key configured')
+      );
+      expect(warningCalls.length).toBeLessThanOrEqual(1);
+      consoleSpy.mockRestore();
+    });
+  });
+
+  it('prefers API_KEY over GEMINI_API_KEY and trims whitespace', async () => {
+    process.env.API_KEY = '  primary-key  ';
+    process.env.GEMINI_API_KEY = 'secondary-key';
+
+    const { getApiKey } = await import('@/config/api');
+    const key = getApiKey();
+
+    expect(key).toBe('primary-key');
+  });
+
+  it('falls back to GEMINI_API_KEY without warning when API_KEY missing', async () => {
+    delete process.env.API_KEY;
+    process.env.GEMINI_API_KEY = 'gem-key';
+    const warnSpy = vi.spyOn(console, 'warn');
+
+    const { getApiKey: freshGetApiKey } = await import('@/config/api');
+    const key = freshGetApiKey();
+
+    expect(key).toBe('gem-key');
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('uses VITE_GEMINI_API_KEY when other env keys are missing', async () => {
+    process.env.VITE_GEMINI_API_KEY = 'vite-key';
+
+    const { getApiKey } = await import('@/config/api');
+    const key = getApiKey();
+
+    expect(key).toBe('vite-key');
+  });
+
+  it('warns once and returns empty string when no keys are set', async () => {
+    process.env.TEST_API_KEY_OVERRIDE = ' ';
+    const warnSpy = vi.spyOn(console, 'warn');
+
+    const { getApiKey } = await import('@/config/api');
+    const key = getApiKey();
+    expect(key).toBe('');
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0][0])).toContain('No API key configured');
   });
 });

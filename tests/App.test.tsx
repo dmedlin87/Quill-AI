@@ -50,6 +50,12 @@ import App from '@/App';
 import { useProjectStore } from '@/features/project';
 
 const mockUseProjectStore = useProjectStore as unknown as Mock;
+const setDocumentVisibilityState = (value: DocumentVisibilityState) => {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value,
+  });
+};
 
 describe('App', () => {
   let store: ReturnType<typeof mockUseProjectStore>;
@@ -69,6 +75,7 @@ describe('App', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    setDocumentVisibilityState('visible');
   });
 
   it('initializes the project store and renders layout when ready', () => {
@@ -98,10 +105,7 @@ describe('App', () => {
 
     render(<App />);
 
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      value: 'hidden',
-    });
+    setDocumentVisibilityState('hidden');
 
     fireEvent(document, new Event('visibilitychange'));
     fireEvent(window, new Event('beforeunload'));
@@ -110,5 +114,77 @@ describe('App', () => {
 
     expect(flushPendingWrites).toHaveBeenCalledWith({ keepAlive: true, reason: 'visibilitychange' });
     expect(flushPendingWrites).toHaveBeenCalledWith({ keepAlive: true, reason: 'beforeunload' });
+  });
+
+  it('logs info when pending writes flush successfully', async () => {
+    const flushPendingWrites = vi.fn().mockResolvedValue({ pendingCount: 2, errors: [] });
+    mockUseProjectStore.mockReturnValue({
+      ...baseStore,
+      flushPendingWrites,
+    } as any);
+
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    render(<App />);
+
+    setDocumentVisibilityState('hidden');
+    fireEvent(document, new Event('visibilitychange'));
+
+    await waitFor(() => expect(flushPendingWrites).toHaveBeenCalled());
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[App] Flushed 2 pending writes during visibilitychange'),
+    );
+
+    infoSpy.mockRestore();
+  });
+
+  it('logs errors when pending writes flush returns failures', async () => {
+    const error = new Error('oops');
+    const flushPendingWrites = vi.fn().mockResolvedValue({ pendingCount: 1, errors: [error] });
+    mockUseProjectStore.mockReturnValue({
+      ...baseStore,
+      flushPendingWrites,
+    } as any);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<App />);
+
+    setDocumentVisibilityState('hidden');
+    fireEvent(document, new Event('visibilitychange'));
+
+    await waitFor(() => expect(flushPendingWrites).toHaveBeenCalled());
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[App] Failed to flush 1 pending writes during visibilitychange'),
+      [error],
+    );
+
+    errorSpy.mockRestore();
+  });
+
+  it('logs unexpected errors when flushing pending writes throws', async () => {
+    const error = new Error('boom');
+    const flushPendingWrites = vi.fn().mockRejectedValue(error);
+    mockUseProjectStore.mockReturnValue({
+      ...baseStore,
+      flushPendingWrites,
+    } as any);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<App />);
+
+    fireEvent(window, new Event('beforeunload'));
+
+    await waitFor(() => expect(flushPendingWrites).toHaveBeenCalled());
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[App] Unexpected error while flushing pending writes during beforeunload'),
+      error,
+    );
+
+    errorSpy.mockRestore();
   });
 });

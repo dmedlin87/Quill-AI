@@ -3,6 +3,7 @@ import {
   isMemoryTool, 
   executeMemoryTool, 
   getMemoryToolNames,
+  withMemoryTools,
 } from '@/services/gemini/memoryToolHandlers';
 
 // Mock the memory service
@@ -291,6 +292,57 @@ describe('memoryToolHandlers', () => {
       it('returns null for unknown tools', async () => {
         const result = await executeMemoryTool('unknown_tool', {}, mockContext);
         expect(result).toBeNull();
+      });
+    });
+
+    describe('withMemoryTools', () => {
+      it('routes memory tools when a project is loaded', async () => {
+        const existingHandler = vi.fn(async () => 'fallback');
+        const getProjectId = vi.fn(() => 'test-project');
+
+        const handler = withMemoryTools(existingHandler, getProjectId);
+
+        const result = await handler('write_memory_note', {
+          text: 'Test memory routed via wrapper',
+          type: 'observation',
+          scope: 'project',
+        });
+
+        expect(getProjectId).toHaveBeenCalledTimes(1);
+        expect(existingHandler).not.toHaveBeenCalled();
+        expect(result).toContain('Memory saved');
+      });
+
+      it('returns an error when no project is loaded for memory tools', async () => {
+        const existingHandler = vi.fn(async () => 'fallback');
+        const getProjectId = vi.fn(() => null);
+
+        const handler = withMemoryTools(existingHandler, getProjectId);
+
+        const result = await handler('write_memory_note', {
+          text: 'Should fail due to missing project',
+          type: 'observation',
+          scope: 'project',
+        });
+
+        expect(existingHandler).not.toHaveBeenCalled();
+        expect(result).toContain('Error: No project loaded');
+      });
+
+      it('delegates non-memory tools to the existing handler', async () => {
+        const existingHandler = vi.fn(async () => 'delegated-result');
+        const getProjectId = vi.fn(() => 'test-project');
+
+        const handler = withMemoryTools(existingHandler, getProjectId);
+
+        const result = await handler('navigate_to_text', {
+          query: 'something',
+        });
+
+        expect(getProjectId).not.toHaveBeenCalled();
+        expect(existingHandler).toHaveBeenCalledTimes(1);
+        expect(existingHandler).toHaveBeenCalledWith('navigate_to_text', { query: 'something' });
+        expect(result).toBe('delegated-result');
       });
     });
   });

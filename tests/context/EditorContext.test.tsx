@@ -3,14 +3,39 @@
  * Covers editor state, selection, branching, and comments
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+const {
+  emitCursorMoved,
+  emitEditMade,
+  emitSelectionChanged,
+  emitTextChanged,
+  emitZenModeToggled,
+} = vi.hoisted(() => ({
+  emitCursorMoved: vi.fn(),
+  emitEditMade: vi.fn(),
+  emitSelectionChanged: vi.fn(),
+  emitTextChanged: vi.fn(),
+  emitZenModeToggled: vi.fn(),
+}));
+
+vi.mock('@/services/appBrain', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appBrain')>('@/services/appBrain');
+
+  return {
+    ...actual,
+    emitCursorMoved,
+    emitEditMade,
+    emitSelectionChanged,
+    emitTextChanged,
+    emitZenModeToggled,
+  };
+});
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 
 // Unmock EditorContext since this test needs the real implementation
 vi.unmock('@/features/core/context/EditorContext');
 
-import { EditorProvider, useEditor } from '@/features/core/context/EditorContext';
+import { EditorProvider, useEditor, useEditorState, useEditorActions } from '@/features/core/context/EditorContext';
 
 // Mock useProjectStore
 const mockGetActiveChapter = vi.fn(() => ({
@@ -87,6 +112,46 @@ describe('EditorContext', () => {
       
       expect(result.current).toBeDefined();
       expect(result.current.currentText).toBe('Current text content');
+    });
+  });
+
+  describe('selector hooks', () => {
+    it('useEditorState throws when used outside provider', () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() => {
+        renderHook(() => useEditorState());
+      }).toThrow('useEditorState must be used within an EditorProvider');
+
+      consoleSpy.mockRestore();
+    });
+
+    it('useEditorActions throws when used outside provider', () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() => {
+        renderHook(() => useEditorActions());
+      }).toThrow('useEditorActions must be used within an EditorProvider');
+
+      consoleSpy.mockRestore();
+    });
+
+    it('useEditorState provides subset of state inside provider', () => {
+      const { result } = renderHook(() => useEditorState(), { wrapper });
+
+      expect(result.current.currentText).toBe('Current text content');
+      expect(result.current.canUndo).toBe(true);
+      expect(result.current.canRedo).toBe(false);
+    });
+
+    it('useEditorActions exposes editing actions inside provider', () => {
+      const { result } = renderHook(() => useEditorActions(), { wrapper });
+
+      act(() => {
+        result.current.updateText('Other text');
+      });
+
+      expect(mockUpdateText).toHaveBeenCalledWith('Other text');
     });
   });
 
@@ -194,6 +259,7 @@ describe('EditorContext', () => {
       
       expect(result.current.selectionRange).toEqual({ start: 10, end: 20, text: 'selected' });
       expect(result.current.selectionPos).toEqual({ top: 100, left: 50 });
+      expect(emitSelectionChanged).toHaveBeenCalledWith('selected', 10, 20);
     });
 
     it('clears selection', () => {
@@ -214,6 +280,32 @@ describe('EditorContext', () => {
       
       expect(result.current.selectionRange).toBeNull();
       expect(result.current.selectionPos).toBeNull();
+    });
+  });
+
+  describe('Side effects & events', () => {
+    it('emits cursor move on mount', () => {
+      renderHook(() => useEditor(), { wrapper });
+      expect(emitCursorMoved).toHaveBeenCalledWith(0, null);
+    });
+
+    it('emits text and edit events and toggles zen mode', () => {
+      const { result } = renderHook(() => useEditor(), { wrapper });
+
+      act(() => {
+        result.current.updateText('Short');
+      });
+      expect(emitTextChanged).toHaveBeenCalledWith(5, 5 - 'Current text content'.length);
+
+      act(() => {
+        result.current.commit('Committed text', 'desc', 'Agent');
+      });
+      expect(emitEditMade).toHaveBeenCalledWith('agent', 'desc');
+
+      act(() => {
+        result.current.toggleZenMode();
+      });
+      expect(emitZenModeToggled).toHaveBeenCalledWith(true);
     });
   });
 

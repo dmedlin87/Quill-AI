@@ -95,12 +95,15 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = React.memo(({
         {activeChapterTitle || 'No Active Chapter'}
       </h2>
       {projectSetting && (
-        <span className="text-[var(--text-xs)] px-2 py-0.5 rounded bg-[var(--magic-100)] text-[var(--magic-500)] font-medium">
-          {projectSetting.timePeriod} 
-          {" "}
-          •
-          {" "}
-          {projectSetting.location}
+        <span
+          className="text-[var(--text-xs)] px-2 py-0.5 rounded bg-[var(--magic-100)] text-[var(--magic-500)] font-medium flex items-center gap-1"
+          title={`${projectSetting.timePeriod} | ${projectSetting.location}`}
+        >
+          <span>{projectSetting.timePeriod}</span>
+          <span aria-hidden className="text-[var(--text-primary)] font-semibold">
+            |
+          </span>
+          <span>{projectSetting.location}</span>
         </span>
       )}
     </div>

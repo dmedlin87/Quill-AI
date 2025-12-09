@@ -65,6 +65,21 @@ describe('BedsideNotePanel', () => {
     mockedGetMemoryChain.mockResolvedValue(baseHistory);
   });
 
+  it('renders guard message when no projectId', () => {
+    render(<BedsideNotePanel projectId={null} goals={[]} />);
+
+    expect(screen.getByText('Select a project to view bedside notes.')).toBeInTheDocument();
+    expect(mockedGetOrCreate).not.toHaveBeenCalled();
+  });
+
+  it('displays error when loading fails', async () => {
+    mockedGetOrCreate.mockRejectedValueOnce(new Error('Network error'));
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+
+    await waitFor(() => expect(screen.getByText('Network error')).toBeInTheDocument());
+  });
+
   it('renders structured sections and allows collapsing', async () => {
     render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
 
@@ -119,6 +134,83 @@ describe('BedsideNotePanel', () => {
     await waitFor(() => expect(mockedGetMemoryChain).toHaveBeenCalled());
     expect(screen.getByText('Conflicts detected')).toBeInTheDocument();
     expect(screen.getByText('Stalled goals')).toBeInTheDocument();
+  });
+
+  it('renders current focus section header', async () => {
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    // Current Focus section header should be visible
+    expect(screen.getByText('Current Focus')).toBeInTheDocument();
+  });
+
+  it('removes an item from a list section', async () => {
+    const updatedNote: MemoryNote = {
+      ...baseNote,
+      structuredContent: { ...baseNote.structuredContent, warnings: [] },
+    };
+    mockedApplyMutation.mockResolvedValue(updatedNote);
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+    expect(screen.getByText('Keep POV consistent')).toBeInTheDocument();
+
+    const removeButton = screen.getByText('Remove');
+    fireEvent.click(removeButton);
+
+    await waitFor(() => expect(mockedApplyMutation).toHaveBeenCalledWith('proj-1', {
+      section: 'warnings',
+      action: 'remove',
+      content: 'Keep POV consistent',
+    }));
+  });
+
+  it('renders active goals section header', async () => {
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    // Active Goals section header should be visible
+    expect(screen.getByText('Active Goals')).toBeInTheDocument();
+  });
+
+  it('shows conflicts notification when conflicts exist', async () => {
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    // Conflicts notification should be visible
+    expect(screen.getByText('Conflicts detected')).toBeInTheDocument();
+  });
+
+  it('handles fallback when structuredContent is empty but note.text exists', async () => {
+    const textOnlyNote: MemoryNote = {
+      ...baseNote,
+      structuredContent: undefined,
+      text: 'Legacy text content',
+    };
+    mockedGetOrCreate.mockResolvedValue(textOnlyNote);
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    // The component should render with the text content
+    expect(screen.getByText('Current Focus')).toBeInTheDocument();
+  });
+
+  it('shows significant update notification when history includes significant changes', async () => {
+    const historyWithSignificant: ChainedMemory[] = [
+      { ...baseHistory[0], changeReason: 'significant_plot_change' },
+    ];
+    mockedGetMemoryChain.mockResolvedValue(historyWithSignificant);
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+
+    await waitFor(() => expect(mockedGetMemoryChain).toHaveBeenCalled());
+    expect(screen.getByText('Significant bedside update')).toBeInTheDocument();
   });
 });
 

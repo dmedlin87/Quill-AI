@@ -11,6 +11,7 @@ import {
   emitAnalysisCompleted,
   emitToolExecuted,
   emitNavigationRequested,
+  emitZenModeToggled,
 } from '@/services/appBrain';
 
 describe('eventBus', () => {
@@ -113,6 +114,38 @@ describe('eventBus', () => {
     // subscribeForOrchestrator replays synchronously
     expect(handler).toHaveBeenCalledTimes(1);
     unsubscribe();
+  });
+
+  it('formats panel and zen mode events correctly', () => {
+    // Panel switched event
+    eventBus.emit({
+      type: 'PANEL_SWITCHED',
+      payload: { panel: 'outline' },
+      timestamp: Date.now(),
+    });
+
+    let formatted = eventBus.formatRecentEventsForAI(1);
+    expect(formatted).toContain('Panel switched to outline');
+
+    // Zen mode toggled event via convenience emitter
+    (eventBus as any).clearHistory();
+    emitZenModeToggled(true as any);
+
+    formatted = eventBus.formatRecentEventsForAI(1);
+    expect(formatted).toContain('Zen mode enabled');
+  });
+
+  it('formats unknown events with a generic label', () => {
+    (eventBus as any).clearHistory();
+
+    eventBus.emit({
+      type: 'SOME_UNKNOWN_EVENT' as any,
+      payload: {} as any,
+      timestamp: Date.now(),
+    });
+
+    const formatted = eventBus.formatRecentEventsForAI(1);
+    expect(formatted).toContain('Unknown event');
   });
 
   it('disposes listeners and clears state', () => {

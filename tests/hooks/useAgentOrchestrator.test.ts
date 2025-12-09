@@ -2,12 +2,33 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAgentOrchestrator } from '@/features/agent/hooks/useAgentOrchestrator';
 
+const createMockSmartContext = () => ({
+  context: 'SMART-CONTEXT',
+  tokenCount: 100,
+  sectionsIncluded: ['manuscript'],
+  sectionsTruncated: [],
+  sectionsOmitted: [],
+  budget: {
+    totalTokens: 8000,
+    sections: {
+      manuscript: 0.2,
+      intelligence: 0.2,
+      analysis: 0.2,
+      memory: 0.2,
+      lore: 0.1,
+      history: 0.1,
+    },
+  },
+});
+
 const {
   mockCreateAgentSession,
   mockSendMessage,
   mockUseAppBrain,
   mockExecuteAgentToolCall,
   mockGetSmartAgentContext,
+  mockEmitToolExecuted,
+  mockEventBus,
   brainValue,
 } = vi.hoisted(() => {
   const mockSendMessage = vi.fn();
@@ -78,24 +99,12 @@ const {
     message: 'tool-ok',
   }));
 
-  const mockGetSmartAgentContext = vi.fn(async () => ({
-    context: 'SMART-CONTEXT',
-    tokenCount: 100,
-    sectionsIncluded: ['manuscript'],
-    sectionsTruncated: [],
-    sectionsOmitted: [],
-    budget: {
-      totalTokens: 8000,
-      sections: {
-        manuscript: 0.2,
-        intelligence: 0.2,
-        analysis: 0.2,
-        memory: 0.2,
-        lore: 0.1,
-        history: 0.1,
-      },
-    },
-  }));
+  const mockGetSmartAgentContext = vi.fn(async () => createMockSmartContext());
+  const mockEmitToolExecuted = vi.fn();
+  const mockEventBus = {
+    getChangeLog: vi.fn(() => []),
+    subscribeForOrchestrator: vi.fn(() => () => {}),
+  };
 
   return {
     mockCreateAgentSession,
@@ -103,6 +112,8 @@ const {
     mockUseAppBrain,
     mockExecuteAgentToolCall,
     mockGetSmartAgentContext,
+    mockEmitToolExecuted,
+    mockEventBus,
     brainValue,
   };
 });
@@ -122,11 +133,8 @@ vi.mock('@/services/gemini/toolExecutor', () => ({
 }));
 
 vi.mock('@/services/appBrain', () => ({
-  emitToolExecuted: vi.fn(),
-  eventBus: {
-    getChangeLog: vi.fn(() => []),
-    subscribeForOrchestrator: vi.fn(() => () => {}),
-  },
+  emitToolExecuted: mockEmitToolExecuted,
+  eventBus: mockEventBus,
   getSmartAgentContext: mockGetSmartAgentContext,
 }));
 
@@ -141,6 +149,17 @@ vi.mock('@/features/settings', () => ({
 describe('useAgentOrchestrator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSendMessage.mockReset();
+    mockCreateAgentSession.mockReset();
+    mockCreateAgentSession.mockImplementation(() => ({
+      sendMessage: mockSendMessage,
+    }));
+    mockExecuteAgentToolCall.mockReset();
+    mockExecuteAgentToolCall.mockResolvedValue({ success: true, message: 'tool-ok' });
+    mockGetSmartAgentContext.mockResolvedValue(createMockSmartContext());
+    mockEmitToolExecuted.mockReset();
+    mockEventBus.getChangeLog.mockReturnValue([]);
+    mockEventBus.subscribeForOrchestrator.mockReturnValue(() => {});
   });
 
   it('initializes session and marks isReady', async () => {
@@ -409,5 +428,102 @@ describe('useAgentOrchestrator', () => {
     expect(texts).not.toContain('First');
     expect(texts).toContain('Second');
     expect(texts).toContain('Reply 2');
+  });
+
+  it('records failed tool executions when the tool call returns an error result', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: '' })
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [{ id: 'call-1', name: 'update_manuscript', args: { foo: 'bar' } }],
+      })
+      .mockResolvedValueOnce({ text: 'After failure' });
+
+    mockExecuteAgentToolCall.mockResolvedValueOnce({
+      success: false,
+      message: 'tool failure',
+      error: 'tool failure',
+    });
+
+    const { result } = renderHook(() => useAgentOrchestrator());
+
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Run a failing tool');
+    });
+
+    await waitFor(() => {
+      expect(result.current.state.lastToolCall).toEqual({
+        name: 'update_manuscript',
+        success: false,
+      });
+    });
+
+    expect(mockEmitToolExecuted).toHaveBeenCalledWith('update_manuscript', false);
+  });
+
+  it('captures exceptions from tool executions and surfaces a failure message', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: '' })
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [{ id: 'call-2', name: 'update_manuscript', args: { foo: 'bar' } }],
+      })
+      .mockResolvedValueOnce({ text: 'After error' });
+
+    mockExecuteAgentToolCall.mockRejectedValueOnce(new Error('boom tool'));
+
+    const { result } = renderHook(() => useAgentOrchestrator());
+
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Trigger tool exception');
+    });
+
+    await waitFor(() => {
+      expect(result.current.state.lastToolCall?.success).toBe(false);
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages.some(m => m.text.includes('update_manuscript failed'))).toBe(true);
+    });
+    expect(mockEmitToolExecuted).toHaveBeenCalledWith('update_manuscript', false);
+  });
+
+  it('falls back to editor context when smart context resolution fails', async () => {
+    mockSendMessage
+      .mockResolvedValueOnce({ text: '' })
+      .mockResolvedValueOnce({ text: 'Fallback response' });
+
+    mockGetSmartAgentContext.mockRejectedValueOnce(new Error('smart context down'));
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { result } = renderHook(() => useAgentOrchestrator());
+
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Needs fallback');
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages.some(m => m.text === 'Fallback response')).toBe(true);
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[AgentOrchestrator] Smart context unavailable, using editor fallback:'),
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
   });
 });

@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DEFAULT_PERSONAS } from '@/types/personas';
+import type { AgentControllerDependencies } from '@/services/core/AgentController';
 import type { EditorContext } from '@/types';
 
 /**
@@ -22,12 +23,14 @@ const { MockDefaultAgentController, mockControllerInstance } = vi.hoisted(() => 
     setPersona: vi.fn(),
     // Internal event handlers - will be set during construction
     _events: null as any,
+    _deps: null as AgentControllerDependencies | null,
   };
 
   class MockDefaultAgentController {
     constructor(args: any) {
       mockControllerInstance._events = args.events;
       mockControllerInstance.getCurrentPersona.mockReturnValue(args.initialPersona);
+      mockControllerInstance._deps = args.deps;
     }
     initializeChat = mockControllerInstance.initializeChat;
     sendMessage = mockControllerInstance.sendMessage;
@@ -61,6 +64,9 @@ vi.mock('@/features/settings', () => ({
 vi.mock('@/services/core/agentSession', () => ({
   fetchMemoryContext: vi.fn(async () => '[AGENT MEMORY]'),
 }));
+
+import { fetchMemoryContext } from '@/services/core/agentSession';
+const mockFetchMemoryContext = vi.mocked(fetchMemoryContext);
 
 // Now import the hook after mocks are set up
 import { useAgentService } from '@/features/agent/hooks/useAgentService';
@@ -98,6 +104,10 @@ describe('useAgentService', () => {
     mockControllerInstance.sendMessage.mockClear();
     mockControllerInstance.dispose.mockClear();
     mockControllerInstance._events = null;
+    mockControllerInstance._deps = null;
+    mockControllerInstance.initializeChat.mockResolvedValue(undefined);
+    mockFetchMemoryContext.mockReset();
+    mockFetchMemoryContext.mockResolvedValue('[AGENT MEMORY]');
   });
 
   it('initializes the controller with correct context on mount', async () => {
@@ -353,5 +363,81 @@ describe('useAgentService', () => {
     expect(result.current.agentState.status).toBe('error');
     expect(result.current.agentState.lastError).toBe('Connection failed');
     expect(result.current.isProcessing).toBe(false);
+  });
+
+  it('reports tool executor failures when tool action rejects', async () => {
+    const onToolAction = vi.fn(async () => {
+      throw new Error('boom tool');
+    });
+
+    renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockControllerInstance._deps).not.toBeNull();
+    });
+
+    const executor = mockControllerInstance._deps?.toolExecutor;
+    expect(executor).toBeDefined();
+
+    const result = await executor!.execute('update_manuscript', {});
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Error executing update_manuscript: boom tool');
+  });
+
+  it('gracefully handles memory provider failures', async () => {
+    mockFetchMemoryContext.mockRejectedValueOnce(new Error('memory fail'));
+
+    const onToolAction = vi.fn();
+
+    renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+        projectId: 'proj-1',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockControllerInstance._deps?.memoryProvider).toBeDefined();
+    });
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const provider = mockControllerInstance._deps!.memoryProvider!;
+    const memory = await provider.buildMemoryContext('proj-1');
+    expect(memory).toBe('');
+    expect(mockFetchMemoryContext).toHaveBeenCalledWith('proj-1');
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('announces persona changes after switching personas', async () => {
+    const onToolAction = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentService('Hello world', {
+        chapters: [makeChapter()],
+        analysis: null,
+        onToolAction,
+      }),
+    );
+
+    const newPersona = DEFAULT_PERSONAS[1];
+
+    await act(async () => {
+      result.current.setPersona(newPersona);
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.messages.some(msg => msg.text.includes(`Switching to ${newPersona.name}`)),
+      ).toBe(true);
+    });
   });
 });
