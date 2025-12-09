@@ -36,10 +36,17 @@ const createMockContext = () => {
   } as unknown as CanvasRenderingContext2D;
 };
 
+const createObserverEntry = (width: number, height: number) =>
+  ({
+    contentRect: { width, height } as DOMRectReadOnly,
+    target: document.body,
+  } as unknown as ResizeObserverEntry);
+
 describe('KnowledgeGraph', () => {
   let mockContext: CanvasRenderingContext2D;
   const originalGetContext = HTMLCanvasElement.prototype.getContext;
   const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+  const originalResizeObserver = (globalThis as any).ResizeObserver;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -65,6 +72,11 @@ describe('KnowledgeGraph', () => {
   afterEach(() => {
     HTMLCanvasElement.prototype.getContext = originalGetContext;
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    if (originalResizeObserver) {
+      (globalThis as any).ResizeObserver = originalResizeObserver;
+    } else {
+      delete (globalThis as any).ResizeObserver;
+    }
     vi.restoreAllMocks();
   });
 
@@ -143,6 +155,172 @@ describe('KnowledgeGraph', () => {
 
     await waitFor(() => expect(onSelectCharacter).toHaveBeenCalled());
     expect(onSelectCharacter).toHaveBeenCalledWith(expect.objectContaining({ name: 'Alice' }));
+  });
+
+  it('changes cursor on hover and resets when leaving node', async () => {
+    const characters: CharacterProfile[] = [
+      {
+        name: 'Alice',
+        bio: '',
+        arc: '',
+        arcStages: [],
+        relationships: [{ name: 'Bob', type: 'friend', dynamic: '' }],
+        plotThreads: [],
+        inconsistencies: [],
+        developmentSuggestion: '',
+      },
+      {
+        name: 'Bob',
+        bio: '',
+        arc: '',
+        arcStages: [],
+        relationships: [{ name: 'Alice', type: 'ally', dynamic: '' }],
+        plotThreads: [],
+        inconsistencies: [],
+        developmentSuggestion: '',
+      },
+    ];
+
+    mockedUseProjectStore.mockReturnValue({
+      currentProject: { lore: { characters, worldRules: [] } },
+      chapters: [],
+    } as any);
+
+    render(<KnowledgeGraph onSelectCharacter={vi.fn()} />);
+
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+    await waitFor(() => expect(canvas).toBeInstanceOf(HTMLCanvasElement));
+
+    fireEvent.mouseMove(canvas, { clientX: 250, clientY: 200 });
+    expect(canvas.style.cursor).toBe('pointer');
+
+    fireEvent.mouseMove(canvas, { clientX: 10, clientY: 10 });
+    expect(canvas.style.cursor).toBe('default');
+  });
+
+  it('updates dimensions on resize via window listener and ResizeObserver fallback', async () => {
+    const getRectMock = vi.fn().mockReturnValue({
+      width: 500,
+      height: 400,
+      top: 0,
+      left: 0,
+      right: 500,
+      bottom: 400,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    HTMLElement.prototype.getBoundingClientRect = getRectMock;
+
+    const resizeDisconnect = vi.fn();
+    const resizeObserve = vi.fn();
+    class ResizeObserverMock {
+      callback: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) {
+        this.callback = cb;
+      }
+      observe = resizeObserve;
+      disconnect = resizeDisconnect;
+      trigger(entry: ResizeObserverEntry) {
+        this.callback([entry], this as unknown as ResizeObserver);
+      }
+    }
+    (globalThis as any).ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
+
+    mockedUseProjectStore.mockReturnValue({
+      currentProject: { lore: { characters: [{ name: 'Alice' } as CharacterProfile], worldRules: [] } },
+      chapters: [],
+    } as any);
+
+    render(<KnowledgeGraph onSelectCharacter={vi.fn()} />);
+
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+    await waitFor(() => expect(canvas.width).toBe(500));
+
+    getRectMock.mockReturnValue({
+      width: 640,
+      height: 360,
+      top: 0,
+      left: 0,
+      right: 640,
+      bottom: 360,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+
+    fireEvent(window, new Event('resize'));
+    await waitFor(() => {
+      expect(canvas.width).toBe(640);
+      expect(canvas.height).toBe(360);
+    });
+
+    const observerInstance = resizeObserve.mock.instances?.[0] as ResizeObserverMock | undefined;
+    observerInstance?.trigger(createObserverEntry(700, 420));
+
+    await waitFor(() => {
+      expect(canvas.width).toBe(700);
+      expect(canvas.height).toBe(420);
+    });
+  });
+
+  it('deduplicates lore and chapter characters and allows selecting from combined set', async () => {
+    // vary first random call so nodes are separated spatially
+    const randomSpy = vi.spyOn(Math, 'random');
+    randomSpy.mockReturnValueOnce(0.4).mockReturnValue(0.5);
+
+    const loreCharacters: CharacterProfile[] = [
+      {
+        name: 'Alice',
+        bio: '',
+        arc: '',
+        arcStages: [],
+        relationships: [{ name: 'Bob', type: 'friend', dynamic: 'ally' }],
+        plotThreads: [],
+        inconsistencies: [],
+        developmentSuggestion: '',
+      },
+    ];
+
+    const chapterCharacters: CharacterProfile[] = [
+      {
+        name: 'Bob',
+        bio: '',
+        arc: '',
+        arcStages: [],
+        relationships: [{ name: 'Alice', type: 'friend', dynamic: 'ally' }],
+        plotThreads: [],
+        inconsistencies: [],
+        developmentSuggestion: '',
+      },
+    ];
+
+    mockedUseProjectStore.mockReturnValue({
+      currentProject: { lore: { characters: loreCharacters, worldRules: [] } },
+      chapters: [
+        {
+          id: 'c1',
+          title: 'Chapter',
+          content: '',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          projectId: 'p1',
+          lastAnalysis: { characters: chapterCharacters },
+        },
+      ],
+    } as any);
+
+    const onSelect = vi.fn();
+    render(<KnowledgeGraph onSelectCharacter={onSelect} />);
+
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+    await waitFor(() => expect(canvas).toBeInstanceOf(HTMLCanvasElement));
+
+    fireEvent.click(canvas, { clientX: 250, clientY: 200 });
+
+    await waitFor(() => expect(onSelect).toHaveBeenCalled());
+    const selected = onSelect.mock.calls[0][0] as CharacterProfile;
+    expect(['Alice', 'Bob']).toContain(selected.name);
   });
 
   it('cleans up animation frame, resize/mouse listeners, and observers on unmount', async () => {

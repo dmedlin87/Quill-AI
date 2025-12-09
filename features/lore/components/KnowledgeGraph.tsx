@@ -64,6 +64,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ onSelectCharacte
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const nodesRef = useRef<GraphNode[]>([]);
   const linksRef = useRef<GraphLink[]>([]);
@@ -192,12 +193,13 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ onSelectCharacte
 
   useEffect(() => {
     handleResize();
-
-    const observer = attachResizeObserver(containerRef.current);
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = attachResizeObserver(containerRef.current);
     window.addEventListener('resize', handleResize);
 
     return () => {
-      observer?.disconnect();
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       window.removeEventListener('resize', handleResize);
     };
   }, [attachResizeObserver, handleResize]);
