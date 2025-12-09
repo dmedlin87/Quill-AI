@@ -384,4 +384,102 @@ describe('MemoryManager', () => {
     await waitFor(() => expect(mocks.updateWatchedEntity).toHaveBeenCalled());
     expect(mocks.updateWatchedEntity).toHaveBeenCalledWith('e-disabled', { monitoringEnabled: true });
   });
+
+  it('normalizes importance value safely', async () => {
+    render(<MemoryManager projectId="proj-1" />);
+
+    const form = screen.getByRole('form', { name: /memories/i });
+    const textarea = screen.getByLabelText('Memory Text', { selector: 'textarea' });
+    const importanceInput = screen.getByLabelText('Importance (0-1)', { selector: 'input' });
+
+    fireEvent.change(textarea, { target: { value: 'Valid text' } });
+
+    // Simulate invalid input causing NaN or weirdness if parsed directly
+    fireEvent.change(importanceInput, { target: { value: '' } });
+    // The component uses parseFloat(e.target.value). parseFloat('') is NaN.
+    // normalizeImportance(NaN) -> 0.5
+
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(mocks.createMemory).toHaveBeenCalled());
+    expect(mocks.createMemory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        importance: 0.5,
+      })
+    );
+  });
+
+  it('shows error when deleting memory fails', async () => {
+    mocks.deleteMemory.mockRejectedValueOnce(new Error('Delete failed'));
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+
+    await waitFor(() => expect(screen.getByText('Project note')).toBeInTheDocument());
+
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete' });
+    // Assuming first one is memory delete
+    await user.click(deleteButtons[0]);
+
+    await waitFor(() => expect(screen.getByText('Delete failed')).toBeInTheDocument());
+  });
+
+  it('shows error when submitting goal fails', async () => {
+    mocks.addGoal.mockRejectedValueOnce(new Error('Goal error'));
+    render(<MemoryManager projectId="proj-1" />);
+
+    const goalsSection = screen.getByText('Goals').closest('section');
+    const titleInput = goalsSection?.querySelector('input[type="text"]');
+    if (titleInput) fireEvent.change(titleInput, { target: { value: 'New goal' } });
+
+    const addGoalButton = screen.getByRole('button', { name: 'Add Goal' });
+    fireEvent.click(addGoalButton);
+
+    await waitFor(() => expect(screen.getByText('Goal error')).toBeInTheDocument());
+  });
+
+  it('shows error when deleting goal fails', async () => {
+    mocks.deleteGoal.mockRejectedValueOnce(new Error('Goal delete error'));
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+
+    await waitFor(() => expect(screen.getByText('Goal title')).toBeInTheDocument());
+
+    const goalsSection = screen.getByText('Goals').closest('section');
+    const deleteButton = Array.from(goalsSection?.querySelectorAll('button') || []).find(
+      (btn) => btn.textContent === 'Delete',
+    );
+    if (deleteButton) await user.click(deleteButton);
+
+    await waitFor(() => expect(screen.getByText('Goal delete error')).toBeInTheDocument());
+  });
+
+  it('shows error when submitting entity fails', async () => {
+    mocks.addWatchedEntity.mockRejectedValueOnce(new Error('Entity error'));
+    render(<MemoryManager projectId="proj-1" />);
+
+    const entitySection = screen.getByText('Proactive Monitoring').closest('section');
+    const nameInput = entitySection?.querySelector('input[type="text"]');
+    if (nameInput) fireEvent.change(nameInput, { target: { value: 'New entity' } });
+
+    const watchEntityButton = screen.getByRole('button', { name: 'Watch Entity' });
+    fireEvent.click(watchEntityButton);
+
+    await waitFor(() => expect(screen.getByText('Entity error')).toBeInTheDocument());
+  });
+
+  it('shows error when deleting entity fails', async () => {
+    mocks.removeWatchedEntity.mockRejectedValueOnce(new Error('Entity delete error'));
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+
+    await waitFor(() => expect(screen.getByText('Watcher')).toBeInTheDocument());
+
+    const entitySection = screen.getByText('Proactive Monitoring').closest('section');
+    const deleteButton = Array.from(entitySection?.querySelectorAll('button') || []).find(
+      (btn) => btn.textContent === 'Delete',
+    );
+    if (deleteButton) await user.click(deleteButton);
+
+    await waitFor(() => expect(screen.getByText('Entity delete error')).toBeInTheDocument());
+  });
 });
