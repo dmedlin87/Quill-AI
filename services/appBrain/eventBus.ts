@@ -5,7 +5,7 @@
  * Enables agent to react to user actions and vice versa.
  */
 
-import { AppEvent, EventHandler } from './types';
+import { AppEvent, EventHandler, MemoryContextSnapshot, ProactiveSuggestion, ThinkingContextSnapshot } from './types';
 
 const MAX_HISTORY = 100;
 const MAX_CHANGE_LOG = 500;
@@ -239,10 +239,22 @@ class EventBusImpl {
         return `Zen mode ${event.payload.enabled ? 'enabled' : 'disabled'}`;
       case 'SIGNIFICANT_EDIT_DETECTED':
         return `Significant edit detected (${event.payload.delta} chars)`;
-      case 'PROACTIVE_THINKING_STARTED':
-        return `AI thinking started (trigger: ${event.payload.trigger})`;
-      case 'PROACTIVE_THINKING_COMPLETED':
-        return `AI thinking complete (${event.payload.suggestionsCount} suggestions in ${event.payload.thinkingTime}ms)`;
+      case 'PROACTIVE_THINKING_STARTED': {
+        const pendingCount = event.payload.pendingEvents?.length;
+        const contextHint = event.payload.contextPreview
+          ? ` context: ${event.payload.contextPreview.slice(0, 40)}...`
+          : '';
+        return `AI thinking started (trigger: ${event.payload.trigger}` +
+          `${pendingCount ? `, events: ${pendingCount}` : ''}` +
+          `${contextHint ? `,${contextHint}` : ''})`;
+      }
+      case 'PROACTIVE_THINKING_COMPLETED': {
+        const suggestionText =
+          event.payload.suggestionsCount > 0
+            ? `${event.payload.suggestionsCount} suggestions`
+            : 'no suggestions';
+        return `AI thinking complete (${suggestionText} in ${event.payload.thinkingTime}ms)`;
+      }
       default:
         return `Unknown event`;
     }
@@ -330,10 +342,21 @@ export const emitSignificantEditDetected = (delta: number, chapterId?: string) =
   eventBus.emit({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta, chapterId } });
 };
 
-export const emitProactiveThinkingStarted = (trigger: string) => {
-  eventBus.emit({ type: 'PROACTIVE_THINKING_STARTED', payload: { trigger } });
+export const emitProactiveThinkingStarted = (
+  payload: { trigger: string; pendingEvents?: AppEvent[]; contextPreview?: string },
+) => {
+  eventBus.emit({ type: 'PROACTIVE_THINKING_STARTED', payload });
 };
 
-export const emitProactiveThinkingCompleted = (suggestionsCount: number, thinkingTime: number) => {
-  eventBus.emit({ type: 'PROACTIVE_THINKING_COMPLETED', payload: { suggestionsCount, thinkingTime } });
+export const emitProactiveThinkingCompleted = (
+  payload: {
+    suggestionsCount: number;
+    thinkingTime: number;
+    suggestions?: ProactiveSuggestion[];
+    rawThinking?: string;
+    memoryContext?: MemoryContextSnapshot;
+    contextUsed?: ThinkingContextSnapshot;
+  },
+) => {
+  eventBus.emit({ type: 'PROACTIVE_THINKING_COMPLETED', payload });
 };

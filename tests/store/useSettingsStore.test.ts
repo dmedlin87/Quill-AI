@@ -17,6 +17,7 @@ describe('useSettingsStore', () => {
       experienceLevel: DEFAULT_EXPERIENCE,
       autonomyMode: DEFAULT_AUTONOMY,
       nativeSpellcheckEnabled: true,
+      developerModeEnabled: false,
     });
   });
 
@@ -27,6 +28,7 @@ describe('useSettingsStore', () => {
     expect(state.experienceLevel).toBe(DEFAULT_EXPERIENCE);
     expect(state.autonomyMode).toBe(DEFAULT_AUTONOMY);
     expect(state.nativeSpellcheckEnabled).toBe(true);
+    expect(state.developerModeEnabled).toBe(false);
   });
 
   it('updates critiqueIntensity via setCritiqueIntensity', () => {
@@ -59,5 +61,13 @@ describe('useSettingsStore', () => {
     setNativeSpellcheckEnabled(false);
 
     expect(useSettingsStore.getState().nativeSpellcheckEnabled).toBe(false);
+  });
+
+  it('toggles developer mode preference', () => {
+    const { setDeveloperModeEnabled } = useSettingsStore.getState();
+
+    setDeveloperModeEnabled(true);
+
+    expect(useSettingsStore.getState().developerModeEnabled).toBe(true);
   });
 });

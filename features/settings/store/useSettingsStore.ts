@@ -19,6 +19,8 @@ interface SettingsState {
   setBudgetThreshold: (threshold: number) => void;
   nativeSpellcheckEnabled: boolean;
   setNativeSpellcheckEnabled: (enabled: boolean) => void;
+  developerModeEnabled: boolean;
+  setDeveloperModeEnabled: (enabled: boolean) => void;
 }
 
 const initialState: Omit<SettingsState, keyof SettingsActions> = {
@@ -27,6 +29,7 @@ const initialState: Omit<SettingsState, keyof SettingsActions> = {
   autonomyMode: DEFAULT_AUTONOMY,
   budgetThreshold: 1.0,
   nativeSpellcheckEnabled: true,
+  developerModeEnabled: false,
 };
 
 type SettingsActions = Pick<
@@ -36,6 +39,7 @@ type SettingsActions = Pick<
   | 'setAutonomyMode'
   | 'setBudgetThreshold'
   | 'setNativeSpellcheckEnabled'
+  | 'setDeveloperModeEnabled'
 >;
 
 export const useSettingsStore = create<SettingsState>()(
@@ -59,6 +63,12 @@ export const useSettingsStore = create<SettingsState>()(
           state.nativeSpellcheckEnabled === enabled
             ? state
             : { ...state, nativeSpellcheckEnabled: enabled }
+        ),
+      setDeveloperModeEnabled: (enabled) =>
+        set((state) =>
+          state.developerModeEnabled === enabled
+            ? state
+            : { ...state, developerModeEnabled: enabled }
         ),
     }),
     {

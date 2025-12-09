@@ -12,6 +12,7 @@ import { EditorHeader } from './EditorHeader';
 import { ToolsPanelContainer } from './ToolsPanelContainer';
 import { ZenModeOverlay } from './ZenModeOverlay';
 import { useLayoutStore } from './store/useLayoutStore';
+import { BrainActivityMonitor } from '@/features/debug';
 
 /**
  * Derive orb status from engine state
@@ -110,6 +111,9 @@ export const MainLayout: React.FC = () => {
 
       {/* 5. Zen Mode Overlay - Exit button and hover zones */}
       <ZenModeOverlay isZenMode={isZenMode} toggleZenMode={toggleZenMode} />
+
+      {/* 6. Developer Brain Activity Monitor */}
+      <BrainActivityMonitor />
     </div>
   );
 };
