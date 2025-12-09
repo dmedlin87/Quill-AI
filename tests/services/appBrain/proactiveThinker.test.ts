@@ -43,14 +43,12 @@ vi.mock('../../../services/memory/bedsideHistorySearch', () => ({
   searchBedsideHistory: vi.fn(),
 }));
 
-vi.mock('../../../services/memory', async (importOriginal) => {
-  // Simplification: don't use importOriginal for now to match passing test structure if possible,
-  // but we need exported functions.
-  // The passing test didn't use importOriginal.
+// Mock the core memory service bedside-note evolution
+vi.mock('@/services/memory', () => {
   return {
-    evolveBedsideNote: vi.fn().mockResolvedValue(undefined),
-    upsertVoiceProfile: vi.fn(),
+    evolveBedsideNote: (...args: any[]) => memoryMocks.evolveBedsideNote(...args),
     getVoiceProfileForCharacter: vi.fn(),
+    upsertVoiceProfile: vi.fn(),
   };
 });
 

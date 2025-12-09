@@ -13,11 +13,15 @@ describe('UsageContext', () => {
     };
     window.addEventListener('error', preventDefault);
 
+    // Prevent unhandled error noise in jsdom
+    const errorHandler = (e: Event) => e.preventDefault();
+    window.addEventListener('error', errorHandler);
+
     expect(() => renderHook(() => useUsage())).toThrowError(
       'useUsage must be used within UsageProvider'
     );
 
-    window.removeEventListener('error', preventDefault);
+    window.removeEventListener('error', errorHandler);
     consoleError.mockRestore();
   });
 
@@ -32,4 +36,3 @@ describe('UsageContext', () => {
     expect(result.current.promptTokens).toBe(0);
   });
 });
-
