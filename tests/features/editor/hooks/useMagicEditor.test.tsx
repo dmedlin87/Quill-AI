@@ -149,6 +149,56 @@ describe('useMagicEditor', () => {
     expect(commitMock).not.toHaveBeenCalled();
   });
 
+  it('handles rewrite failure gracefully', async () => {
+    rewriteTextMock.mockRejectedValue(new Error('API Error'));
+    const ref = renderHarness();
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    await act(async () => {
+      await ref.current?.actions.handleRewrite('Rewrite');
+    });
+
+    expect(ref.current?.state.magicError).toBe('API Error');
+    expect(ref.current?.state.isMagicLoading).toBe(false);
+  });
+
+  it('handles help failure gracefully', async () => {
+    getContextualHelpMock.mockRejectedValue(new Error('Help API Error'));
+    const ref = renderHarness();
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    await act(async () => {
+      await ref.current?.actions.handleHelp('Explain');
+    });
+
+    expect(ref.current?.state.magicError).toBe('Help API Error');
+    expect(ref.current?.state.isMagicLoading).toBe(false);
+  });
+
+  it('aborts pending help operation when starting new one', async () => {
+    // Mock slow help response
+    getContextualHelpMock.mockImplementation(async (text, type, signal) => {
+       if (signal?.aborted) return { result: '', usage: { tokens: 0 }};
+       await new Promise(resolve => setTimeout(resolve, 100));
+       if (signal?.aborted) return { result: '', usage: { tokens: 0 }};
+       return { result: 'Help', usage: { tokens: 1 }};
+    });
+
+    const ref = renderHarness();
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    await act(async () => {
+      ref.current?.actions.handleHelp('Explain');
+    });
+
+    // Immediate second call should abort first
+    await act(async () => {
+      ref.current?.actions.handleHelp('Thesaurus');
+    });
+
+    expect(getContextualHelpMock).toHaveBeenCalledTimes(2);
+  });
+
   it('applies contextual replacements after help requests', async () => {
     getContextualHelpMock.mockResolvedValue({ result: 'Answer', usage: { tokens: 2 } });
     const ref = renderHarness();
@@ -290,6 +340,17 @@ describe('useMagicEditor', () => {
 
       expect(commitMock).toHaveBeenCalledWith('Fixed text', 'Applied grammar fixes', 'User');
       expect(clearSelectionMock).toHaveBeenCalled();
+    });
+
+    it('does nothing when applyAll is called with no suggestions', async () => {
+      const ref = renderHarness();
+      await waitFor(() => expect(ref.current).not.toBeNull());
+
+      await act(async () => {
+        ref.current?.actions.applyAllGrammarSuggestions();
+      });
+
+      expect(commitMock).not.toHaveBeenCalled();
     });
 
     it('dismisses a grammar suggestion without applying', async () => {
