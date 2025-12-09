@@ -14,12 +14,14 @@ import { eventBus } from './eventBus';
 import type { AppEvent, AppBrainState } from './types';
 import { buildCompressedContext } from './contextBuilder';
 import { formatConflictsForPrompt, getHighPriorityConflicts } from './intelligenceMemoryBridge';
-import { evolveBedsideNote } from '../memory';
+import { evolveBedsideNote, getVoiceProfileForCharacter, upsertVoiceProfile } from '../memory';
 import { extractFacts } from '../memory/factExtractor';
 import { filterNovelLoreEntities } from '../memory/relevance';
 import { getImportantReminders, type ProactiveSuggestion } from '../memory/proactive';
 import { searchBedsideHistory, type BedsideHistoryMatch } from '../memory/bedsideHistorySearch';
 import { extractTemporalMarkers, type TemporalMarker } from '../intelligence/timelineTracker';
+import { generateVoiceProfile } from '../intelligence/voiceProfiler';
+import type { DialogueLine, VoiceMetrics } from '../../types/intelligence';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -239,6 +241,7 @@ export class ProactiveThinker {
     this.maybeUpdateBedsideNotes(event);
     this.enqueueEvent(event);
     void this.detectConflicts(event);
+    void this.detectVoiceConsistency(event);
     this.scheduleThinking(this.isUrgentEvent(event));
   }
 
@@ -387,6 +390,157 @@ export class ProactiveThinker {
 
       if (!previous) {
         latestByCategory.set(marker.category, marker);
+      }
+    }
+  }
+
+  private extractDialogueBlocks(text: string): Array<{ quote: string; context: string }> {
+    const blocks: Array<{ quote: string; context: string }> = [];
+    const regex = /"([^"\n]{10,600}?)"/gms;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      const quote = match[1].trim();
+      if (!quote) continue;
+      const start = Math.max(0, match.index - 120);
+      const end = Math.min(text.length, (match.index + match[0].length) + 120);
+      const context = text.slice(start, end);
+      blocks.push({ quote, context });
+    }
+
+    return blocks;
+  }
+
+  private inferDialogueSpeaker(context: string, knownCharacters: string[]): string | null {
+    if (!knownCharacters.length) return null;
+    const normalizedContext = context.toLowerCase();
+
+    for (const character of knownCharacters) {
+      const normalized = character.toLowerCase();
+      const namePattern = new RegExp(`\\b${normalized.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+      if (namePattern.test(normalizedContext)) {
+        return character;
+      }
+    }
+
+    const attribution = /(?:said|asked|replied|whispered|shouted|muttered|exclaimed)\s+([A-Z][a-zA-Z]+)/i;
+    const match = attribution.exec(context);
+    if (match && match[1]) {
+      const candidate = match[1];
+      const exact = knownCharacters.find(name => name.toLowerCase() === candidate.toLowerCase());
+      return exact ?? candidate;
+    }
+
+    return null;
+  }
+
+  private collectKnownCharacters(state: AppBrainState): string[] {
+    const names = new Set<string>();
+
+    const graphNodes = state.intelligence.entities?.nodes ?? [];
+    for (const node of graphNodes) {
+      if (node.type === 'character' && node.name) {
+        names.add(node.name);
+      }
+    }
+
+    const loreCharacters = state.lore?.characters ?? [];
+    for (const character of loreCharacters) {
+      if (character.name) {
+        names.add(character.name);
+      }
+    }
+
+    return Array.from(names);
+  }
+
+  private calculateVoiceDeviation(newMetrics: VoiceMetrics, baseline: VoiceMetrics) {
+    const relativeDifference = (a: number, b: number): number => {
+      if (a === 0 && b === 0) return 0;
+      const avg = (Math.abs(a) + Math.abs(b)) / 2;
+      if (avg === 0) return Math.abs(a - b);
+      return Math.abs(a - b) / avg;
+    };
+
+    const metricLabels: Record<keyof VoiceMetrics, string> = {
+      avgSentenceLength: 'Sentence length',
+      sentenceVariance: 'Sentence variance',
+      contractionRatio: 'Contractions',
+      questionRatio: 'Questions',
+      exclamationRatio: 'Exclamations',
+      latinateRatio: 'Formality',
+      uniqueWordCount: 'Vocabulary breadth',
+    };
+
+    const diffs = (Object.keys(metricLabels) as Array<keyof VoiceMetrics>).map(metric => {
+      return {
+        metric,
+        label: metricLabels[metric],
+        current: newMetrics[metric],
+        historic: baseline[metric],
+        delta: relativeDifference(newMetrics[metric], baseline[metric]),
+      };
+    });
+
+    const sorted = diffs.sort((a, b) => b.delta - a.delta);
+    return { diffs: sorted, maxDelta: sorted[0]?.delta ?? 0 };
+  }
+
+  private async detectVoiceConsistency(event: AppEvent): Promise<void> {
+    if (event.type !== 'SIGNIFICANT_EDIT_DETECTED' || !this.getState || !this.projectId) return;
+
+    const state = this.getState();
+    const text = state.manuscript.currentText ?? '';
+    if (!text.includes('"')) return;
+
+    const sampleWindow = Math.min(Math.max((event.payload?.delta ?? SIGNIFICANT_EDIT_THRESHOLD) * 4, 800), 5000);
+    const recentText = text.slice(-sampleWindow);
+    const dialogueBlocks = this.extractDialogueBlocks(recentText);
+    if (dialogueBlocks.length === 0) return;
+
+    const knownCharacters = this.collectKnownCharacters(state);
+
+    for (const block of dialogueBlocks) {
+      const speaker = this.inferDialogueSpeaker(block.context, knownCharacters);
+      if (!speaker) continue;
+
+      const dialogueLines: DialogueLine[] = [{ speaker, quote: block.quote }];
+      const liveProfile = generateVoiceProfile(dialogueLines, { speakerName: speaker });
+      const baseline = await getVoiceProfileForCharacter(this.projectId, speaker);
+
+      await upsertVoiceProfile(this.projectId, speaker, dialogueLines);
+
+      if (!baseline) continue;
+
+      const deviation = this.calculateVoiceDeviation(liveProfile.metrics, baseline.metrics);
+      if (deviation.maxDelta < 0.35) continue;
+
+      const summaryDiffs = deviation.diffs.slice(0, 2).map(diff => {
+        return `${diff.label}: ${diff.current > diff.historic ? 'Higher' : 'Lower'} (now ${(diff.current).toFixed(2)} vs historic ${(diff.historic).toFixed(2)})`;
+      });
+
+      const suggestion: ProactiveSuggestion = {
+        id: `voice-${speaker}-${Date.now()}`,
+        type: 'voice_inconsistency',
+        priority: deviation.maxDelta > 0.55 ? 'high' : 'medium',
+        title: `Voice drift detected for ${speaker}`,
+        description:
+          summaryDiffs.join('; ') || 'Recent dialogue differs from the established voice profile.',
+        source: { type: 'entity', id: `character:${speaker.toLowerCase()}`, name: speaker },
+        suggestedAction: `rewrite_dialogue character="${speaker}" style="${baseline.impression}"`,
+        tags: ['voice', `character:${speaker.toLowerCase()}`],
+        createdAt: Date.now(),
+        metadata: {
+          speaker,
+          currentImpression: liveProfile.impression,
+          historicImpression: baseline.impression,
+          diffs: deviation.diffs,
+          quote: block.quote,
+        },
+      };
+
+      if (this.onSuggestion) {
+        this.onSuggestion(suggestion);
       }
     }
   }
