@@ -721,4 +721,65 @@ describe('useProjectStore', () => {
       expect(state.isLoading).toBe(false);
     });
   });
+
+  describe('updateChapterBranchState', () => {
+    it('updates branch state in store and db', async () => {
+       const testChapter = {
+        id: 'chapter-1',
+        projectId: 'project-1',
+        title: 'Chapter 1',
+        content: 'Content',
+        order: 0,
+        updatedAt: Date.now(),
+      };
+
+      const { db } = await import('@/services/db');
+      vi.mocked(db.chapters.get).mockResolvedValue(testChapter as any);
+      vi.mocked(db.chapters.update).mockResolvedValue(undefined);
+      vi.mocked(db.projects.update).mockResolvedValue(undefined);
+
+      useProjectStore.setState({
+        chapters: [testChapter],
+      });
+
+      const { updateChapterBranchState } = useProjectStore.getState();
+      const updates = {
+        branches: [{ id: 'b1', label: 'Draft', content: 'New Content', timestamp: 1 }],
+        activeBranchId: 'b1',
+        content: 'New Content'
+      };
+
+      await updateChapterBranchState('chapter-1', updates);
+
+      const state = useProjectStore.getState();
+      const updatedChapter = state.chapters[0];
+
+      expect(updatedChapter.branches).toEqual(updates.branches);
+      expect(updatedChapter.activeBranchId).toBe('b1');
+      expect(updatedChapter.content).toBe('New Content');
+      expect(db.chapters.update).toHaveBeenCalledWith('chapter-1', expect.objectContaining(updates));
+      expect(db.projects.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('flushPendingWrites', () => {
+    it('flushes pending writes', async () => {
+        vi.useFakeTimers();
+        const { updateChapterContent, flushPendingWrites } = useProjectStore.getState();
+        const { db } = await import('@/services/db');
+        vi.mocked(db.chapters.get).mockResolvedValue({ projectId: 'p1' } as any);
+
+        // Trigger a write
+        updateChapterContent('c1', 'new content');
+
+        // Should be pending
+        const result = await flushPendingWrites({ reason: 'test' });
+        expect(result.pendingCount).toBe(1);
+        expect(result.errors).toHaveLength(0);
+
+        expect(db.chapters.update).toHaveBeenCalled();
+
+        vi.useRealTimers();
+    });
+  });
 });
