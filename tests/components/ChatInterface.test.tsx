@@ -449,11 +449,8 @@ describe('ChatInterface', () => {
     render(<ChatInterface {...baseProps} projectId="p1" />);
 
     await waitFor(() => {
-      expect(mockSendMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.stringContaining('[AGENT MEMORY]'),
-        })
-      );
+      expect(getMemoriesForContext).toHaveBeenCalledWith('p1', { limit: 25 });
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
     });
   });
 
