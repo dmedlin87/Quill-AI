@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, beforeAll } from 'vitest';
 
 const documentStub = { documentElement: { setAttribute: vi.fn() } };
 const localStorageStub = {
@@ -59,6 +59,10 @@ describe('useLayoutStore', () => {
     toggleView();
     expect(useLayoutStore.getState().activeView).toBe(MainView.EDITOR);
 
+    // Toggle back to STORYBOARD
+    toggleView();
+    expect(useLayoutStore.getState().activeView).toBe(MainView.STORYBOARD);
+
     setActiveTab(SidebarTab.CHAT);
     expect(emitPanelSwitched).toHaveBeenCalledWith(SidebarTab.CHAT);
 
@@ -75,6 +79,7 @@ describe('useLayoutStore', () => {
       handleSelectGraphCharacter,
       handleInterviewCharacter,
       exitInterview,
+      setSelectedGraphCharacter
     } = useLayoutStore.getState();
 
     handleFixRequest('context', 'suggest');
@@ -87,6 +92,12 @@ describe('useLayoutStore', () => {
     expect(useLayoutStore.getState().chatInitialMessage).toBeUndefined();
 
     const character = { id: 'c1', name: 'Alice' } as any;
+
+    // Direct setter
+    setSelectedGraphCharacter(character);
+    expect(useLayoutStore.getState().selectedGraphCharacter).toEqual(character);
+
+    // Helper
     handleSelectGraphCharacter(character);
     expect(useLayoutStore.getState().selectedGraphCharacter).toEqual(character);
     expect(useLayoutStore.getState().activeTab).toBe(SidebarTab.LORE);
@@ -107,5 +118,46 @@ describe('useLayoutStore', () => {
     expect(useLayoutStore.getState().theme).toBe('dark');
     expect(localStorageStub.setItem).toHaveBeenCalledWith('quillai-theme', 'dark');
     expect(documentStub.documentElement.setAttribute).toHaveBeenCalledWith('data-theme', 'dark');
+
+    toggleTheme();
+    expect(useLayoutStore.getState().theme).toBe('light');
+  });
+
+  it('sets sidebar collapsed directly', () => {
+    const { setSidebarCollapsed } = useLayoutStore.getState();
+    setSidebarCollapsed(true);
+    expect(useLayoutStore.getState().isSidebarCollapsed).toBe(true);
+    setSidebarCollapsed(false);
+    expect(useLayoutStore.getState().isSidebarCollapsed).toBe(false);
+  });
+
+  it('manages zen mode hover states', () => {
+    const { setExitZenHovered, setHeaderHovered } = useLayoutStore.getState();
+
+    setExitZenHovered(true);
+    expect(useLayoutStore.getState().isExitZenHovered).toBe(true);
+
+    setHeaderHovered(true);
+    expect(useLayoutStore.getState().isHeaderHovered).toBe(true);
+  });
+
+  it('sets current persona index', () => {
+    const { setCurrentPersonaIndex } = useLayoutStore.getState();
+    setCurrentPersonaIndex(5);
+    expect(useLayoutStore.getState().currentPersonaIndex).toBe(5);
+  });
+
+  it('manages lore draft state', () => {
+    const { openLoreDraft, consumeLoreDraft } = useLayoutStore.getState();
+    const character = { id: 'c2', name: 'Bob' } as any;
+
+    openLoreDraft(character);
+    expect(useLayoutStore.getState().loreDraftCharacter).toEqual(character);
+    expect(useLayoutStore.getState().activeTab).toBe(SidebarTab.LORE);
+    expect(useLayoutStore.getState().isToolsCollapsed).toBe(false);
+    expect(emitPanelSwitched).toHaveBeenCalledWith(SidebarTab.LORE);
+
+    consumeLoreDraft();
+    expect(useLayoutStore.getState().loreDraftCharacter).toBeNull();
   });
 });
