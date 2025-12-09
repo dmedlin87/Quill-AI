@@ -97,7 +97,7 @@ The metaphor: a novelist's bedside notebook where they jot down "don't forget Sa
 
 **Goal:** Evolve the bedside note in response to more meaningful events beyond analysis and proactive thinking.
 
-#### 3.1 Goal Lifecycle Events
+#### 3.1 Goal Lifecycle Events ✅ (implemented)
 
 **Trigger:** Goal creation, completion, or abandonment.
 
@@ -427,7 +427,7 @@ When starting a new project:
 
 | Phase | Effort | Impact | Priority |
 |-------|--------|--------|----------|
-| 3.1 Goal Lifecycle | Low | High | **P1** |
+| 3.1 Goal Lifecycle | Low | High | **Done** |
 | 3.5 Staleness Refresh | Low | Medium | **P1** |
 | 4.1–4.2 Structured Schema + Budgets | Medium | High | **P2** |
 | 5.1 Agent Tool | Medium | High | **P2** |

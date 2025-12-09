@@ -5,6 +5,7 @@
 
 import { db } from '../db';
 import { BEDSIDE_NOTE_TAG } from './types';
+import { evolveBedsideNote, getOrCreateBedsideNote } from './chains';
 import type {
   MemoryNote,
   AgentGoal,
@@ -125,10 +126,9 @@ async function syncGoalLifecycleUpdate(
   projectId: string,
   planText: string
 ): Promise<void> {
-  const chains = await import('./chains');
   const [goals] = await Promise.all([
     getGoals(projectId),
-    chains.getOrCreateBedsideNote(projectId),
+    getOrCreateBedsideNote(projectId),
   ]);
 
   const activeCount = goals.filter(goal => goal.status === 'active').length;
@@ -138,7 +138,7 @@ async function syncGoalLifecycleUpdate(
       ? `${planText} Active goals: ${activeCount}/${totalCount}.`
       : `${planText} No remaining goals.`;
 
-  await chains.evolveBedsideNote(projectId, annotatedPlanText, {
+  await evolveBedsideNote(projectId, annotatedPlanText, {
     changeReason: 'goal_lifecycle',
   });
 }
