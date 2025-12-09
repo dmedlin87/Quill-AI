@@ -15,6 +15,8 @@ import type { AppEvent, AppBrainState } from './types';
 import { buildCompressedContext } from './contextBuilder';
 import { formatConflictsForPrompt, getHighPriorityConflicts } from './intelligenceMemoryBridge';
 import { evolveBedsideNote } from '../memory';
+import { extractFacts } from '../memory/factExtractor';
+import { filterNovelLoreEntities } from '../memory/relevance';
 import { getImportantReminders, type ProactiveSuggestion } from '../memory/proactive';
 import { searchBedsideHistory, type BedsideHistoryMatch } from '../memory/bedsideHistorySearch';
 
@@ -374,6 +376,8 @@ export class ProactiveThinker {
       const context = buildCompressedContext(state);
       const formattedEvents = this.formatEventsForPrompt(events);
 
+      const loreSuggestions = await this.detectLoreSuggestions(state, events);
+
       // Get long-term memory context from BedsideHistorySearch
       const longTermMemory = await this.fetchLongTermMemoryContext(state);
 
@@ -406,17 +410,18 @@ export class ProactiveThinker {
       
       const text = response.text || '';
       const result = this.parseThinkingResult(text);
+      const combinedSuggestions = [...loreSuggestions, ...result.suggestions];
 
       this.state.lastThinkTime = Date.now();
-      this.state.suggestionsGenerated += result.suggestions.length;
+      this.state.suggestionsGenerated += combinedSuggestions.length;
 
       // Emit thinking completed event
       eventBus.emit({
         type: 'PROACTIVE_THINKING_COMPLETED',
         payload: {
-          suggestionsCount: result.suggestions.length,
+          suggestionsCount: combinedSuggestions.length,
           thinkingTime: Date.now() - startTime,
-          suggestions: result.suggestions,
+          suggestions: combinedSuggestions,
           rawThinking: result.rawThinking,
           memoryContext: {
             longTermMemoryIds: longTermMemory.matches.map(match => match.note.id),
@@ -434,19 +439,19 @@ export class ProactiveThinker {
       });
 
       if (this.onSuggestion) {
-        for (const suggestion of result.suggestions) {
+        for (const suggestion of combinedSuggestions) {
           this.onSuggestion(suggestion);
         }
       }
 
-      if (this.projectId && result.significant) {
+      if (this.projectId && (result.significant || loreSuggestions.length > 0)) {
         try {
           const reminders = await getImportantReminders(this.projectId);
           const lines: string[] = [];
 
-          if (result.suggestions.length > 0) {
+          if (combinedSuggestions.length > 0) {
             lines.push('Proactive opportunities to focus on next:');
-            for (const suggestion of result.suggestions.slice(0, 3)) {
+            for (const suggestion of combinedSuggestions.slice(0, 3)) {
               lines.push(`- ${suggestion.title}: ${suggestion.description}`);
             }
           }
@@ -471,6 +476,8 @@ export class ProactiveThinker {
 
       return {
         ...result,
+        suggestions: combinedSuggestions,
+        significant: result.significant || loreSuggestions.length > 0,
         thinkingTime: Date.now() - startTime,
       };
       
@@ -496,6 +503,55 @@ export class ProactiveThinker {
     }
     
     return lines.join('\n');
+  }
+
+  private async detectLoreSuggestions(
+    state: AppBrainState,
+    events: AppEvent[],
+  ): Promise<ProactiveSuggestion[]> {
+    const sawSignificantEdit = events.some(event => event.type === 'SIGNIFICANT_EDIT_DETECTED');
+    if (!sawSignificantEdit) return [];
+
+    const intelligence = state.intelligence.full;
+    if (!intelligence?.entities?.nodes?.length) return [];
+
+    const candidates = intelligence.entities.nodes.filter(node =>
+      ['character', 'location', 'object'].includes(node.type) && node.mentionCount >= 2,
+    );
+
+    const existingLoreNames = state.lore?.characters?.map(character => character.name) ?? [];
+    const novelEntities = filterNovelLoreEntities(candidates, existingLoreNames);
+    if (novelEntities.length === 0) return [];
+
+    const facts = extractFacts(intelligence);
+    const now = Date.now();
+
+    return novelEntities.map(entity => {
+      const fact = facts.find(
+        candidate => candidate.subject.toLowerCase() === entity.name.toLowerCase(),
+      );
+
+      const description = fact
+        ? `${fact.subject} ${fact.predicate} ${fact.object}`
+        : `Spotted multiple mentions around offset ${entity.firstMention ?? 0}.`;
+
+      return {
+        id: `lore-${entity.name}-${now}`,
+        type: 'lore_discovery',
+        priority: 'medium',
+        title: `New ${entity.type === 'object' ? 'item' : entity.type} detected: ${entity.name}`,
+        description,
+        source: { type: 'entity', id: entity.name, name: entity.name },
+        tags: ['lore', entity.type],
+        createdAt: now,
+        metadata: {
+          entityName: entity.name,
+          entityType: entity.type,
+          evidence: description,
+          firstMention: entity.firstMention,
+        },
+      };
+    });
   }
 
   private parseThinkingResult(text: string): Omit<ThinkingResult, 'thinkingTime'> {

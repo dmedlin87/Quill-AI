@@ -19,6 +19,14 @@ import { Persona } from '@/types/personas';
 import type { ProactiveSuggestion } from '../memory/proactive';
 export type { ProactiveSuggestion } from '../memory/proactive';
 
+export type SuggestionType =
+  | 'plot'
+  | 'character'
+  | 'pacing'
+  | 'style'
+  | 'continuity'
+  | 'lore_discovery';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CORE STATE
 // ─────────────────────────────────────────────────────────────────────────────

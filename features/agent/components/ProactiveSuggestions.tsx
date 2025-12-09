@@ -36,6 +36,7 @@ const typeIcons: Record<ProactiveSuggestion['type'], string> = {
   related_memory: '💭',
   active_goal: '🎯',
   reminder: '⚡',
+  lore_discovery: '📖',
 };
 
 const priorityColors: Record<ProactiveSuggestion['priority'], string> = {
@@ -95,7 +96,9 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
             animate="visible"
             exit="exit"
             layout
-            className={`relative p-3 rounded-lg border ${priorityColors[suggestion.priority]} shadow-sm`}
+            className={`relative p-3 rounded-lg border ${priorityColors[suggestion.priority]} shadow-sm ${
+              suggestion.type === 'lore_discovery' ? 'ring-1 ring-indigo-100' : ''
+            }`}
           >
             {/* Priority Indicator */}
             <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${priorityDots[suggestion.priority]}`} />
@@ -108,6 +111,11 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                 <span className="text-sm font-medium text-gray-800 leading-tight">
                   {suggestion.title}
                 </span>
+                {suggestion.type === 'lore_discovery' && (
+                  <span className="ml-1 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                    Lore
+                  </span>
+                )}
               </div>
               
               {/* Description */}
@@ -138,7 +146,7 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                     className="text-[10px] text-emerald-600 hover:text-emerald-800 font-medium transition-colors"
                     aria-label={`Apply suggestion: ${suggestion.title}`}
                   >
-                    ✓ Apply
+                    {suggestion.type === 'lore_discovery' ? 'Create entry' : '✓ Apply'}
                   </button>
                 )}
                 {onAction && suggestion.suggestedAction && (

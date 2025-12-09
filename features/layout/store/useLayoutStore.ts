@@ -17,6 +17,9 @@ interface LayoutState {
   // Chat State
   chatInitialMessage: string | undefined;
   interviewTarget: CharacterProfile | null;
+
+  // Lore Drafting
+  loreDraftCharacter: CharacterProfile | null;
   
   // Graph State
   selectedGraphCharacter: CharacterProfile | null;
@@ -66,6 +69,8 @@ interface LayoutActions {
   handleFixRequest: (issueContext: string, suggestion: string) => void;
   handleSelectGraphCharacter: (character: CharacterProfile) => void;
   handleInterviewCharacter: (character: CharacterProfile) => void;
+  openLoreDraft: (character: CharacterProfile) => void;
+  consumeLoreDraft: () => void;
 }
 
 type LayoutStore = LayoutState & LayoutActions;
@@ -100,12 +105,24 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
   isExitZenHovered: false,
   isHeaderHovered: false,
   currentPersonaIndex: 0,
+  loreDraftCharacter: null,
 
   // Tab/View Actions
   setActiveTab: (tab) => {
     emitPanelSwitched(tab);
     set({ activeTab: tab });
   },
+
+  openLoreDraft: (character) => {
+    emitPanelSwitched(SidebarTab.LORE);
+    set({
+      loreDraftCharacter: character,
+      activeTab: SidebarTab.LORE,
+      isToolsCollapsed: false,
+    });
+  },
+
+  consumeLoreDraft: () => set({ loreDraftCharacter: null }),
   setActiveView: (view) => set({ activeView: view }),
   toggleView: () => set((state) => ({
     activeView: state.activeView === MainView.EDITOR ? MainView.STORYBOARD : MainView.EDITOR

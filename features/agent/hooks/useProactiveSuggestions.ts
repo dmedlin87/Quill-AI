@@ -8,12 +8,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { eventBus, startProactiveThinker, stopProactiveThinker, getProactiveThinker } from '@/services/appBrain';
 import type { AppBrainState } from '@/services/appBrain';
-import { 
-  ProactiveSuggestion, 
+import {
+  ProactiveSuggestion,
   generateSuggestionsForChapter,
   getImportantReminders,
 } from '@/services/memory/proactive';
 import { createMemory, evolveBedsideNote } from '@/services/memory';
+import { markLoreEntityDismissed } from '@/services/memory/relevance';
+import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
 
 export interface UseProactiveSuggestionsOptions {
   /** Project ID to fetch suggestions for */
@@ -72,7 +74,16 @@ export function useProactiveSuggestions(
 
   // Dismiss a single suggestion
   const dismissSuggestion = useCallback((id: string) => {
-    setSuggestions(prev => prev.filter(s => s.id !== id));
+    setSuggestions(prev => {
+      const target = prev.find(s => s.id === id);
+      if (target?.type === 'lore_discovery') {
+        const name = (target.metadata?.entityName as string) || target.source.name || target.title;
+        if (name) {
+          markLoreEntityDismissed(name);
+        }
+      }
+      return prev.filter(s => s.id !== id);
+    });
     
     // Clear any auto-dismiss timer
     const timer = dismissTimersRef.current.get(id);
@@ -185,6 +196,24 @@ export function useProactiveSuggestions(
 
   // Apply a suggestion (records positive feedback and dismisses)
   const applySuggestion = useCallback(async (suggestion: ProactiveSuggestion) => {
+    if (suggestion.type === 'lore_discovery') {
+      const openLoreDraft = useLayoutStore.getState().openLoreDraft;
+      const name = (suggestion.metadata?.entityName as string) || suggestion.source.name || suggestion.title;
+      if (name && openLoreDraft) {
+        markLoreEntityDismissed(name);
+        openLoreDraft({
+          name,
+          bio: suggestion.description,
+          arc: '',
+          voiceTraits: '',
+          arcStages: [],
+          relationships: [],
+          plotThreads: [],
+          inconsistencies: [],
+          developmentSuggestion: suggestion.description,
+        });
+      }
+    }
     await recordFeedback(suggestion, 'applied');
     dismissSuggestion(suggestion.id);
   }, [recordFeedback, dismissSuggestion]);
