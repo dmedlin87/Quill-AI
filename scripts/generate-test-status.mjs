@@ -37,10 +37,10 @@ const colors = {
 
 // Coverage thresholds (must match vite.config.ts)
 const THRESHOLDS = {
-  statements: 80,
-  branches: 75,
-  functions: 80,
-  lines: 80,
+  statements: 90,
+  branches: 90,
+  functions: 90,
+  lines: 90,
 };
 
 // Determine the reference date for this report.

@@ -394,7 +394,8 @@ describe('entityExtractor', () => {
       const base = extractEntities(`Sarah and Marcus walked together.`, [createTestParagraph(0, 40)], [], 'c1');
       const extra = extractEntities(`Sarah loves Marcus deeply.`, [createTestParagraph(0, 30)], [], 'c2');
 
-      const merged = mergeEntityGraphs([base, extra]);
+      // Place the explicit relationship graph first so its type is preserved when merging
+      const merged = mergeEntityGraphs([extra, base]);
 
       const edge = merged.edges.find(e => {
         const src = merged.nodes.find(n => n.id === e.source);
