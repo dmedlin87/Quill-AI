@@ -37,6 +37,7 @@ const typeIcons: Record<ProactiveSuggestion['type'], string> = {
   active_goal: '🎯',
   reminder: '⚡',
   lore_discovery: '📖',
+  timeline_conflict: '⏳',
 };
 
 const priorityColors: Record<ProactiveSuggestion['priority'], string> = {
@@ -97,7 +98,11 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
             exit="exit"
             layout
             className={`relative p-3 rounded-lg border ${priorityColors[suggestion.priority]} shadow-sm ${
-              suggestion.type === 'lore_discovery' ? 'ring-1 ring-indigo-100' : ''
+              suggestion.type === 'lore_discovery'
+                ? 'ring-1 ring-indigo-100'
+                : suggestion.type === 'timeline_conflict'
+                  ? 'ring-1 ring-rose-100'
+                  : ''
             }`}
           >
             {/* Priority Indicator */}
@@ -116,12 +121,34 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                     Lore
                   </span>
                 )}
+                {suggestion.type === 'timeline_conflict' && (
+                  <span className="ml-1 inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                    Timeline
+                  </span>
+                )}
               </div>
-              
+
               {/* Description */}
               <p className="text-xs text-gray-600 ml-6 leading-relaxed">
                 {suggestion.description}
               </p>
+
+              {suggestion.type === 'timeline_conflict' && (
+                <div className="mt-2 ml-6 rounded-md border border-rose-100 bg-rose-50/60 px-2 py-1.5 text-[11px] text-rose-800">
+                  <div className="font-semibold flex items-center gap-1 text-rose-700">
+                    <span>⏱️</span>
+                    <span>Continuity check</span>
+                  </div>
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    <span>
+                      Previous: <strong>{(suggestion.metadata as any)?.previousMarker ?? '—'}</strong>
+                    </span>
+                    <span>
+                      Current: <strong>{(suggestion.metadata as any)?.currentMarker ?? '—'}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
               
               {/* Tags */}
               {suggestion.tags.length > 0 && (

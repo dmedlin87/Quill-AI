@@ -25,7 +25,8 @@ export type SuggestionType =
   | 'pacing'
   | 'style'
   | 'continuity'
-  | 'lore_discovery';
+  | 'lore_discovery'
+  | 'timeline_conflict';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CORE STATE

@@ -138,6 +138,19 @@ const clonePattern = (pattern: RegExp) => new RegExp(pattern.source, pattern.fla
 const truncate = (value: string, limit: number): string =>
   value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 
+const DAYS_OF_WEEK = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+];
+
+const DAY_PATTERN = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/gi;
+const SEASON_PATTERN = /\b(spring|summer|fall|autumn|winter)\b/gi;
+
 const getMatchedContent = (match: RegExpExecArray): string => {
   const captured = match.slice(1).filter(Boolean).join(' ').trim();
   return captured.length > 0 ? captured : match[0];
@@ -157,8 +170,87 @@ const extractSentence = (text: string, offset: number): string => {
   while (end < text.length && !/[.!?]/.test(text[end])) {
     end++;
   }
-  
+
   return text.slice(start, end + 1).trim();
+};
+
+export interface TemporalMarker {
+  marker: string;
+  normalized: string;
+  category: 'day' | 'time_of_day' | 'season';
+  offset: number;
+  sentence: string;
+}
+
+const normalizeDay = (match: string): string => {
+  const lower = match.toLowerCase();
+  const full = DAYS_OF_WEEK.find(day => day.startsWith(lower.slice(0, 3))) ?? lower;
+  return full;
+};
+
+const normalizeTimeOfDay = (match: string): string => {
+  const lower = match.toLowerCase();
+  if (/(dawn|sunrise|first light)/i.test(match)) return 'dawn';
+  if (/morning|forenoon/i.test(match)) return 'morning';
+  if (/noon|midday|high noon/i.test(match)) return 'noon';
+  if (/afternoon/i.test(match)) return 'afternoon';
+  if (/dusk|sunset|twilight|evening/i.test(match)) return 'evening';
+  if (/night|nightfall|midnight/i.test(match)) return 'night';
+  return lower;
+};
+
+const normalizeSeason = (match: string): string => {
+  const lower = match.toLowerCase();
+  return lower === 'autumn' ? 'fall' : lower;
+};
+
+const pushMarker = (
+  markers: TemporalMarker[],
+  marker: string,
+  normalized: string,
+  category: TemporalMarker['category'],
+  text: string,
+  offset: number,
+): void => {
+  markers.push({
+    marker,
+    normalized,
+    category,
+    offset,
+    sentence: extractSentence(text, offset),
+  });
+};
+
+/**
+ * Lightweight extraction of temporal markers for quick continuity checks.
+ * Focuses on simple keywords (days of week, time-of-day, seasons)
+ * to enable realtime conflict detection without heavy NLP.
+ */
+export const extractTemporalMarkers = (text: string): TemporalMarker[] => {
+  const markers: TemporalMarker[] = [];
+
+  // Days of the week
+  let match: RegExpExecArray | null;
+  const dayPattern = clonePattern(DAY_PATTERN);
+  while ((match = dayPattern.exec(text)) !== null) {
+    pushMarker(markers, match[0], normalizeDay(match[0]), 'day', text, match.index);
+  }
+
+  // Time-of-day markers
+  for (const patternBase of TIME_OF_DAY_PATTERNS) {
+    const pattern = clonePattern(patternBase);
+    while ((match = pattern.exec(text)) !== null) {
+      pushMarker(markers, match[0], normalizeTimeOfDay(match[0]), 'time_of_day', text, match.index);
+    }
+  }
+
+  // Seasons
+  const seasonPattern = clonePattern(SEASON_PATTERN);
+  while ((match = seasonPattern.exec(text)) !== null) {
+    pushMarker(markers, match[0], normalizeSeason(match[0]), 'season', text, match.index);
+  }
+
+  return markers;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ import { extractFacts } from '../memory/factExtractor';
 import { filterNovelLoreEntities } from '../memory/relevance';
 import { getImportantReminders, type ProactiveSuggestion } from '../memory/proactive';
 import { searchBedsideHistory, type BedsideHistoryMatch } from '../memory/bedsideHistorySearch';
+import { extractTemporalMarkers, type TemporalMarker } from '../intelligence/timelineTracker';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -63,6 +64,7 @@ export interface ThinkerState {
   editDeltaAccumulator: number;
   lastEditEvolveAt: number;
   lastBedsideEvolveAt: number;
+  lastTimelineCheckAt: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,6 +73,8 @@ export interface ThinkerState {
 
 const SIGNIFICANT_EDIT_THRESHOLD = 500;
 const SIGNIFICANT_EDIT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const TIMELINE_CONTEXT_WINDOW = 2000;
+const TIMELINE_CHECK_COOLDOWN_MS = 30_000;
 
 const DEFAULT_CONFIG: ThinkerConfig = {
   debounceMs: 10000, // 10 seconds between thinks
@@ -161,6 +165,7 @@ export class ProactiveThinker {
       editDeltaAccumulator: 0,
       lastEditEvolveAt: 0,
       lastBedsideEvolveAt: 0,
+      lastTimelineCheckAt: 0,
     };
   }
 
@@ -233,6 +238,7 @@ export class ProactiveThinker {
   private handleEvent(event: AppEvent): void {
     this.maybeUpdateBedsideNotes(event);
     this.enqueueEvent(event);
+    void this.detectConflicts(event);
     this.scheduleThinking(this.isUrgentEvent(event));
   }
 
@@ -310,6 +316,79 @@ export class ProactiveThinker {
         'edit:significant',
       ],
     });
+  }
+
+  private async detectConflicts(event: AppEvent): Promise<void> {
+    if (event.type !== 'SIGNIFICANT_EDIT_DETECTED' || !this.getState) return;
+
+    const now = Date.now();
+    if (now - this.state.lastTimelineCheckAt < TIMELINE_CHECK_COOLDOWN_MS) return;
+
+    const state = this.getState();
+    const timeline = state.intelligence.timeline;
+    const activeChapterId = state.manuscript.activeChapterId;
+
+    if (!timeline || !activeChapterId) return;
+
+    const currentText = state.manuscript.currentText || '';
+    if (!currentText) return;
+
+    const recentText = currentText.slice(-TIMELINE_CONTEXT_WINDOW);
+    const newMarkers = extractTemporalMarkers(recentText);
+
+    if (newMarkers.length === 0) return;
+
+    this.state.lastTimelineCheckAt = now;
+
+    const chapterEvents = timeline.events
+      .filter(timelineEvent => timelineEvent.chapterId === activeChapterId)
+      .sort((a, b) => a.offset - b.offset);
+
+    const historicalMarkers: TemporalMarker[] = [];
+    for (const timelineEvent of chapterEvents) {
+      const baseText = timelineEvent.temporalMarker || timelineEvent.description;
+      if (!baseText) continue;
+      historicalMarkers.push(...extractTemporalMarkers(baseText));
+    }
+
+    const latestByCategory = new Map<TemporalMarker['category'], TemporalMarker>();
+    for (const marker of historicalMarkers) {
+      latestByCategory.set(marker.category, marker);
+    }
+
+    for (const marker of newMarkers) {
+      const previous = latestByCategory.get(marker.category);
+      if (previous && previous.normalized !== marker.normalized) {
+        const suggestion: ProactiveSuggestion = {
+          id: `timeline-conflict-${Date.now()}`,
+          type: 'timeline_conflict',
+          priority: 'high',
+          title: 'Timeline conflict detected',
+          description: `Previous context referenced ${previous.normalized}, but the latest edit mentions ${marker.normalized}. Confirm chapter continuity.`,
+          source: { type: 'memory', id: 'timeline-tracker' },
+          tags: ['continuity', 'timeline', marker.category],
+          createdAt: Date.now(),
+          metadata: {
+            previousMarker: previous.marker,
+            previousContext: previous.sentence,
+            currentMarker: marker.marker,
+            currentContext: marker.sentence,
+            category: marker.category,
+          },
+        };
+
+        if (this.onSuggestion) {
+          this.onSuggestion(suggestion);
+        }
+
+        this.state.lastTimelineCheckAt = now;
+        break;
+      }
+
+      if (!previous) {
+        latestByCategory.set(marker.category, marker);
+      }
+    }
   }
 
   private enqueueEvent(event: AppEvent): void {
