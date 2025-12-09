@@ -274,8 +274,8 @@ export function useVoiceSession(): UseVoiceSessionResult {
 
     } catch (e) {
       console.error('[useVoiceSession] Failed to start:', e);
-      setError(e instanceof Error ? e.message : 'Failed to start voice session');
       stopSession();
+      setError(e instanceof Error ? e.message : 'Failed to start voice session');
     }
   }, [stopSession, startVisualizer]);
 
