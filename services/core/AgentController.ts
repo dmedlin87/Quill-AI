@@ -13,6 +13,8 @@ import { createChatSessionFromContext, buildInitializationMessage } from './agen
 import { buildAgentContextPrompt } from './agentContextBuilder';
 import { getSmartAgentContext, type AppBrainState } from '@/services/appBrain';
 import { ToolRunner } from './toolRunner';
+import { createAbortCoordination, isAbortError } from './abortCoordinator';
+import { buildAppBrainStateFromAgentContext } from './agentStateFactory';
 
 // ---- Shared with existing hook ----
 
@@ -293,22 +295,11 @@ export class DefaultAgentController implements AgentController {
     this.updateState({ status: 'thinking', lastError: undefined });
     this.toolRunner.resetTurn();
 
-    const internalAbortController = new AbortController();
-    this.currentAbortController = internalAbortController;
-
-    const externalSignal = input.options?.abortSignal;
-    const teardownAbortListener =
-      externalSignal && !externalSignal.aborted
-        ? (() => {
-            const onAbort = () => internalAbortController.abort();
-            externalSignal.addEventListener('abort', onAbort, { once: true });
-            return () => externalSignal.removeEventListener('abort', onAbort);
-          })()
-        : null;
-
-    if (externalSignal?.aborted) {
-      internalAbortController.abort();
-    }
+    // Use extracted abort coordination utility
+    const { internalController, teardown: teardownAbortListener } = createAbortCoordination(
+      input.options?.abortSignal
+    );
+    this.currentAbortController = internalController;
 
     // Ensure we have an initialized chat session
     if (!this.chat && this.currentPersona) {
@@ -329,7 +320,7 @@ export class DefaultAgentController implements AgentController {
     };
     this.events?.onMessage?.(userMessage);
 
-    const abortSignal = internalAbortController.signal;
+    const abortSignal = internalController.signal;
 
     try {
       const { streamHandlers } = input.options || {};
@@ -351,6 +342,18 @@ export class DefaultAgentController implements AgentController {
 
       let smartContextString: string | undefined;
       try {
+        // Use extracted state factory to build AppBrainState
+        const appBrainState = buildAppBrainStateFromAgentContext({
+          projectId: this.context.projectId ?? null,
+          chapters: this.context.chapters,
+          fullText: this.context.fullText,
+          intelligenceHUD: this.context.intelligenceHUD,
+          analysis: this.context.analysis,
+          lore: this.context.lore,
+          editorContext,
+          persona: this.currentPersona,
+        });
+
         const selection = editorContext.selection
           ? {
               start: editorContext.selection.start,
@@ -358,61 +361,6 @@ export class DefaultAgentController implements AgentController {
               text: editorContext.selection.text,
             }
           : null;
-
-        const appBrainState: AppBrainState = {
-          manuscript: {
-            projectId: this.context.projectId ?? null,
-            projectTitle: '',
-            chapters: this.context.chapters,
-            activeChapterId: this.context.chapters[0]?.id ?? null,
-            activeArcId: null,
-            currentText: this.context.fullText,
-            branches: [],
-            activeBranchId: null,
-            setting: undefined,
-            arcs: [],
-          },
-          intelligence: {
-            hud: this.context.intelligenceHUD ?? null,
-            full: null,
-            entities: null,
-            timeline: null,
-            style: null,
-            heatmap: null,
-            lastProcessedAt: Date.now(),
-          },
-          analysis: {
-            result: this.context.analysis ?? null,
-            status: {
-              pacing: 'idle',
-              characters: 'idle',
-              plot: 'idle',
-              setting: 'idle',
-            },
-            inlineComments: [],
-          },
-          lore: {
-            characters: this.context.lore?.characters ?? [],
-            worldRules: this.context.lore?.worldRules ?? [],
-            manuscriptIndex: undefined,
-          },
-          ui: {
-            cursor: { position: editorContext.cursorPosition, scene: null, paragraph: null },
-            selection,
-            activePanel: 'agent',
-            activeView: 'editor',
-            isZenMode: false,
-            activeHighlight: null,
-            microphone: { status: 'idle', mode: 'text', lastTranscript: null, error: null },
-          },
-          session: {
-            chatHistory: [],
-            currentPersona: this.currentPersona ?? null,
-            pendingToolCalls: [],
-            lastAgentAction: null,
-            isProcessing: false,
-          },
-        };
 
         const smartContext = await getSmartAgentContext(appBrainState, this.context.projectId ?? null, {
           mode: 'text',
@@ -467,7 +415,7 @@ export class DefaultAgentController implements AgentController {
 
       this.updateState({ status: 'idle' });
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      if (isAbortError(error)) {
         // Aborts are treated as a clean cancellation, not an error state.
         this.updateState({ status: 'idle' });
       } else {

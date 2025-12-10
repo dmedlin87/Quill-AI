@@ -52,6 +52,31 @@ import {
 // Types imported from @/types as needed
 import { generateContinuation, rewriteText } from '@/services/gemini/agent';
 
+// Import split contexts for composition
+import {
+  AppBrainActionsProvider,
+  createNoOpAppBrainActions,
+} from './AppBrainActionsContext';
+import {
+  AppBrainStatusProvider,
+  type AppBrainStatus,
+  createEmptyAppBrainStatus,
+} from './AppBrainStatusContext';
+
+// Re-export split context hooks for direct access
+export {
+  useAppBrainActionsContext,
+  createNoOpAppBrainActions,
+} from './AppBrainActionsContext';
+export {
+  useAppBrainStatusContext,
+  useIsAgentProcessing,
+  usePendingToolCalls,
+  useLastAgentAction,
+  createEmptyAppBrainStatus,
+} from './AppBrainStatusContext';
+export type { AppBrainStatus } from './AppBrainStatusContext';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTEXT TYPES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -551,9 +576,26 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     subscribeAll: eventBus.subscribeAll.bind(eventBus),
   }), [throttledState, actions, contextBuilders]);
 
+  // Build status for split context
+  const status: AppBrainStatus = useMemo(() => ({
+    isProcessing: throttledState.session.isProcessing,
+    pendingToolCalls: throttledState.session.pendingToolCalls,
+    lastAgentAction: throttledState.session.lastAgentAction,
+    currentPersona: throttledState.session.currentPersona,
+  }), [
+    throttledState.session.isProcessing,
+    throttledState.session.pendingToolCalls,
+    throttledState.session.lastAgentAction,
+    throttledState.session.currentPersona,
+  ]);
+
   return (
     <AppBrainContext.Provider value={value}>
-      {children}
+      <AppBrainActionsProvider actions={actions}>
+        <AppBrainStatusProvider status={status}>
+          {children}
+        </AppBrainStatusProvider>
+      </AppBrainActionsProvider>
     </AppBrainContext.Provider>
   );
 };

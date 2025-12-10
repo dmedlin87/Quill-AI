@@ -5,6 +5,12 @@ import { useUsage } from '@/features/shared';
 import { ModelConfig } from '@/config/models';
 import { GrammarSuggestion } from '@/types';
 import { HighlightItem } from './useTiptapSync';
+import {
+  validateSelectionFreshness,
+  validateGrammarSelectionFreshness,
+} from '@/features/shared/utils/selectionValidator';
+import { normalizeGrammarSuggestions } from '@/features/shared/utils/grammarNormalizer';
+import { replaceTextRange } from '@/features/shared/utils/textReplacer';
 
 interface SelectionRange {
   start: number;
@@ -156,24 +162,14 @@ export function useMagicEditor({
 
       if (signal.aborted) return;
 
-      const offset = selectionRange.start;
-      const normalized = suggestions.map(s => ({
-        ...s,
-        start: s.start + offset,
-        end: s.end + offset,
-        originalText: s.originalText ?? selectionRange.text.slice(s.start, s.end),
-      }));
+      const { suggestions: normalized, highlights } = normalizeGrammarSuggestions(
+        suggestions,
+        selectionRange.start,
+        selectionRange.text
+      );
 
       setGrammarSuggestions(normalized);
-      setGrammarHighlights(
-        normalized.map(s => ({
-          start: s.start,
-          end: s.end,
-          color: 'var(--error-500)',
-          title: s.message,
-          severity: s.severity === 'style' ? 'warning' : 'error',
-        }))
-      );
+      setGrammarHighlights(highlights);
     } catch (e) {
       if (signal.aborted) return;
       const message = e instanceof Error ? e.message : 'Grammar check failed';
@@ -230,18 +226,25 @@ export function useMagicEditor({
       return;
     }
 
-    const targetText = currentText.substring(targetSuggestion.start, targetSuggestion.end);
+    const validation = validateGrammarSelectionFreshness(currentText, {
+      start: targetSuggestion.start,
+      end: targetSuggestion.end,
+      text: targetSuggestion.originalText ?? '',
+    });
 
-    if (targetText !== targetSuggestion.originalText) {
-      setMagicError('Text has changed since grammar check. Please re-run.');
+    if (!validation.isValid) {
+      setMagicError(validation.errorMessage!);
       closeMagicBar();
       clearSelection();
       return;
     }
 
-    const before = currentText.substring(0, targetSuggestion.start);
-    const after = currentText.substring(targetSuggestion.end);
-    const updated = before + targetSuggestion.replacement + after;
+    const updated = replaceTextRange(
+      currentText,
+      targetSuggestion.start,
+      targetSuggestion.end,
+      targetSuggestion.replacement
+    );
 
     commit(updated, 'Grammar fix applied', 'User');
     dismissGrammarSuggestion(targetSuggestion.id);
@@ -258,19 +261,30 @@ export function useMagicEditor({
     if (!grammarSuggestions.length) return;
     const currentText = getCurrentText();
 
+    // Sort in reverse order to avoid offset issues
     const sorted = [...grammarSuggestions].sort((a, b) => b.start - a.start);
     let updated = currentText;
 
     for (const suggestion of sorted) {
-      const targetText = updated.substring(suggestion.start, suggestion.end);
-      if (targetText !== suggestion.originalText) {
-        setMagicError('Text has changed since grammar check. Please re-run.');
+      const validation = validateGrammarSelectionFreshness(updated, {
+        start: suggestion.start,
+        end: suggestion.end,
+        text: suggestion.originalText ?? '',
+      });
+
+      if (!validation.isValid) {
+        setMagicError(validation.errorMessage!);
         closeMagicBar();
         clearSelection();
         return;
       }
 
-      updated = `${updated.substring(0, suggestion.start)}${suggestion.replacement}${updated.substring(suggestion.end)}`;
+      updated = replaceTextRange(
+        updated,
+        suggestion.start,
+        suggestion.end,
+        suggestion.replacement
+      );
     }
 
     commit(updated, 'Applied grammar fixes', 'User');
@@ -283,33 +297,33 @@ export function useMagicEditor({
   const applyVariation = useCallback((newText: string) => {
     const currentText = getCurrentText();
     const capturedSelection = operationSelectionRef.current;
-    
+
     if (!capturedSelection) {
       setMagicError('No selection to apply to');
       return;
     }
-    
-    // Validate selection is still valid
-    const expectedText = currentText.substring(
-      capturedSelection.start, 
-      capturedSelection.end
-    );
-    
-    if (expectedText !== capturedSelection.text) {
-      setMagicError('Text has changed since selection. Please re-select and try again.');
+
+    // Validate selection is still valid using extracted utility
+    const validation = validateSelectionFreshness(currentText, capturedSelection);
+
+    if (!validation.isValid) {
+      setMagicError(validation.errorMessage!);
       closeMagicBar();
       clearSelection();
       return;
     }
-    
-    const before = currentText.substring(0, capturedSelection.start);
-    const after = currentText.substring(capturedSelection.end);
-    const updated = before + newText + after;
 
-    const description = magicVariations.length > 0 
-      ? 'Magic Edit: Variation Applied' 
+    const updated = replaceTextRange(
+      currentText,
+      capturedSelection.start,
+      capturedSelection.end,
+      newText
+    );
+
+    const description = magicVariations.length > 0
+      ? 'Magic Edit: Variation Applied'
       : 'Magic Edit: Context Replacement';
-    
+
     commit(updated, description, 'User');
     closeMagicBar();
     clearSelection();
