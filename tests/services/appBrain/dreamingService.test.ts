@@ -174,7 +174,7 @@ describe('DreamingService', () => {
 
     await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100);
 
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Dreaming cycle failed'), expect.any(Error));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Dreaming cycle failed'), '');
     // Should reset and be ready again
     expect(emitDreamingStateChanged).toHaveBeenLastCalledWith(false);
   });

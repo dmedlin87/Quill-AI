@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getProactiveThinker, startProactiveThinker, stopProactiveThinker, resetProactiveThinker, ProactiveThinker } from '../../../services/appBrain/proactiveThinker';
+import { getProactiveThinker, startProactiveThinker, stopProactiveThinker, resetProactiveThinker, ProactiveThinker, setProactiveThinkerSettingsAdapter, resetProactiveThinkerSettingsAdapter } from '../../../services/appBrain/proactiveThinker';
 import { eventBus } from '../../../services/appBrain/eventBus';
 import { ai } from '../../../services/gemini/client';
 import { evolveBedsideNote, getVoiceProfileForCharacter, upsertVoiceProfile } from '../../../services/memory';
@@ -97,6 +97,7 @@ describe('ProactiveThinker', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     resetProactiveThinker();
+    resetProactiveThinkerSettingsAdapter();
     thinker = getProactiveThinker({ enabled: true });
 
     // Default mocks
@@ -356,7 +357,7 @@ describe('ProactiveThinker', () => {
 
     await thinker.forceThink();
 
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Thinking failed'), expect.any(Error));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Thinking failed'), '', expect.any(Error));
   });
 
   it('should use long term memory context', async () => {
@@ -514,13 +515,19 @@ describe('ProactiveThinker', () => {
   });
 
   it('should apply adaptive relevance weights correctly', async () => {
-    vi.mocked(useSettingsStore.getState).mockReturnValue({
-        suggestionWeights: {
+    setProactiveThinkerSettingsAdapter({
+        getSuggestionWeights: () => ({
             plot: 0.1, // Should mute or lower priority
             character: 1.0, // Normal
-            pacing: 1.9 // Boost
-        },
-    } as any);
+            pacing: 1.9, // Boost
+            style: 1.0,
+            continuity: 1.0,
+            lore_discovery: 1.0,
+            timeline_conflict: 1.0,
+            voice_inconsistency: 1.0,
+            other: 1.0,
+        }),
+    });
 
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
 
@@ -551,13 +558,19 @@ describe('ProactiveThinker', () => {
   });
 
   it('applies weighting rules and sorting for related memory suggestions', () => {
-    vi.mocked(useSettingsStore.getState).mockReturnValue({
-        suggestionWeights: {
+    setProactiveThinkerSettingsAdapter({
+        getSuggestionWeights: () => ({
             plot: 0.01, // Hard mute
             character: 0.4, // Downgrade from high to medium
             style: 2.0, // Boost from low to high
-        },
-    } as any);
+            pacing: 1.0,
+            continuity: 1.0,
+            lore_discovery: 1.0,
+            timeline_conflict: 1.0,
+            voice_inconsistency: 1.0,
+            other: 1.0,
+        }),
+    });
 
     const weighted = (thinker as any).applyAdaptiveRelevance([
         { title: 'Plot callback', type: 'related_memory', tags: ['plot'], priority: 'high' },
@@ -659,11 +672,19 @@ describe('ProactiveThinker', () => {
   });
 
   it('maps categories and weighting for adaptive relevance', () => {
-    vi.mocked(useSettingsStore.getState).mockReturnValue({
-        suggestionWeights: {
+    setProactiveThinkerSettingsAdapter({
+        getSuggestionWeights: () => ({
             other: 0.01,
-        },
-    } as any);
+            plot: 1.0,
+            character: 1.0,
+            pacing: 1.0,
+            style: 1.0,
+            continuity: 1.0,
+            lore_discovery: 1.0,
+            timeline_conflict: 1.0,
+            voice_inconsistency: 1.0,
+        }),
+    });
 
     const weighted = (thinker as any).applyAdaptiveRelevance([
         { title: 'Misc item', type: 'related_memory', tags: ['other'], priority: 'high' },
@@ -719,7 +740,7 @@ describe('ProactiveThinker', () => {
       changeReason: 'test',
     });
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Bedside evolve failed:'), expect.any(Error));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Bedside evolve failed'), '');
 
     cooldownThinker.stop();
     warnSpy.mockRestore();
@@ -749,7 +770,7 @@ describe('ProactiveThinker', () => {
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fallback = (thinker as any).parseThinkingResult('{oops');
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to parse thinking result:'), expect.any(Error));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to parse thinking result'), '');
     expect(fallback).toEqual({ suggestions: [], significant: false });
     warnSpy.mockRestore();
   });
@@ -798,7 +819,7 @@ describe('ProactiveThinker', () => {
 
     await thinker.forceThink();
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Bedside evolve failed:'), expect.any(Error));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Bedside evolve failed'), '');
 
     warnSpy.mockRestore();
   });

@@ -551,7 +551,15 @@ export class ProactiveThinker {
       const speaker = this.inferDialogueSpeaker(block.context, knownCharacters);
       if (!speaker) continue;
 
-      const dialogueLines: DialogueLine[] = [{ speaker, quote: block.quote }];
+      const dialogueLines: DialogueLine[] = [{
+        id: 'live-sample-0',
+        quote: block.quote,
+        speaker,
+        offset: 0,
+        length: block.quote.length,
+        replyTo: null,
+        sentiment: 0,
+      }];
       const liveProfile = generateVoiceProfile(dialogueLines, { speakerName: speaker });
       const baseline = await getVoiceProfileForCharacter(this.projectId, speaker);
 
