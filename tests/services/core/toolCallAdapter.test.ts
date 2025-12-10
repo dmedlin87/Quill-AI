@@ -96,6 +96,36 @@ describe('createToolCallAdapter', () => {
     );
   });
 
+  it('uses fallback failure message when error missing but message provided', () => {
+    const ui: ToolCallUI = {
+      onMessage: vi.fn(),
+    };
+
+    const adapter = createToolCallAdapter(ui);
+    adapter.handleToolEnd('summonMuse', { success: false, message: 'Failed softly' });
+
+    expect(ui.onMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: '⚠️ summonMuse failed: Failed softly',
+      }),
+    );
+  });
+
+  it('falls back to Unknown error when both error and message absent', () => {
+    const ui: ToolCallUI = {
+      onMessage: vi.fn(),
+    };
+
+    const adapter = createToolCallAdapter(ui);
+    adapter.handleToolEnd('summonMuse', { success: false, message: '' });
+
+    expect(ui.onMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: '⚠️ summonMuse failed: Unknown error',
+      }),
+    );
+  });
+
   it('includes timestamp in messages', () => {
     const ui: ToolCallUI = {
       onMessage: vi.fn(),

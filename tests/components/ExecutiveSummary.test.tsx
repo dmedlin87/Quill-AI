@@ -64,4 +64,29 @@ describe('ExecutiveSummary', () => {
     expect(stop).toHaveBeenCalled();
     expect(play).not.toHaveBeenCalled();
   });
+
+  it('shows empty-state copy and disables playback when summary is missing', () => {
+    const play = vi.fn();
+    const stop = vi.fn();
+
+    useTextToSpeechMock.mockReturnValue({
+      isPlaying: false,
+      play,
+      stop,
+    });
+
+    render(<ExecutiveSummary summary="   " />);
+
+    expect(
+      screen.getByText(/No summary available\./i),
+    ).toBeInTheDocument();
+
+    const button = screen.getByRole('button', { name: /read aloud/i });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'No summary available');
+
+    fireEvent.click(button);
+    expect(play).not.toHaveBeenCalled();
+    expect(stop).not.toHaveBeenCalled();
+  });
 });
