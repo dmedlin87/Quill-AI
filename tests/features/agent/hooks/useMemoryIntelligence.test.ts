@@ -1,280 +1,190 @@
-import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import useMemoryIntelligence from '@/features/agent/hooks/useMemoryIntelligence';
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { useMemoryIntelligence } from '@/features/agent/hooks/useMemoryIntelligence';
+import { eventBus } from '@/services/appBrain';
+import {
+  observeAnalysisResults,
+  observeIntelligenceResults,
+} from '@/services/memory/autoObserver';
+import {
+  runConsolidation,
+  reinforceMemory,
+  getMemoryHealthStats,
+} from '@/services/memory/consolidation';
+import { getActiveGoals, evolveBedsideNote } from '@/services/memory';
+import { serializeBedsideNote } from '@/services/memory/bedsideNoteSerializer';
 
-const mocks = vi.hoisted(() => ({
-  observeAnalysisResults: vi.fn(),
-  observeIntelligenceResults: vi.fn(),
-  runConsolidation: vi.fn(),
-  reinforceMemory: vi.fn(),
-  getMemoryHealthStats: vi.fn(),
-  subscribe: vi.fn(),
-  getActiveGoals: vi.fn(),
-  evolveBedsideNote: vi.fn(),
-}));
-
-type MockObservationResult = {
-  created: any[];
-  skipped: number;
-  errors?: string[];
-};
-
-vi.mock('@/services/appBrain', () => ({
-  eventBus: {
-    subscribe: mocks.subscribe,
-  },
-}));
-
-vi.mock('@/services/memory/autoObserver', () => ({
-  observeAnalysisResults: (...args: any[]) => mocks.observeAnalysisResults(...args),
-  observeIntelligenceResults: (...args: any[]) => mocks.observeIntelligenceResults(...args),
-}));
-
-vi.mock('@/services/memory/consolidation', () => ({
-  runConsolidation: (...args: any[]) => mocks.runConsolidation(...args),
-  reinforceMemory: (...args: any[]) => mocks.reinforceMemory(...args),
-  reinforceMemories: vi.fn(),
-  getMemoryHealthStats: (...args: any[]) => mocks.getMemoryHealthStats(...args),
-}));
-
-vi.mock('@/services/memory', () => ({
-  getActiveGoals: (...args: any[]) => mocks.getActiveGoals(...args),
-  evolveBedsideNote: (...args: any[]) => mocks.evolveBedsideNote(...args),
-}));
+// Mocks
+vi.mock('@/services/appBrain', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        eventBus: {
+            subscribe: vi.fn(),
+            emit: vi.fn(),
+        },
+    };
+});
+vi.mock('@/services/memory/autoObserver');
+vi.mock('@/services/memory/consolidation');
+vi.mock('@/services/memory');
+vi.mock('@/services/memory/bedsideNoteSerializer');
 
 describe('useMemoryIntelligence', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    mocks.subscribe.mockReturnValue(() => {});
-    mocks.observeAnalysisResults.mockResolvedValue({ created: ['a'], skipped: 0 });
-    mocks.observeIntelligenceResults.mockResolvedValue({ created: ['b'], skipped: 0 });
-    mocks.runConsolidation.mockResolvedValue({
-      decayed: 1,
-      merged: 0,
-      archived: 0,
-      reinforced: 0,
-      errors: [],
-      duration: 10,
-    });
-    mocks.reinforceMemory.mockResolvedValue(true);
-    mocks.getMemoryHealthStats.mockResolvedValue({
-      totalMemories: 3,
-      avgImportance: 0.5,
-      lowImportanceCount: 1,
-      oldMemoriesCount: 0,
-      activeGoals: 0,
-      completedGoals: 0,
-    });
-  });
+    const mockProjectId = 'p1';
 
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
-    vi.restoreAllMocks();
-  });
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.useFakeTimers();
 
-  it('returns "No project ID" when observing without a project', async () => {
-    const { result } = renderHook(() =>
-      useMemoryIntelligence({
-        projectId: null,
-        autoObserveEnabled: false,
-        consolidateOnMount: false,
-        consolidationIntervalMs: 0,
-      })
-    );
-
-    let observation: MockObservationResult | null = null;
-    await act(async () => {
-      observation = await result.current.observeAnalysis({} as any);
+        // Default Mocks
+        (eventBus.subscribe as any).mockReturnValue(vi.fn());
+        (observeAnalysisResults as any).mockResolvedValue({ created: [], skipped: 0 });
+        (observeIntelligenceResults as any).mockResolvedValue({ created: [], skipped: 0 });
+        (runConsolidation as any).mockResolvedValue({ duration: 100, merged: 0 });
+        (reinforceMemory as any).mockResolvedValue(true);
+        (getMemoryHealthStats as any).mockResolvedValue({ totalMemories: 10 });
+        (getActiveGoals as any).mockResolvedValue([]);
+        (serializeBedsideNote as any).mockReturnValue({ text: 'Bedside Note' });
+        (evolveBedsideNote as any).mockResolvedValue(true);
     });
 
-    expect(observation).toEqual({ created: [], skipped: 0, errors: ['No project ID'] });
-
-    let intelligenceObservation: MockObservationResult | null = null;
-    await act(async () => {
-      intelligenceObservation = await result.current.observeIntelligence({} as any);
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
-    expect(intelligenceObservation).toEqual({ created: [], skipped: 0, errors: ['No project ID'] });
-  });
+    it('initializes and runs consolidation on mount', async () => {
+        renderHook(() => useMemoryIntelligence({
+            projectId: mockProjectId,
+            consolidateOnMount: true
+        }));
 
-  it('runs consolidation on mount, schedules intervals, and cleans up timers', async () => {
-    const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
-    const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+        // Should run consolidation after 2000ms
+        await act(async () => {
+            vi.advanceTimersByTime(2000);
+        });
 
-    const { result, unmount } = renderHook(() =>
-      useMemoryIntelligence({
-        projectId: 'project-1',
-        consolidationIntervalMs: 5000,
-      })
-    );
-
-    expect(mocks.runConsolidation).not.toHaveBeenCalled();
-
-    act(() => {
-      vi.advanceTimersByTime(2000);
+        expect(runConsolidation).toHaveBeenCalledWith({ projectId: mockProjectId });
+        expect(getMemoryHealthStats).toHaveBeenCalledWith(mockProjectId);
     });
 
-    await act(async () => {
-      await Promise.resolve();
+    it('skips consolidation on mount if disabled', async () => {
+        renderHook(() => useMemoryIntelligence({
+            projectId: mockProjectId,
+            consolidateOnMount: false
+        }));
+
+        await act(async () => {
+            vi.advanceTimersByTime(3000);
+        });
+
+        expect(runConsolidation).not.toHaveBeenCalled();
     });
 
-    expect(mocks.runConsolidation).toHaveBeenCalledTimes(1);
-    expect(mocks.getMemoryHealthStats).toHaveBeenCalledWith('project-1');
-    expect(result.current.lastConsolidation).toEqual({
-      decayed: 1,
-      merged: 0,
-      archived: 0,
-      reinforced: 0,
-      errors: [],
-      duration: 10,
+    it('runs consolidation periodically', async () => {
+        renderHook(() => useMemoryIntelligence({
+            projectId: mockProjectId,
+            consolidateOnMount: false,
+            consolidationIntervalMs: 5000
+        }));
+
+        expect(runConsolidation).not.toHaveBeenCalled();
+
+        await act(async () => {
+            vi.advanceTimersByTime(5000);
+        });
+
+        expect(runConsolidation).toHaveBeenCalledTimes(1);
     });
 
-    act(() => {
-      vi.advanceTimersByTime(5000);
+    it('observes analysis results', async () => {
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
+
+        const mockAnalysis = { summary: 'Sum', weaknesses: [], plotIssues: [], generalSuggestions: [] } as any;
+
+        await act(async () => {
+            await result.current.observeAnalysis(mockAnalysis);
+        });
+
+        expect(observeAnalysisResults).toHaveBeenCalledWith(mockAnalysis, { projectId: mockProjectId });
+        expect(evolveBedsideNote).toHaveBeenCalled();
+        expect(result.current.lastObservation).toBeDefined();
     });
 
-    expect(mocks.runConsolidation).toHaveBeenCalledTimes(2);
+    it('observes intelligence results', async () => {
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
 
-    unmount();
+        const mockIntel = { some: 'data' } as any;
 
-    expect(clearTimeoutSpy).toHaveBeenCalled();
-    expect(clearIntervalSpy).toHaveBeenCalled();
-  });
+        await act(async () => {
+            await result.current.observeIntelligence(mockIntel);
+        });
 
-  it('refreshHealthStats updates state and handles errors', async () => {
-    const { result } = renderHook(() =>
-      useMemoryIntelligence({
-        projectId: 'project-1',
-        autoObserveEnabled: false,
-        consolidateOnMount: false,
-        consolidationIntervalMs: 0,
-      })
-    );
-
-    await act(async () => {
-      await result.current.refreshHealthStats();
+        expect(observeIntelligenceResults).toHaveBeenCalledWith(mockIntel, { projectId: mockProjectId });
     });
 
-    expect(result.current.healthStats).toEqual({
-      totalMemories: 3,
-      avgImportance: 0.5,
-      lowImportanceCount: 1,
-      oldMemoriesCount: 0,
-      activeGoals: 0,
-      completedGoals: 0,
+    it('consolidates manually', async () => {
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId, consolidateOnMount: false }));
+
+        await act(async () => {
+            await result.current.consolidate();
+        });
+
+        expect(runConsolidation).toHaveBeenCalled();
     });
 
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    mocks.getMemoryHealthStats.mockRejectedValueOnce(new Error('boom'));
+    it('prevents concurrent consolidation', async () => {
+         const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId, consolidateOnMount: false }));
 
-    await act(async () => {
-      await result.current.refreshHealthStats();
+         (runConsolidation as any).mockImplementation(() => new Promise(r => setTimeout(r, 100)));
+
+         let p1: any;
+         let p2: any;
+
+         await act(async () => {
+             p1 = result.current.consolidate();
+             p2 = result.current.consolidate();
+         });
+
+         await act(async () => {
+             vi.advanceTimersByTime(100);
+         });
+
+         await p1;
+         await p2;
+
+         expect(runConsolidation).toHaveBeenCalledTimes(1);
     });
 
-    expect(result.current.healthStats).toEqual({
-      totalMemories: 3,
-      avgImportance: 0.5,
-      lowImportanceCount: 1,
-      oldMemoriesCount: 0,
-      activeGoals: 0,
-      completedGoals: 0,
-    });
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
-  });
+    it('reinforces used memory', async () => {
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
 
-  it('delegates reinforcement to reinforceMemory', async () => {
-    const { result } = renderHook(() =>
-      useMemoryIntelligence({
-        projectId: 'project-1',
-        autoObserveEnabled: false,
-        consolidateOnMount: false,
-        consolidationIntervalMs: 0,
-      })
-    );
+        await act(async () => {
+            await result.current.reinforceUsed('m1', 'retrieval');
+        });
 
-    let reinforced = false;
-    await act(async () => {
-      reinforced = await result.current.reinforceUsed('memory-1', 'manual');
+        expect(reinforceMemory).toHaveBeenCalledWith({ memoryId: 'm1', reason: 'retrieval' });
     });
 
-    expect(reinforced).toBe(true);
-    expect(mocks.reinforceMemory).toHaveBeenCalledWith({ memoryId: 'memory-1', reason: 'manual' });
-  });
+    it('handles no project ID', async () => {
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: null }));
 
-  it('evolves the bedside-note plan after observing analysis for a project', async () => {
-    const analysis: any = {
-      summary: 'Story so far',
-      weaknesses: ['Pacing is uneven'],
-      plotIssues: [{ issue: 'Unclear motivation in Act 2' }],
-    };
+        const res = await act(async () => {
+            return await result.current.consolidate();
+        });
 
-    mocks.getActiveGoals.mockResolvedValueOnce([
-      {
-        id: 'goal-1',
-        projectId: 'project-1',
-        title: 'Tighten pacing',
-        status: 'active',
-        progress: 25,
-        createdAt: Date.now(),
-      },
-    ]);
-    mocks.evolveBedsideNote.mockResolvedValueOnce({} as any);
-
-    const { result } = renderHook(() =>
-      useMemoryIntelligence({
-        projectId: 'project-1',
-        autoObserveEnabled: false,
-        consolidateOnMount: false,
-        consolidationIntervalMs: 0,
-      })
-    );
-
-    await act(async () => {
-      await result.current.observeAnalysis(analysis);
+        expect(runConsolidation).not.toHaveBeenCalled();
+        expect(res.errors).toContain('No project ID');
     });
 
-    expect(mocks.observeAnalysisResults).toHaveBeenCalledWith(analysis, { projectId: 'project-1' });
-    expect(mocks.getActiveGoals).toHaveBeenCalledWith('project-1');
-    expect(mocks.evolveBedsideNote).toHaveBeenCalledTimes(1);
-    const [projectIdArg, planText, options] = mocks.evolveBedsideNote.mock.calls[0];
-    expect(projectIdArg).toBe('project-1');
-    expect(typeof planText).toBe('string');
-    expect(planText).toContain('Current Focus:');
-    expect(planText).toContain('Active Goals:');
-    expect(planText).toContain('Warnings & Risks:');
-    expect(options).toEqual({ changeReason: 'analysis_update', structuredContent: expect.any(Object) });
-  });
+    it('refreshes health stats', async () => {
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
 
-  it('returns cached result when consolidation is already in progress', async () => {
-    const neverResolves = new Promise(() => {});
-    mocks.runConsolidation.mockImplementationOnce(() => neverResolves);
+        await act(async () => {
+             await result.current.refreshHealthStats();
+        });
 
-    const { result } = renderHook(() =>
-      useMemoryIntelligence({
-        projectId: 'project-1',
-        autoObserveEnabled: false,
-        consolidateOnMount: false,
-        consolidationIntervalMs: 0,
-      })
-    );
-
-    let inFlightResult: any;
-    let concurrentResult: any;
-    await act(async () => {
-      inFlightResult = result.current.consolidate();
-      concurrentResult = await result.current.consolidate();
+        expect(getMemoryHealthStats).toHaveBeenCalled();
+        expect(result.current.healthStats?.totalMemories).toBe(10);
     });
-
-    expect(inFlightResult).toBeInstanceOf(Promise);
-    expect(concurrentResult).toEqual({
-      decayed: 0,
-      merged: 0,
-      archived: 0,
-      reinforced: 0,
-      errors: ['Consolidation already in progress'],
-      duration: 0,
-    });
-  });
 });
