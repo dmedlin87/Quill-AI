@@ -4,6 +4,7 @@ import { SidebarTab, MainView, type CharacterProfile } from '@/types';
 import { DEFAULT_PERSONAS } from '@/types/personas';
 import { AIPresenceOrb, type OrbStatus } from '@/features/agent';
 import { useLayoutStore } from './store/useLayoutStore';
+import { AccessibleTooltip } from '@/features/shared/components/AccessibleTooltip';
 import {
   ZenIcon,
   AnalysisIcon,
@@ -17,6 +18,7 @@ import {
   SunIcon,
   MoonIcon,
   SettingsIcon,
+  HomeIcon,
 } from '@/features/shared/components/Icons';
 
 interface NavigationRailProps {
@@ -26,13 +28,13 @@ interface NavigationRailProps {
   analysisReady: boolean;
 }
 
-const NAV_ITEMS: Array<{ tab: SidebarTab; Icon: React.FC<{ className?: string }>; label: string }> = [
-  { tab: SidebarTab.ANALYSIS, Icon: AnalysisIcon, label: 'Analysis' },
-  { tab: SidebarTab.HISTORY, Icon: HistoryIcon, label: 'History' },
-  { tab: SidebarTab.VOICE, Icon: MicIcon, label: 'Voice' },
-  { tab: SidebarTab.MEMORY, Icon: MemoryIcon, label: 'Memory' },
-  { tab: SidebarTab.GRAPH, Icon: GraphIcon, label: 'Graph' },
-  { tab: SidebarTab.LORE, Icon: BookIcon, label: 'Lore Bible' },
+const NAV_ITEMS: Array<{ tab: SidebarTab; Icon: React.FC<{ className?: string }>; label: string; description: string }> = [
+  { tab: SidebarTab.ANALYSIS, Icon: AnalysisIcon, label: 'Analysis', description: 'Deep analysis of your manuscript' },
+  { tab: SidebarTab.HISTORY, Icon: HistoryIcon, label: 'History', description: 'View edit history and restore versions' },
+  { tab: SidebarTab.VOICE, Icon: MicIcon, label: 'Voice', description: 'Dictate and transcribe with AI' },
+  { tab: SidebarTab.MEMORY, Icon: MemoryIcon, label: 'Memory', description: 'AI memory and context tracking' },
+  { tab: SidebarTab.GRAPH, Icon: GraphIcon, label: 'Graph', description: 'Visualize character relationships' },
+  { tab: SidebarTab.LORE, Icon: BookIcon, label: 'Lore Bible', description: 'Manage world-building details' },
 ];
 
 export const NavigationRail: React.FC<NavigationRailProps> = ({
@@ -62,7 +64,8 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
   const currentPersona = DEFAULT_PERSONAS[currentPersonaIndex];
 
   const handleHomeClick = () => {
-    window.location.reload();
+    // Navigate back to project dashboard instead of reloading
+    useLayoutStore.getState().resetToProjectDashboard?.() ?? window.location.reload();
   };
 
   return (
@@ -80,27 +83,34 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
       inert={isZenMode ? "true" : undefined}
     >
       {/* Home/Library Button */}
-      <button
-        onClick={handleHomeClick}
-        className="w-10 h-10 rounded-xl bg-[var(--interactive-accent)] text-[var(--text-inverse)] flex items-center justify-center shadow-md mb-4 hover:scale-105 transition-transform"
-        aria-label="Return to Library"
-      >
-        <WandIcon />
-      </button>
+      <AccessibleTooltip content="Return to Project Library" position="right">
+        <button
+          onClick={handleHomeClick}
+          className="w-10 h-10 rounded-xl bg-[var(--interactive-accent)] text-[var(--text-inverse)] flex items-center justify-center shadow-md mb-4 hover:scale-105 transition-transform"
+          aria-label="Return to Library"
+        >
+          <HomeIcon />
+        </button>
+      </AccessibleTooltip>
 
       {/* View Toggle */}
-      <button
-        onClick={toggleView}
-        aria-label={activeView === MainView.EDITOR ? 'Switch to Story Board' : 'Switch to Editor'}
-        aria-pressed={activeView === MainView.STORYBOARD}
-        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all mb-2 ${
-          activeView === MainView.STORYBOARD
-            ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]'
-            : 'text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--text-secondary)]'
-        }`}
+      <AccessibleTooltip 
+        content={activeView === MainView.EDITOR ? 'Switch to Story Board view' : 'Switch to Editor view'} 
+        position="right"
       >
-        <BoardIcon />
-      </button>
+        <button
+          onClick={toggleView}
+          aria-label={activeView === MainView.EDITOR ? 'Switch to Story Board' : 'Switch to Editor'}
+          aria-pressed={activeView === MainView.STORYBOARD}
+          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all mb-2 ${
+            activeView === MainView.STORYBOARD
+              ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]'
+              : 'text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--text-secondary)]'
+          }`}
+        >
+          <BoardIcon />
+        </button>
+      </AccessibleTooltip>
 
       <div className="w-8 border-t border-[var(--border-primary)] mb-2" aria-hidden="true" />
 
@@ -114,59 +124,66 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
       />
 
       {/* Navigation Items */}
-      {NAV_ITEMS.map(({ tab, Icon, label }) => (
-        <button
-          key={tab}
-          onClick={() => openTabWithPanel(tab)}
-          aria-label={label}
-          aria-current={activeTab === tab ? 'page' : undefined}
-          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative ${
-            activeTab === tab
-              ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]'
-              : 'text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--text-secondary)]'
-          }`}
-        >
-          <Icon />
-          {activeTab === tab && (
-            <div
-              className="absolute right-[-13px] top-1/2 -translate-y-1/2 w-1 h-5 bg-[var(--interactive-accent)] rounded-l-sm"
-              aria-hidden="true"
-            />
-          )}
-        </button>
+      {NAV_ITEMS.map(({ tab, Icon, label, description }) => (
+        <AccessibleTooltip key={tab} content={<><strong>{label}</strong><br/><span className="text-[var(--text-muted)]">{description}</span></>} position="right">
+          <button
+            onClick={() => openTabWithPanel(tab)}
+            aria-label={label}
+            aria-current={activeTab === tab ? 'page' : undefined}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative ${
+              activeTab === tab
+                ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]'
+                : 'text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--text-secondary)]'
+            }`}
+          >
+            <Icon />
+            {activeTab === tab && (
+              <div
+                className="absolute right-[-13px] top-1/2 -translate-y-1/2 w-1 h-5 bg-[var(--interactive-accent)] rounded-l-sm"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+        </AccessibleTooltip>
       ))}
 
       {/* Bottom Actions */}
       <div className="mt-auto flex flex-col items-center gap-2">
-        <button
-          onClick={toggleZenMode}
-          aria-label={isZenMode ? 'Exit Zen Mode' : 'Enter Zen Mode'}
-          aria-pressed={isZenMode}
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
-        >
-          <ZenIcon />
-        </button>
+        <AccessibleTooltip content={<><strong>Zen Mode</strong><br/><span className="text-[var(--text-muted)]">Distraction-free writing (Ctrl+Shift+Z)</span></>} position="right">
+          <button
+            onClick={toggleZenMode}
+            aria-label={isZenMode ? 'Exit Zen Mode' : 'Enter Zen Mode'}
+            aria-pressed={isZenMode}
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
+          >
+            <ZenIcon />
+          </button>
+        </AccessibleTooltip>
 
-        <button
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
-        >
-          {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-        </button>
+        <AccessibleTooltip content={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'} position="right">
+          <button
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
+          >
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </button>
+        </AccessibleTooltip>
 
-        <button
-          onClick={() => openTabWithPanel(SidebarTab.SETTINGS)}
-          aria-label="Settings"
-          aria-pressed={activeTab === SidebarTab.SETTINGS}
-          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
-            activeTab === SidebarTab.SETTINGS
-              ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]'
-              : 'text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)]'
-          }`}
-        >
-          <SettingsIcon />
-        </button>
+        <AccessibleTooltip content={<><strong>Settings</strong><br/><span className="text-[var(--text-muted)]">Customize your workspace</span></>} position="right">
+          <button
+            onClick={() => openTabWithPanel(SidebarTab.SETTINGS)}
+            aria-label="Settings"
+            aria-pressed={activeTab === SidebarTab.SETTINGS}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
+              activeTab === SidebarTab.SETTINGS
+                ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]'
+                : 'text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)]'
+            }`}
+          >
+            <SettingsIcon />
+          </button>
+        </AccessibleTooltip>
       </div>
     </motion.nav>
   );
