@@ -17,6 +17,10 @@ import { extractTemporalMarkers } from '../../../services/intelligence/timelineT
 import { extractFacts } from '../../../services/memory/factExtractor';
 import { filterNovelLoreEntities } from '../../../services/memory/relevance';
 
+const memoryMocks = vi.hoisted(() => ({
+  evolveBedsideNote: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock dependencies
 vi.mock('../../../services/gemini/client', () => ({
   ai: {
@@ -414,12 +418,12 @@ describe('ProactiveThinker', () => {
       timestamp: Date.now()
     });
 
-    expect(evolveBedsideNote).toHaveBeenCalledWith(
+    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
       mockProjectId,
       expect.stringContaining('Pacing issue'),
       expect.any(Object)
     );
-    expect(evolveBedsideNote).toHaveBeenCalledWith(
+    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
       mockProjectId,
       expect.stringContaining('Hero'),
       expect.any(Object)
@@ -447,7 +451,7 @@ describe('ProactiveThinker', () => {
 
     await thinker.forceThink();
 
-    expect(evolveBedsideNote).toHaveBeenCalledWith(
+    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
         mockProjectId,
         expect.stringContaining('Unresolved Plot'),
         expect.objectContaining({ changeReason: 'proactive_thinking' })

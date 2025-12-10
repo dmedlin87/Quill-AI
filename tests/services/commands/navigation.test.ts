@@ -186,7 +186,23 @@ describe('NavigateToTextCommand', () => {
     expect(deps.navigateToRange).toHaveBeenCalled();
   });
 
-  it('supports dialogue and character mention search types', async () => {
+  it('searches correctly when chapter hint is provided but no matching chapter found', async () => {
+      // Branch coverage for: if (targetChapter) { ... } else { ... }
+      const cmd = new NavigateToTextCommand();
+      const res = await cmd.execute({ query: 'upon', chapter: 'Unknown Chapter' }, deps);
+
+      // Should search in current text because targetChapter was not found
+      expect(res).toContain('Found at position');
+      expect(deps.selectChapter).not.toHaveBeenCalled();
+  });
+
+  it('supports exact search type', async () => {
+    const cmd = new NavigateToTextCommand();
+    const res = await cmd.execute({ query: 'upon', searchType: 'exact' }, deps);
+    expect(res).toContain('Found at position');
+  });
+
+  it('supports dialogue search type', async () => {
     const cmd = new NavigateToTextCommand();
     const dialogueDeps = makeDeps({
       currentText: baseChapters[1].content,
@@ -197,12 +213,37 @@ describe('NavigateToTextCommand', () => {
       dialogueDeps,
     );
     expect(dialogueRes).toContain('Found at position');
+  });
 
-    const mentionRes = await cmd.execute(
+  it('handles dialogue search type with no match', async () => {
+      const cmd = new NavigateToTextCommand();
+      const dialogueDeps = makeDeps({
+          currentText: 'Just some text without dialogue.',
+          activeChapterId: 'c2',
+      });
+      const res = await cmd.execute(
+          { query: 'Hello', searchType: 'dialogue', character: 'Alice' },
+          dialogueDeps
+      );
+      expect(res).toContain('Could not find');
+  });
+
+  it('supports character mention search type', async () => {
+    const cmd = new NavigateToTextCommand();
+     const mentionRes = await cmd.execute(
       { query: 'Bob', searchType: 'character_mention', character: 'Bob' },
-      { ...deps, currentText: deps.chapters[1].content },
+      { ...deps, currentText: baseChapters[1].content },
     );
     expect(mentionRes).toContain('Found at position');
+  });
+
+  it('handles character mention search type with no match', async () => {
+      const cmd = new NavigateToTextCommand();
+      const res = await cmd.execute(
+          { query: 'Bob', searchType: 'character_mention', character: 'Bob' },
+          { ...deps, currentText: 'Alice is here.' }
+      );
+      expect(res).toContain('Could not find');
   });
 
   it('returns not-found message when no match exists', async () => {
@@ -226,6 +267,11 @@ describe('JumpToChapterCommand', () => {
     const byNumber = await cmd.execute('2', depsNumber);
     expect(byNumber).toContain('Switched');
     expect(depsNumber.selectChapter).toHaveBeenCalledWith('c2');
+
+    // Test direct index matching
+    const byZero = await cmd.execute('0', depsNumber);
+    expect(byZero).toContain('Switched');
+    expect(depsNumber.selectChapter).toHaveBeenCalledWith('c1');
   });
 
   it('reports available chapters when not found', async () => {
