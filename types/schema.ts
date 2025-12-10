@@ -55,6 +55,7 @@ export interface Branch {
   id: string;
   name: string;
   content: string;
+  baseContent?: string; // Content of main when branch was created
   createdAt: number;
 }
 

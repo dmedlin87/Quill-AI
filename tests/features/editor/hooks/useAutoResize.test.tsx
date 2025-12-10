@@ -122,6 +122,67 @@ describe('useAutoResize', () => {
 
     expect(requestSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('handles empty content gracefully', async () => {
+    const ref = React.createRef<{ setValue: (val: string) => void }>();
+    render(<AutoResizeHarness ref={ref} initialValue="" mode="EDITOR" />);
+
+    expect(requestSpy).toHaveBeenCalledTimes(1);
+    const cb = rafCallbacks.shift();
+    cb?.(0);
+    // Should not crash
+  });
+
+  it('respects scrollHeight growth (simulating exceeding max height)', async () => {
+      const ref = React.createRef<{ setValue: (val: string) => void }>();
+      const { getByTestId } = render(<AutoResizeHarness ref={ref} initialValue="Long text" mode="EDITOR" />);
+      const textarea = getByTestId('auto-textarea') as HTMLTextAreaElement;
+
+      // Simulate a very large scrollHeight
+      Object.defineProperty(textarea, 'scrollHeight', { value: 1000, configurable: true });
+
+      const cb = rafCallbacks.shift();
+      cb?.(0);
+
+      expect(textarea.style.height).toBe('1000px');
+  });
+
+  it('handles rapid text input by coalescing updates', async () => {
+      const ref = React.createRef<{ setValue: (val: string) => void }>();
+      render(<AutoResizeHarness ref={ref} initialValue="" mode="EDITOR" />);
+
+      // Flush the initial render RAF
+      const cb = rafCallbacks.shift();
+      cb?.(0);
+      rafCallbacks.length = 0;
+
+      requestSpy.mockClear();
+
+      await act(async () => {
+          for(let i = 0; i < 10; i++) {
+              ref.current?.setValue(`text ${i}`);
+          }
+      });
+
+      // Should verify that we don't queue 10 frames if they happen synchronously
+      // With our mock, we just check call count.
+      // The hook uses requestAnimationFrame, so multiple state updates in one tick
+      // might trigger multiple effects, but if RAF is pending, it shouldn't queue more.
+
+      // In this test harness, `setValue` triggers a re-render.
+      // `useAutoResize` has `useEffect` on `value`.
+      // So effect runs 10 times.
+      // But the hook checks `pendingRef.current`.
+      // If RAF is mocked to NOT execute immediately, pendingRef stays true.
+      // So requestAnimationFrame should only be called once (or few times depending on implementation details).
+
+      // Actually, if we clear pendingRef only in callback, and callback hasn't run...
+      // `useEffect` runs -> calls update -> checks pending -> if true, returns.
+      // So only first one calls rAF.
+
+      // Let's verify.
+      expect(requestSpy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('useResizeObserver', () => {
