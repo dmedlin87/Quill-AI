@@ -185,7 +185,7 @@ describe('ProactiveThinker', () => {
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'ANALYSIS_COMPLETED', payload: {}, timestamp: Date.now() });
+    callback({ type: 'ANALYSIS_COMPLETED', payload: { section: 'full_text', status: 'success' }, timestamp: Date.now() });
 
     await vi.advanceTimersByTimeAsync(3000);
 
@@ -252,6 +252,7 @@ describe('ProactiveThinker', () => {
 
     vi.mocked(generateVoiceProfile).mockReturnValue({
         metrics: createMockMetrics({ avgSentenceLength: 10 }),
+        impression: 'Neutral',
         speakerName: 'Alice',
         lineCount: 1,
         signatureWords: [],
@@ -259,6 +260,7 @@ describe('ProactiveThinker', () => {
 
     vi.mocked(getVoiceProfileForCharacter).mockResolvedValue({
         metrics: createMockMetrics({ avgSentenceLength: 11 }), // Small difference
+        impression: 'Verbose',
         speakerName: 'Alice',
         lineCount: 100,
         signatureWords: [],

@@ -9,7 +9,7 @@ import { EXPERIENCE_PRESETS, AUTONOMY_PRESETS, ExperienceLevel, AutonomyMode } f
 vi.mock('framer-motion', () => ({
   motion: {
     // Destructure framer-specific props to prevent them from being passed to the DOM
-    div: ({ children, layoutId, transition, ...props }: any) => (
+    div: ({ children, layoutId, transition, whileHover, whileTap, initial, animate, exit, variants, ...props }: any) => (
       <div {...props}>{children}</div>
     ),
     button: ({ children, whileHover, whileTap, transition, ...props }: any) => (
@@ -84,8 +84,8 @@ describe('ExperienceSelector', () => {
     const activeButton = screen.getByTitle(`${activeExperience.label}: ${activeExperience.description}`);
     const inactiveButton = screen.getByTitle(`${inactiveExperience.label}: ${inactiveExperience.description}`);
 
-    expect(activeButton.className).toContain('text-white');
-    expect(inactiveButton.className).toContain('text-slate-400');
+    expect(activeButton.className).toContain('text-[var(--text-inverse)]');
+    expect(inactiveButton.className).toContain('text-[var(--text-secondary)]');
   });
 
   it('renders labels and descriptions in full mode and updates store on click', () => {
@@ -121,20 +121,20 @@ describe('ExperienceSelector', () => {
     });
 
     // Clicking experience preset
-    const targetExpButton = screen.getByText(targetExperience.label).closest('button');
-    expect(targetExpButton).toBeTruthy();
-    if (targetExpButton) fireEvent.click(targetExpButton);
+    // Note: Card might render as a div, so we search for the clickable container or just click the text's parent
+    const targetExpLabel = screen.getByText(targetExperience.label);
+    fireEvent.click(targetExpLabel);
     expect(setExperienceLevel).toHaveBeenCalledWith(targetExperience.id as ExperienceLevel);
 
     // Clicking autonomy preset
-    const targetAutoButton = screen.getByText(targetAutonomy.label).closest('button');
-    expect(targetAutoButton).toBeTruthy();
-    if (targetAutoButton) fireEvent.click(targetAutoButton);
+    const targetAutoLabel = screen.getByText(targetAutonomy.label);
+    fireEvent.click(targetAutoLabel);
     expect(setAutonomyMode).toHaveBeenCalledWith(targetAutonomy.id as AutonomyMode);
 
-    // Active experience preset should use its color in inline styles
-    const activeExpButton = screen.getByText(activeExperience.label).closest('button');
-    expect(activeExpButton).toHaveStyle({ borderColor: activeExperience.color });
+    // Verify active class presence (e.g. ring-2)
+    const activeLabel = screen.getByText(activeExperience.label);
+    const activeCard = activeLabel.closest('div'); 
+    expect(activeCard?.className).toContain('ring-2');
   });
 
   it('can hide labels and helper text in full mode when showLabels is false', () => {

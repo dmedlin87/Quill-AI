@@ -22,6 +22,7 @@ beforeAll(() => {
 vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
@@ -73,12 +74,9 @@ vi.mock('@/features/settings/components/RelevanceTuning', () => ({
 }));
 
 const mockEditorContext: EditorContext = {
-  content: 'Test content',
   cursorPosition: 10,
   selection: null,
   totalLength: 100,
-  selectedText: '',
-  chapters: [],
 };
 
 const mockPersona: Persona = DEFAULT_PERSONAS[0];

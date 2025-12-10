@@ -100,104 +100,105 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
   applyTheme(initialMode, initialVisualTheme);
 
   return {
-  // Initial State
-  activeTab: SidebarTab.ANALYSIS,
-  activeView: MainView.EDITOR,
-  isSidebarCollapsed: false,
-  isToolsCollapsed: false,
-  theme: initialMode,
-  visualTheme: initialVisualTheme,
-  chatInitialMessage: undefined,
-  interviewTarget: null,
-  selectedGraphCharacter: null,
-  isExitZenHovered: false,
-  isHeaderHovered: false,
-  currentPersonaIndex: 0,
-  loreDraftCharacter: null,
+    // Initial State
+    activeTab: SidebarTab.ANALYSIS,
+    activeView: MainView.EDITOR,
+    isSidebarCollapsed: false,
+    isToolsCollapsed: false,
+    theme: initialMode,
+    visualTheme: initialVisualTheme,
+    chatInitialMessage: undefined,
+    interviewTarget: null,
+    selectedGraphCharacter: null,
+    isExitZenHovered: false,
+    isHeaderHovered: false,
+    currentPersonaIndex: 0,
+    loreDraftCharacter: null,
 
-  // Tab/View Actions
-  setActiveTab: (tab) => {
-    emitPanelSwitched(tab);
-    set({ activeTab: tab });
-  },
+    // Tab/View Actions
+    setActiveTab: (tab) => {
+      emitPanelSwitched(tab);
+      set({ activeTab: tab });
+    },
 
-  openLoreDraft: (character) => {
-    emitPanelSwitched(SidebarTab.LORE);
-    set({
-      loreDraftCharacter: character,
-      activeTab: SidebarTab.LORE,
-      isToolsCollapsed: false,
-    });
-  },
+    openLoreDraft: (character) => {
+      emitPanelSwitched(SidebarTab.LORE);
+      set({
+        loreDraftCharacter: character,
+        activeTab: SidebarTab.LORE,
+        isToolsCollapsed: false,
+      });
+    },
 
-  consumeLoreDraft: () => set({ loreDraftCharacter: null }),
-  setActiveView: (view) => set({ activeView: view }),
-  toggleView: () => set((state) => ({
-    activeView: state.activeView === MainView.EDITOR ? MainView.STORYBOARD : MainView.EDITOR
-  })),
+    consumeLoreDraft: () => set({ loreDraftCharacter: null }),
+    setActiveView: (view) => set({ activeView: view }),
+    toggleView: () => set((state) => ({
+      activeView: state.activeView === MainView.EDITOR ? MainView.STORYBOARD : MainView.EDITOR
+    })),
 
-  // Collapse Actions
-  toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
-  setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
-  setToolsCollapsed: (collapsed) => set({ isToolsCollapsed: collapsed }),
+    // Collapse Actions
+    toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+    setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
+    setToolsCollapsed: (collapsed) => set({ isToolsCollapsed: collapsed }),
 
-  // Theme Actions
-  toggleTheme: () => set((state) => {
-    const newMode = state.theme === 'light' ? 'dark' : 'light';
-    applyTheme(newMode, state.visualTheme);
-    return { theme: newMode };
-  }),
+    // Theme Actions
+    toggleTheme: () => set((state) => {
+      const newMode = state.theme === 'light' ? 'dark' : 'light';
+      applyTheme(newMode, state.visualTheme);
+      return { theme: newMode };
+    }),
 
-  setVisualTheme: (visualTheme) => set((state) => {
-    applyTheme(state.theme, visualTheme);
-    return { visualTheme };
-  }),
+    setVisualTheme: (visualTheme) => set((state) => {
+      applyTheme(state.theme, visualTheme);
+      return { visualTheme };
+    }),
 
-  // Chat Actions
-  setChatInitialMessage: (message) => set({ chatInitialMessage: message }),
-  clearChatInitialMessage: () => set({ chatInitialMessage: undefined }),
+    // Chat Actions
+    setChatInitialMessage: (message) => set({ chatInitialMessage: message }),
+    clearChatInitialMessage: () => set({ chatInitialMessage: undefined }),
 
-  // Interview Actions
-  setInterviewTarget: (target) => set({ interviewTarget: target }),
-  exitInterview: () => set({ interviewTarget: null }),
+    // Interview Actions
+    setInterviewTarget: (target) => set({ interviewTarget: target }),
+    exitInterview: () => set({ interviewTarget: null }),
 
-  // Graph Actions
-  setSelectedGraphCharacter: (character) => set({ selectedGraphCharacter: character }),
+    // Graph Actions
+    setSelectedGraphCharacter: (character) => set({ selectedGraphCharacter: character }),
 
-  // Zen Mode Hover Actions
-  setExitZenHovered: (hovered) => set({ isExitZenHovered: hovered }),
-  setHeaderHovered: (hovered) => set({ isHeaderHovered: hovered }),
+    // Zen Mode Hover Actions
+    setExitZenHovered: (hovered) => set({ isExitZenHovered: hovered }),
+    setHeaderHovered: (hovered) => set({ isHeaderHovered: hovered }),
 
-  // Persona Actions
-  setCurrentPersonaIndex: (index) => set({ currentPersonaIndex: index }),
+    // Persona Actions
+    setCurrentPersonaIndex: (index) => set({ currentPersonaIndex: index }),
 
-  // Compound Actions
-  openTabWithPanel: (tab) => {
-    emitPanelSwitched(tab);
-    set({ activeTab: tab, isToolsCollapsed: false });
-  },
+    // Compound Actions
+    openTabWithPanel: (tab) => {
+      emitPanelSwitched(tab);
+      set({ activeTab: tab, isToolsCollapsed: false });
+    },
 
-  handleFixRequest: (issueContext, suggestion) => {
-    const prompt = `I need to fix an issue. Context: ${issueContext}. Suggestion: ${suggestion}. Please locate this in the text and rewrite it using the update_manuscript tool.`;
-    set({
-      chatInitialMessage: prompt,
-      activeTab: SidebarTab.CHAT,
-      isToolsCollapsed: false
-    });
-  },
+    handleFixRequest: (issueContext, suggestion) => {
+      const prompt = `I need to fix an issue. Context: ${issueContext}. Suggestion: ${suggestion}. Please locate this in the text and rewrite it using the update_manuscript tool.`;
+      set({
+        chatInitialMessage: prompt,
+        activeTab: SidebarTab.CHAT,
+        isToolsCollapsed: false
+      });
+    },
 
-  handleSelectGraphCharacter: (character) => {
-    set({
-      selectedGraphCharacter: character,
-      activeTab: SidebarTab.LORE
-    });
-  },
+    handleSelectGraphCharacter: (character) => {
+      set({
+        selectedGraphCharacter: character,
+        activeTab: SidebarTab.LORE
+      });
+    },
 
-  handleInterviewCharacter: (character) => {
-    set({
-      interviewTarget: character,
-      activeTab: SidebarTab.CHAT,
-      isToolsCollapsed: false
-    });
-  }
-}));
+    handleInterviewCharacter: (character) => {
+      set({
+        interviewTarget: character,
+        activeTab: SidebarTab.CHAT,
+        isToolsCollapsed: false
+      });
+    }
+  };
+});
