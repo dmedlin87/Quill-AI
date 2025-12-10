@@ -103,7 +103,12 @@ const INTERNAL_PATTERNS = [
 // UTILITY FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const generateId = (): string => Math.random().toString(36).substring(2, 11);
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 11);
+};
 
 const countWords = (text: string): number => {
   return text.trim().split(/\s+/).filter(w => w.length > 0).length;
