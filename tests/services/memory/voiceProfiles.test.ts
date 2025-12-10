@@ -169,6 +169,21 @@ describe('Voice Profiles', () => {
 
       expect(merged.speakerName).toBe('Alice Wonderland');
     });
+
+    it('handles existing notes without structuredContent by creating a fresh object', async () => {
+      vi.mocked(getMemories).mockResolvedValue([{
+        id: 'mem-no-structured',
+        topicTags: ['voice_profile', 'character:alice'],
+        structuredContent: undefined,
+      }] as any);
+      vi.mocked(generateVoiceProfile).mockReturnValue({ ...mockProfile, impression: 'Detached' } as any);
+
+      await upsertVoiceProfile(mockProjectId, mockCharacter, mockDialogue);
+
+      expect(updateMemory).toHaveBeenCalledWith('mem-no-structured', expect.objectContaining({
+        structuredContent: { voiceProfile: expect.objectContaining({ impression: 'Detached' }) },
+      }));
+    });
   });
 
   describe('mergeVoiceMetrics', () => {
@@ -209,6 +224,19 @@ describe('Voice Profiles', () => {
          expect(result.impression).toBe('Old impression');
       });
 
+      it('falls back to incoming metrics when weights resolve to zero', () => {
+          const maxSpy = vi.spyOn(Math, 'max').mockReturnValue(0);
+
+          const p1 = { ...mockProfile, lineCount: 0, metrics: { ...mockProfile.metrics, avgSentenceLength: 99 } };
+          const p2 = { ...mockProfile, lineCount: 0, metrics: { ...mockProfile.metrics, avgSentenceLength: 5 } };
+
+          const result = mergeVoiceMetrics(p1 as any, p2 as any);
+
+          expect(result.metrics.avgSentenceLength).toBe(5);
+
+          maxSpy.mockRestore();
+      });
+
       it('should handle empty metrics in one profile gracefully', () => {
           // This case might be unrealistic with types, but good for robustness
           // Assuming generateVoiceProfile always returns full metrics, but let's test partials if possible
@@ -220,6 +248,15 @@ describe('Voice Profiles', () => {
           // (10*1 + 20*9) / 10 = (10 + 180) / 10 = 19
           const result = mergeVoiceMetrics(p1 as any, p2 as any);
           expect(result.metrics.avgSentenceLength).toBe(19);
+      });
+
+      it('merges signature words when either side is missing the field', () => {
+         const p1 = { ...mockProfile, signatureWords: undefined };
+         const p2 = { ...mockProfile, signatureWords: undefined };
+
+         const result = mergeVoiceMetrics(p1 as any, p2 as any);
+
+         expect(result.signatureWords).toEqual([]);
       });
   });
 });
