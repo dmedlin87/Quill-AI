@@ -45,6 +45,18 @@ describe('Voice Profiles', () => {
       expect(result).toEqual(mockProfile);
     });
 
+    it('normalizes character name before lookup', async () => {
+      vi.mocked(getMemories).mockResolvedValue([{ structuredContent: { voiceProfile: mockProfile } }] as any);
+
+      await getVoiceProfileForCharacter(mockProjectId, '  ALIce  ');
+
+      expect(getMemories).toHaveBeenCalledWith(
+        expect.objectContaining({
+          topicTags: expect.arrayContaining(['voice_profile', 'character:alice'])
+        }),
+      );
+    });
+
     it('should return null if memory exists but no structured content', async () => {
        vi.mocked(getMemories).mockResolvedValue([{
         structuredContent: undefined
@@ -123,6 +135,39 @@ describe('Voice Profiles', () => {
        expect(updateMemory).toHaveBeenCalledWith('mem-1', expect.objectContaining({
          structuredContent: { voiceProfile: mockProfile }
        }));
+    });
+
+    it('should preserve existing structured fields while updating voice profile', async () => {
+      vi.mocked(getMemories).mockResolvedValue([{
+        id: 'mem-keep-fields',
+        topicTags: ['voice_profile', 'character:alice'],
+        structuredContent: { voiceProfile: { ...mockProfile }, extra: { tone: 'gentle' } }
+      }] as any);
+      vi.mocked(generateVoiceProfile).mockReturnValue({ ...mockProfile, impression: 'New' } as any);
+
+      await upsertVoiceProfile(mockProjectId, mockCharacter, mockDialogue);
+
+      expect(updateMemory).toHaveBeenCalledWith('mem-keep-fields', expect.objectContaining({
+        structuredContent: expect.objectContaining({
+          extra: { tone: 'gentle' },
+          voiceProfile: expect.objectContaining({ impression: 'New' })
+        })
+      }));
+    });
+
+    it('should fall back to incoming speaker name when existing profile is empty', async () => {
+      vi.mocked(getMemories).mockResolvedValue([{
+        id: 'mem-missing-speaker',
+        topicTags: ['voice_profile', 'character:alice'],
+        structuredContent: {
+          voiceProfile: { ...mockProfile, speakerName: '' }
+        }
+      }] as any);
+      vi.mocked(generateVoiceProfile).mockReturnValue({ ...mockProfile, speakerName: 'Alice Wonderland' } as any);
+
+      const merged = await upsertVoiceProfile(mockProjectId, mockCharacter, mockDialogue);
+
+      expect(merged.speakerName).toBe('Alice Wonderland');
     });
   });
 
