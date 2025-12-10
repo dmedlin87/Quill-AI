@@ -85,4 +85,42 @@ describe('ProjectDashboard panels and import flow', () => {
 
     Object.defineProperty(File.prototype, 'text', { value: originalText ?? undefined, configurable: true });
   });
+
+  it('allows backing out of the import wizard via cancel without importing', async () => {
+    const store = baseStore();
+    mockUseProjectStore.mockReturnValue(store);
+
+    const originalText = File.prototype.text;
+    const textMock = vi.fn().mockResolvedValue('chapter content');
+    Object.defineProperty(File.prototype, 'text', { value: textMock, configurable: true });
+
+    render(<ProjectDashboard />);
+
+    // Start import from empty shelf state
+    const importButton = screen.getByText('Import Draft').closest('button');
+    const fileInput = importButton?.parentElement?.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['chapter content'], 'draft.txt', { type: 'text/plain' });
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Import Draft Settings')).toBeInTheDocument();
+    });
+
+    // Advance to wizard
+    fireEvent.change(screen.getByPlaceholderText('e.g. The Winds of Winter'), { target: { value: 'Imported Title' } });
+    fireEvent.click(screen.getByText('Next: Review Chapters'));
+
+    await waitFor(() => expect(screen.getByTestId('wizard-step')).toBeInTheDocument());
+
+    // Cancel from wizard instead of completing
+    fireEvent.click(screen.getByText('Cancel Import'));
+
+    // Wizard unmounts, no import call made, dashboard is visible again
+    expect(screen.queryByTestId('wizard-step')).not.toBeInTheDocument();
+    expect(store.importProject).not.toHaveBeenCalled();
+    expect(screen.getByText('Import Draft')).toBeInTheDocument();
+
+    Object.defineProperty(File.prototype, 'text', { value: originalText ?? undefined, configurable: true });
+  });
 });

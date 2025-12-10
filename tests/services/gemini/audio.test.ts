@@ -225,6 +225,41 @@ describe('generateSpeech', () => {
 
     expect(MockAudioContextConstructor).toHaveBeenCalledWith({ sampleRate: 24000 });
   });
+
+  it('handles malformed base64 data by returning null and closing context', async () => {
+    const mockResponse = {
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                inlineData: {
+                  data: 'not-base64',
+                },
+              },
+            ],
+          },
+        },
+      ],
+      usageMetadata: mockUsageMetadata,
+    };
+
+    mockAi.models.generateContent.mockResolvedValue(mockResponse);
+
+    const { base64ToUint8Array } = await import('@/features/voice');
+    vi.mocked(base64ToUint8Array as any).mockImplementationOnce(() => {
+      throw new Error('Invalid base64');
+    });
+
+    const result = await generateSpeech('Bad data');
+
+    expect(result).toBeNull();
+    // AudioContext should still be safely closed via safeCloseAudioContext
+    const ctxInstance = MockAudioContextConstructor.mock.results[0]?.value as ReturnType<
+      typeof createMockAudioContext
+    >;
+    expect(ctxInstance.close).toHaveBeenCalled();
+  });
 });
 
 describe('connectLiveSession', () => {
@@ -356,5 +391,19 @@ describe('connectLiveSession', () => {
     onErrorCallback(error);
 
     expect(mockOnClose).toHaveBeenCalled();
+  });
+
+  it('propagates network timeout errors from sendAudio', async () => {
+    const timeoutError = new Error('Network timeout');
+    mockAi.live.connect.mockRejectedValueOnce(timeoutError);
+
+    const client = await connectLiveSession(mockOnAudioData, mockOnClose);
+
+    const audioData = new Float32Array([0.1, 0.2]);
+
+    await expect(client.sendAudio(audioData)).rejects.toThrow('Network timeout');
+
+    const { createBlob } = await import('@/features/voice');
+    expect(createBlob).toHaveBeenCalledWith(audioData);
   });
 });
