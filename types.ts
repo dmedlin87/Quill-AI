@@ -204,6 +204,7 @@ export enum SidebarTab {
   GRAPH = 'GRAPH',
   LORE = 'LORE',
   BRANCHES = 'BRANCHES', // Quill AI 3.0
+  SETTINGS = 'SETTINGS',
 }
 
 export enum MainView {

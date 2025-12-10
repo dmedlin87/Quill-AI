@@ -5,3 +5,4 @@ export { ExperienceSelector, ExperienceBadge } from './components/ExperienceSele
 export { NativeSpellcheckToggle } from './components/NativeSpellcheckToggle';
 export { DeveloperModeToggle } from './components/DeveloperModeToggle';
 export { RelevanceTuning } from './components/RelevanceTuning';
+export { ThemeSelector } from './components/ThemeSelector';

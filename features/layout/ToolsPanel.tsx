@@ -8,8 +8,10 @@ import { KnowledgeGraph, LoreManager } from '@/features/lore';
 import { MemoryManager } from '@/features/memory';
 import { Contradiction, Lore } from '@/types/schema';
 import { useLayoutStore } from './store/useLayoutStore';
-import { DeveloperModeToggle } from '@/features/settings';
+import { DeveloperModeToggle, ThemeSelector } from '@/features/settings';
 import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
+import { DesignSystemKitchenSink } from '@/features/shared/components/DesignSystemKitchenSink';
+import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
 
 interface ToolsPanelProps {
   isZenMode: boolean;
@@ -87,6 +89,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
     handleSelectGraphCharacter: state.handleSelectGraphCharacter,
     handleInterviewCharacter: state.handleInterviewCharacter,
   }));
+
+  const isDeveloperMode = useSettingsStore((state) => state.developerModeEnabled);
 
   const shouldShow = !isToolsCollapsed && !isZenMode;
 
@@ -177,6 +181,27 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
                 draftCharacter={loreDraftCharacter}
                 onDraftConsumed={consumeLoreDraft}
               />
+            )}
+
+            {activeTab === SidebarTab.SETTINGS && (
+              <div className="h-full overflow-y-auto">
+                <div className="p-5 space-y-8 animate-fade-in">
+                  <header>
+                    <h2 className="text-[var(--text-lg)] font-serif font-medium text-[var(--text-primary)] mb-1">Settings</h2>
+                    <p className="text-[var(--text-sm)] text-[var(--text-muted)]">Customize your creative environment.</p>
+                  </header>
+
+                  <section>
+                    <ThemeSelector />
+                  </section>
+                  
+                  {isDeveloperMode && (
+                    <section className="pt-8 border-t border-[var(--border-secondary)]">
+                       <DesignSystemKitchenSink />
+                    </section>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </motion.aside>

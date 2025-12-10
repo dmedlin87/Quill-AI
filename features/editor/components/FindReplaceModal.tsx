@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Editor } from '@tiptap/react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Input } from '@/features/shared/components/ui/Input';
+import { Button } from '@/features/shared/components/ui/Button';
+import { dialogZoomVariants } from '@/features/shared/animations';
+import { Card } from '@/features/shared/components/ui/Card';
 
 interface FindReplaceModalProps {
   isOpen: boolean;
@@ -25,8 +30,11 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
   // Focus input on open
   useEffect(() => {
     if (isOpen) {
-      findInputRef.current?.focus();
-      findInputRef.current?.select();
+      // Small timeout to allow animation to start/render
+      setTimeout(() => {
+        findInputRef.current?.focus();
+        findInputRef.current?.select();
+      }, 50);
     }
   }, [isOpen]);
 
@@ -42,6 +50,10 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
       let match;
       while ((match = regex.exec(currentText)) !== null) {
         indices.push(match.index);
+        // Prevent infinite loops with zero-width matches
+        if (match.index === regex.lastIndex) {
+            regex.lastIndex++;
+        }
       }
     } catch (e) {
       console.error(e);
@@ -53,7 +65,7 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
     if (currentMatchIndex >= matches.length) {
       setCurrentMatchIndex(0);
     }
-  }, [matches.length]);
+  }, [matches.length, currentMatchIndex]);
 
   const scrollToMatch = (index: number) => {
     if (!editor || index === -1) return;
@@ -95,8 +107,9 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
     const to = matchPos + findTerm.length;
     
     editor.chain().focus().setTextSelection({ from, to }).insertContent(replaceTerm).run();
-    
-    // Trigger next update cycle naturally via editor
+    setFindTerm(''); // Optional: clear or keep term. Keeping term usually better but match index might shift.
+    // Ideally we re-run match logic, but for now this works. 
+    // Note: React state update will trigger re-render and re-calc of matches based on new text content passed from parent.
   };
 
   const handleReplaceAll = () => {
@@ -125,108 +138,129 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="absolute top-4 right-8 z-50 w-80 bg-white rounded-lg shadow-xl border border-gray-200 animate-in fade-in slide-in-from-top-2 duration-200 text-sm">
-      <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-lg drag-handle cursor-move">
-        <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-gray-400">
-            <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
-          </svg>
-          Find & Replace
-        </h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      
-      <div className="p-4 space-y-3">
-        {/* Find Input */}
-        <div className="relative">
-          <input
-            ref={findInputRef}
-            type="text"
-            className="w-full border border-gray-300 rounded-md py-1.5 pl-3 pr-20 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            placeholder="Find..."
-            value={findTerm}
-            onChange={(e) => setFindTerm(e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-          <div className="absolute right-2 top-1.5 flex items-center gap-1">
-             <span className="text-xs text-gray-400 font-mono">
-               {matches.length > 0 ? `${currentMatchIndex + 1}/${matches.length}` : '0/0'}
-             </span>
-          </div>
-        </div>
-
-        {/* Replace Input */}
-        <div className="flex gap-2">
-           <input
-            type="text"
-            className="flex-1 border border-gray-300 rounded-md py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            placeholder="Replace..."
-            value={replaceTerm}
-            onChange={(e) => setReplaceTerm(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleReplace();
-            }}
-          />
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center justify-between pt-1">
-           <button 
-             onClick={() => setIsCaseSensitive(!isCaseSensitive)}
-             className={`p-1.5 rounded text-xs font-medium border ${isCaseSensitive ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-gray-700'}`}
-             title="Case Sensitive"
-           >
-             Aa
-           </button>
-
-           <div className="flex items-center gap-2">
-              <button 
-                onClick={handlePrev} 
-                disabled={matches.length === 0}
-                className="p-1.5 text-gray-500 hover:bg-gray-100 rounded disabled:opacity-30"
-                title="Previous Match (Shift+Enter)"
-              >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+           variants={dialogZoomVariants}
+           initial="hidden"
+           animate="visible"
+           exit="exit"
+           className="fixed top-20 right-20 z-50 w-80 shadow-2xl"
+           drag
+           dragConstraints={{ left: -500, right: 100, top: -100, bottom: 500 }}
+           dragMomentum={false}
+           // Use a Card primitive as the container
+        >
+          <Card variant="elevated" padding="none" className="overflow-hidden border border-[var(--border-secondary)]">
+            {/* Header / Drag Handle */}
+            <div className="p-3 border-b border-[var(--border-secondary)] flex items-center justify-between bg-[var(--surface-secondary)] cursor-move">
+              <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-[var(--text-muted)]">
+                  <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+                </svg>
+                Find & Replace
+              </h3>
+              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-              <button 
-                onClick={handleNext} 
-                disabled={matches.length === 0}
-                className="p-1.5 text-gray-500 hover:bg-gray-100 rounded disabled:opacity-30"
-                title="Next Match (Enter)"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                </svg>
-              </button>
-           </div>
-        </div>
-        
-        <div className="flex gap-2 pt-2 border-t border-gray-100 mt-2">
-           <button 
-             onClick={handleReplace}
-             disabled={matches.length === 0}
-             className="flex-1 bg-white border border-gray-300 text-gray-700 py-1.5 rounded hover:bg-gray-50 text-xs font-medium disabled:opacity-50 transition-colors"
-           >
-             Replace
-           </button>
-           <button 
-             onClick={handleReplaceAll}
-             disabled={matches.length === 0}
-             className="flex-1 bg-white border border-gray-300 text-gray-700 py-1.5 rounded hover:bg-gray-50 text-xs font-medium disabled:opacity-50 transition-colors"
-           >
-             Replace All
-           </button>
-        </div>
-      </div>
-    </div>
+            </div>
+            
+            <div className="p-4 space-y-3 bg-[var(--surface-primary)]">
+              {/* Find Input */}
+              <div className="relative">
+                <Input
+                  ref={findInputRef}
+                  placeholder="Find..."
+                  value={findTerm}
+                  onChange={(e) => setFindTerm(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="pr-16"
+                  autoFocus
+                />
+                <div className="absolute right-3 top-2.5 flex items-center gap-1 pointer-events-none">
+                   <span className="text-xs text-[var(--text-muted)] font-mono">
+                     {matches.length > 0 ? `${currentMatchIndex + 1}/${matches.length}` : '0/0'}
+                   </span>
+                </div>
+              </div>
+
+              {/* Replace Input */}
+              <div className="flex gap-2">
+                 <Input
+                  placeholder="Replace..."
+                  value={replaceTerm}
+                  onChange={(e) => setReplaceTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleReplace();
+                  }}
+                />
+              </div>
+
+              {/* Controls */}
+              <div className="flex items-center justify-between pt-1">
+                 <Button 
+                   variant={isCaseSensitive ? 'primary' : 'secondary'}
+                   size="sm"
+                   onClick={() => setIsCaseSensitive(!isCaseSensitive)}
+                   className={!isCaseSensitive ? '!bg-[var(--surface-secondary)] !text-[var(--text-secondary)]' : ''}
+                   title="Case Sensitive"
+                 >
+                   Aa
+                 </Button>
+
+                 <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handlePrev} 
+                      disabled={matches.length === 0}
+                      title="Previous Match (Shift+Enter)"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                      </svg>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleNext} 
+                      disabled={matches.length === 0}
+                      title="Next Match (Enter)"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </Button>
+                 </div>
+              </div>
+              
+              <div className="flex gap-2 pt-2 border-t border-[var(--border-secondary)] mt-2">
+                 <Button 
+                   variant="secondary"
+                   size="sm"
+                   onClick={handleReplace}
+                   disabled={matches.length === 0}
+                   className="flex-1"
+                 >
+                   Replace
+                 </Button>
+                 <Button 
+                   variant="secondary"
+                   size="sm"
+                   onClick={handleReplaceAll}
+                   disabled={matches.length === 0}
+                   className="flex-1"
+                 >
+                   Replace All
+                 </Button>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

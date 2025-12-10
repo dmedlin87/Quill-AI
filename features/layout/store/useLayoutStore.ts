@@ -12,7 +12,8 @@ interface LayoutState {
   isToolsCollapsed: boolean;
   
   // Theme
-  theme: Theme;
+  theme: Theme; // 'light' | 'dark'
+  visualTheme: 'parchment' | 'modern' | 'classic';
   
   // Chat State
   chatInitialMessage: string | undefined;
@@ -45,6 +46,7 @@ interface LayoutActions {
   
   // Theme
   toggleTheme: () => void;
+  setVisualTheme: (theme: 'parchment' | 'modern' | 'classic') => void;
   
   // Chat
   setChatInitialMessage: (message: string | undefined) => void;
@@ -75,30 +77,36 @@ interface LayoutActions {
 
 type LayoutStore = LayoutState & LayoutActions;
 
-const applyTheme = (theme: Theme) => {
+const applyTheme = (mode: Theme, visualTheme: string) => {
   if (typeof window !== 'undefined') {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('quillai-theme', theme);
+    document.documentElement.setAttribute('data-mode', mode);
+    document.documentElement.setAttribute('data-theme', visualTheme);
+    localStorage.setItem('quillai-mode', mode); // Renamed to mode for clarity, but keeping theme for compat
+    localStorage.setItem('quillai-visual-theme', visualTheme);
   }
 };
 
-const getInitialTheme = (): Theme => {
-  if (typeof window !== 'undefined') {
-    return (localStorage.getItem('quillai-theme') as Theme) || 'light';
-  }
-  return 'light';
+const getInitialState = () => {
+  if (typeof window === 'undefined') return { mode: 'light' as Theme, visualTheme: 'parchment' as const };
+  
+  const savedMode = (localStorage.getItem('quillai-mode') || localStorage.getItem('quillai-theme') || 'light') as Theme;
+  const savedVisualTheme = (localStorage.getItem('quillai-visual-theme') || 'parchment') as 'parchment' | 'modern' | 'classic';
+  
+  return { mode: savedMode, visualTheme: savedVisualTheme };
 };
 
-export const useLayoutStore = create<LayoutStore>((set, get) => ({
+export const useLayoutStore = create<LayoutStore>((set, get) => {
+  const { mode: initialMode, visualTheme: initialVisualTheme } = getInitialState();
+  applyTheme(initialMode, initialVisualTheme);
+
+  return {
   // Initial State
   activeTab: SidebarTab.ANALYSIS,
   activeView: MainView.EDITOR,
   isSidebarCollapsed: false,
   isToolsCollapsed: false,
-  theme: ((initialTheme) => {
-    applyTheme(initialTheme);
-    return initialTheme;
-  })(getInitialTheme()),
+  theme: initialMode,
+  visualTheme: initialVisualTheme,
   chatInitialMessage: undefined,
   interviewTarget: null,
   selectedGraphCharacter: null,
@@ -135,9 +143,14 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
 
   // Theme Actions
   toggleTheme: () => set((state) => {
-    const newTheme = state.theme === 'light' ? 'dark' : 'light';
-    applyTheme(newTheme);
-    return { theme: newTheme };
+    const newMode = state.theme === 'light' ? 'dark' : 'light';
+    applyTheme(newMode, state.visualTheme);
+    return { theme: newMode };
+  }),
+
+  setVisualTheme: (visualTheme) => set((state) => {
+    applyTheme(state.theme, visualTheme);
+    return { visualTheme };
   }),
 
   // Chat Actions

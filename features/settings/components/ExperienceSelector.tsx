@@ -8,6 +8,8 @@ import {
 } from '@/types/experienceSettings';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { shallow } from 'zustand/shallow';
+import { Card } from '@/features/shared/components/ui/Card';
+import { Text } from '@/features/shared/components/ui/Typography';
 
 interface ExperienceSelectorProps {
   compact?: boolean;
@@ -31,7 +33,7 @@ interface PresetPillProps {
 }
 
 const CompactPresetPills = ({ presets, activeId, onSelect, layoutId }: PresetPillProps) => (
-  <div className="flex items-center gap-1 bg-slate-800/50 rounded-lg p-1">
+  <div className="flex items-center gap-1 bg-[var(--surface-secondary)] rounded-lg p-1 border border-[var(--border-subtle)]">
     {presets.map((preset) => {
       const isActive = activeId === preset.id;
       return (
@@ -40,19 +42,22 @@ const CompactPresetPills = ({ presets, activeId, onSelect, layoutId }: PresetPil
           onClick={() => onSelect(preset.id)}
           className={`
             relative px-2 py-1 rounded text-xs font-medium transition-all
-            ${isActive ? 'text-white' : 'text-slate-400 hover:text-slate-300'}
+            ${isActive ? 'text-[var(--text-inverse)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}
           `}
           title={`${preset.label}: ${preset.description}`}
         >
           {isActive && (
             <motion.div
               layoutId={layoutId}
-              className="absolute inset-0 rounded"
-              style={{ backgroundColor: preset.color }}
+              className="absolute inset-0 rounded bg-[var(--interactive-accent)]"
+              // style={{ backgroundColor: preset.color }} // Using theme accent instead of preset color for consistency
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
-          <span className="relative z-10">{preset.icon}</span>
+          <span className="relative z-10 flex items-center gap-1">
+             {/* We can optionally tint the icon if not active, or keep it monochrome */}
+             <span className={isActive ? 'text-[var(--text-inverse)]' : ''}>{preset.icon}</span>
+          </span>
         </button>
       );
     })}
@@ -66,23 +71,25 @@ interface PresetCardProps {
 }
 
 const PresetCard = ({ preset, isActive, onSelect }: PresetCardProps) => (
-  <motion.button
-    key={preset.id}
+  <Card
+    variant={isActive ? 'elevated' : 'flat'}
+    padding="sm"
+    className={`
+      cursor-pointer text-center transition-all group flex flex-col items-center justify-center h-24
+      ${isActive 
+        ? 'ring-2 ring-[var(--interactive-accent)] bg-[var(--surface-primary)]' 
+        : 'hover:border-[var(--border-secondary)] hover:bg-[var(--surface-secondary)]'
+      }
+    `}
     onClick={() => onSelect(preset.id)}
     whileHover={{ scale: 1.02 }}
     whileTap={{ scale: 0.98 }}
-    className={`
-      relative p-2 rounded-lg border-2 transition-all text-center
-      ${isActive ? 'border-opacity-100' : 'border-slate-700 hover:border-slate-600'}
-    `}
-    style={{
-      borderColor: isActive ? preset.color : undefined,
-      backgroundColor: isActive ? `${preset.color}15` : undefined,
-    }}
   >
-    <span className="text-lg">{preset.icon}</span>
-    <div className="text-xs font-medium text-slate-300 mt-1">{preset.label}</div>
-  </motion.button>
+    <span className="text-2xl mb-1">{preset.icon}</span>
+    <Text variant="muted" className={`text-xs font-medium ${isActive ? 'text-[var(--interactive-accent)]' : ''}`}>
+      {preset.label}
+    </Text>
+  </Card>
 );
 
 export function ExperienceSelector({
@@ -122,7 +129,7 @@ export function ExperienceSelector({
         />
 
         {/* Divider */}
-        <div className="w-px h-4 bg-slate-600" />
+        <div className="w-px h-4 bg-[var(--border-secondary)]" />
 
         <CompactPresetPills
           presets={autonomyPresets}
@@ -135,18 +142,14 @@ export function ExperienceSelector({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Experience Level Section */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {showLabels && (
-          <>
-            <label className="text-sm font-medium text-slate-300">
-              Experience Level
-            </label>
-            <p className="text-xs text-slate-500 -mt-1">
-              Adjusts explanation depth and terminology
-            </p>
-          </>
+          <div>
+            <Text variant="label">Experience Level</Text>
+            <Text variant="muted" className="mt-0.5">Adjusts explanation depth and terminology</Text>
+          </div>
         )}
         <div className="grid grid-cols-3 gap-2">
           {experiencePresets.map((preset) => (
@@ -161,16 +164,12 @@ export function ExperienceSelector({
       </div>
 
       {/* Autonomy Mode Section */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {showLabels && (
-          <>
-            <label className="text-sm font-medium text-slate-300">
-              Autonomy Mode
-            </label>
-            <p className="text-xs text-slate-500 -mt-1">
-              Controls how independently the AI acts
-            </p>
-          </>
+           <div>
+            <Text variant="label">Autonomy Mode</Text>
+            <Text variant="muted" className="mt-0.5">Controls how independently the AI acts</Text>
+          </div>
         )}
         <div className="grid grid-cols-3 gap-2">
           {autonomyPresets.map((preset) => (
@@ -208,15 +207,23 @@ export function ExperienceBadge({ className = '' }: ExperienceBadgeProps) {
   return (
     <div className={`inline-flex items-center gap-1 ${className}`}>
       <span 
-        className="px-1.5 py-0.5 rounded text-xs font-medium"
-        style={{ backgroundColor: `${expPreset.color}20`, color: expPreset.color }}
+        className="px-1.5 py-0.5 rounded text-xs font-medium border border-transparent"
+        style={{ 
+          backgroundColor: 'var(--surface-secondary)', 
+          color: 'var(--text-secondary)',
+          borderColor: 'var(--border-subtle)'
+        }}
         title={`Experience: ${expPreset.label} - ${expPreset.description}`}
       >
         {expPreset.icon}
       </span>
       <span 
-        className="px-1.5 py-0.5 rounded text-xs font-medium"
-        style={{ backgroundColor: `${autoPreset.color}20`, color: autoPreset.color }}
+        className="px-1.5 py-0.5 rounded text-xs font-medium border border-transparent"
+        style={{ 
+           backgroundColor: 'var(--surface-secondary)', 
+           color: 'var(--text-secondary)',
+           borderColor: 'var(--border-subtle)'
+        }}
         title={`Autonomy: ${autoPreset.label} - ${autoPreset.description}`}
       >
         {autoPreset.icon}

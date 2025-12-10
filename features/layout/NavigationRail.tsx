@@ -16,6 +16,7 @@ import {
   BoardIcon,
   SunIcon,
   MoonIcon,
+  SettingsIcon,
 } from '@/features/shared/components/Icons';
 
 interface NavigationRailProps {
@@ -55,7 +56,6 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
     currentPersonaIndex: state.currentPersonaIndex,
     openTabWithPanel: state.openTabWithPanel,
     toggleView: state.toggleView,
-    toggleTheme: state.toggleTheme,
   }));
 
   const currentPersona = DEFAULT_PERSONAS[currentPersonaIndex];
@@ -147,12 +147,16 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
         </button>
 
         <button
-          onClick={toggleTheme}
-          aria-label={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-          aria-pressed={theme === 'dark'}
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
+          onClick={() => openTabWithPanel(SidebarTab.SETTINGS)}
+          aria-label="Settings"
+          aria-pressed={activeTab === SidebarTab.SETTINGS}
+          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
+            activeTab === SidebarTab.SETTINGS
+              ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]'
+              : 'text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)]'
+          }`}
         >
-          {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+          <SettingsIcon />
         </button>
       </div>
     </motion.nav>

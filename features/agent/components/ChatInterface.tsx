@@ -44,6 +44,8 @@ import { PersonaSelector } from './PersonaSelector';
 
 import { CritiqueIntensitySelector, ExperienceSelector, useSettingsStore } from '@/features/settings';
 import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
+import { Button } from '@/features/shared/components/ui/Button';
+import { Input } from '@/features/shared/components/ui/Input';
 
 
 
@@ -448,9 +450,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white relative">
+    <div className="flex flex-col h-full bg-[var(--surface-primary)] relative">
       {/* Agent Header - Persona & Context */}
-      <div className="bg-gray-50 border-b border-gray-100 px-4 py-2 space-y-2">
+      <div className="bg-[var(--surface-secondary)] border-b border-[var(--border-secondary)] px-4 py-2 space-y-2">
         {/* Persona Selector Row */}
         <div className="flex items-center justify-between">
           {isInterviewMode && interviewTarget ? (
@@ -482,11 +484,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           )}
           <div className="flex items-center gap-2">
             <ExperienceSelector compact />
-            <div className="w-px h-4 bg-gray-300" />
+            <div className="w-px h-4 bg-[var(--border-secondary)]" />
             <CritiqueIntensitySelector compact />
             <button
               onClick={() => setShowRelevanceSettings(!showRelevanceSettings)}
-              className={`p-1 rounded hover:bg-gray-200 transition-colors ${showRelevanceSettings ? 'bg-gray-200 text-indigo-600' : 'text-gray-400'}`}
+              className={`p-1 rounded hover:bg-[var(--interactive-bg-hover)] transition-colors ${showRelevanceSettings ? 'bg-[var(--surface-active)] text-[var(--interactive-accent)]' : 'text-[var(--text-tertiary)]'}`}
               title="Configure Proactive Suggestions"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -494,7 +496,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </svg>
             </button>
             <div className="flex gap-2 text-xs ml-1">
-              {lore && <span title="Lore Bible Active" className="text-indigo-600 font-bold">📖</span>}
+              {lore && <span title="Lore Bible Active" className="text-[var(--interactive-accent)] font-bold">📖</span>}
               {analysis && <span title="Deep Analysis Context Active" className="text-purple-600 font-bold">🧠</span>}
             </div>
           </div>
@@ -507,7 +509,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden bg-white border border-gray-200 rounded-lg shadow-inner"
+              className="overflow-hidden bg-[var(--surface-primary)] border border-[var(--border-secondary)] rounded-lg shadow-inner"
             >
               <RelevanceTuning />
             </motion.div>
@@ -515,9 +517,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </AnimatePresence>
 
         {/* Context Row */}
-        <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${editorContext.selection ? 'bg-indigo-500' : 'bg-gray-300'}`}></div>
+              <div className={`w-2 h-2 rounded-full ${editorContext.selection ? 'bg-[var(--interactive-accent)]' : 'bg-[var(--text-tertiary)]'}`}></div>
               <span>{editorContext.selection ? 'Selection Active' : 'Cursor Active'}</span>
            </div>
            <div className="font-mono">
@@ -552,7 +554,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     </div>
                   )}
                   <motion.div 
-                    className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${isUser ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'}`}
+                    className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${isUser ? 'bg-[var(--interactive-accent)] text-[var(--text-inverse)]' : 'bg-[var(--surface-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)]'}`}
                     whileHover={{ scale: 1.01 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   >
@@ -601,40 +603,46 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 border-t border-gray-100 bg-white">
+      <div className="p-4 border-t border-[var(--border-secondary)] bg-[var(--surface-primary)]">
         <div className="flex gap-2 items-center">
-          <input
-            type="text"
-            className="flex-1 border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow disabled:bg-gray-100 disabled:text-gray-400"
-            placeholder="Type / to use tools or ask Agent to edit..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            disabled={isLoading}
-          />
-          <button 
-            type="button"
+          <div className="flex-1">
+             <Input
+                placeholder="Type / to use tools or ask Agent to edit..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                disabled={isLoading}
+                className="w-full"
+                autoFocus
+             />
+          </div>
+          
+          <Button
+            variant={isDeepMode ? 'primary' : 'ghost'}
+            size="md"
             onClick={() => setIsDeepMode(prev => !prev)}
             title="Deep Mode: Enables Voice Analysis."
-            className={`px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-              isDeepMode
-                ? 'border-purple-300 bg-purple-50 text-purple-600'
-                : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-            }`}
+            className={isDeepMode ? 'bg-purple-600 hover:bg-purple-700 border-transparent text-white' : ''}
           >
-            {isDeepMode ? '🧠 Deep' : '👻 Deep'}
-          </button>
-          <button 
+             {isDeepMode ? '🧠 Deep' : '👻 Deep'}
+          </Button>
+
+          <Button 
+            variant="primary"
+            size="md"
             onClick={sendMessage}
             disabled={!input.trim() || isLoading}
-            className="bg-indigo-600 text-white rounded-lg p-3 hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+            isLoading={isLoading && agentState === 'thinking'}
+            rightIcon={!isLoading && (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+              </svg>
+            )}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-              <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
-            </svg>
-          </button>
+            {isLoading ? 'Thinking' : 'Send'}
+          </Button>
         </div>
-        <div className="text-[10px] text-gray-400 mt-2 text-center">
+        <div className="text-[10px] text-[var(--text-muted)] mt-2 text-center">
             Agent can read your selection and edit text directly.
         </div>
       </div>
