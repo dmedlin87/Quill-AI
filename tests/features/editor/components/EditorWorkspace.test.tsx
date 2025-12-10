@@ -323,4 +323,45 @@ describe('EditorWorkspace', () => {
     render(<EditorWorkspace />);
     expect(screen.getByText('Start writing to get AI help')).toBeInTheDocument();
   });
+
+  it('shows selection hint when document has content but no active selection', () => {
+    render(<EditorWorkspace />);
+    expect(
+      screen.getByText(/Highlight a sentence and press/i),
+    ).toBeInTheDocument();
+  });
+
+  it('uses issue-only context when fixing a comment without a quote', () => {
+    render(<EditorWorkspace />);
+
+    const onCommentClick = mockRichTextProps.mock.calls[0][0].onCommentClick;
+    const commentWithoutQuote = {
+      id: 'c-no-quote',
+      type: 'plot',
+      issue: 'Continuity hiccup',
+      suggestion: 'Reintroduce the foreshadowing line',
+      severity: 'warning',
+      quote: undefined,
+    };
+
+    act(() => {
+      onCommentClick(commentWithoutQuote, { top: 50, left: 60 });
+    });
+
+    const latestCardProps =
+      mockCommentCardProps.mock.calls[mockCommentCardProps.mock.calls.length - 1][0];
+
+    act(() => {
+      latestCardProps.onFixWithAgent(
+        commentWithoutQuote.issue,
+        commentWithoutQuote.suggestion,
+        undefined,
+      );
+    });
+
+    expect(mockHandleFixRequest).toHaveBeenCalledWith(
+      commentWithoutQuote.issue,
+      commentWithoutQuote.suggestion,
+    );
+  });
 });
