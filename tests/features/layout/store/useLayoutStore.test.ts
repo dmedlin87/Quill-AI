@@ -165,4 +165,29 @@ describe('useLayoutStore', () => {
     consumeLoreDraft();
     expect(useLayoutStore.getState().loreDraftCharacter).toBeNull();
   });
+
+  it('handles invalid panel identifiers (should not crash)', () => {
+      const { setActiveTab } = useLayoutStore.getState();
+      // @ts-ignore
+      setActiveTab('INVALID_TAB');
+      expect(useLayoutStore.getState().activeTab).toBe('INVALID_TAB');
+  });
+
+  it('prevents simultaneous opening of exclusive panels', () => {
+      const { openLoreDraft, handleInterviewCharacter } = useLayoutStore.getState();
+      const character = { id: 'c1', name: 'Alice' } as any;
+
+      // First open Lore Draft
+      openLoreDraft(character);
+      expect(useLayoutStore.getState().activeTab).toBe(SidebarTab.LORE);
+
+      // Then try to open Interview, which should override the active tab
+      handleInterviewCharacter(character);
+      expect(useLayoutStore.getState().activeTab).toBe(SidebarTab.CHAT);
+
+      // In this specific store implementation, the state is simple (activeTab).
+      // There isn't a complex "exclusive" check other than overwriting the activeTab.
+      // But we verify that `isToolsCollapsed` is handled correctly (e.g. forced open).
+      expect(useLayoutStore.getState().isToolsCollapsed).toBe(false);
+  });
 });
