@@ -36,17 +36,20 @@ vi.mock('@/features/voice', () => ({
 }));
 
 // Mock Web Audio API - create factory that returns fresh mocks
-const createMockAudioContext = () => ({
-  state: 'running',
-  close: vi.fn().mockResolvedValue(undefined),
-  decodeAudioData: vi.fn(),
-  createBuffer: vi.fn(),
-});
+const createMockAudioContext = () => {
+  const close = vi.fn().mockResolvedValue(undefined);
+  return {
+    state: 'running',
+    close,
+    decodeAudioData: vi.fn(),
+    createBuffer: vi.fn(),
+  };
+};
 
 // Store created contexts for test assertions
 let lastCreatedAudioContext: ReturnType<typeof createMockAudioContext> | null = null;
 
-const MockAudioContextConstructor = vi.fn(() => {
+const MockAudioContextConstructor = vi.fn(function() {
   lastCreatedAudioContext = createMockAudioContext();
   return lastCreatedAudioContext;
 });

@@ -90,6 +90,6 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Analysis Warning')).toBeInTheDocument();
     expect(screen.getByText('Text truncated for analysis')).toBeInTheDocument();
-    expect(screen.getByText('Analyze selection only')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /analyze selection/i })).toBeInTheDocument();
   });
 });

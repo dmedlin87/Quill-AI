@@ -122,7 +122,7 @@ describe('AnalysisPanel', () => {
         const warning = { message: 'Warning' };
         render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} warning={warning} hasSelection={true} />);
 
-        const button = screen.getByText('Analyze Selection');
+        const button = screen.getByRole('button', { name: /analyze selection/i });
         expect(button).toBeEnabled();
         fireEvent.click(button);
         expect(defaultProps.onAnalyzeSelection).toHaveBeenCalled();
@@ -132,7 +132,7 @@ describe('AnalysisPanel', () => {
         const warning = { message: 'Warning' };
         render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} warning={warning} hasSelection={false} />);
 
-        const button = screen.getByText('Analyze Selection');
+        const button = screen.getByRole('button', { name: /analyze selection/i });
         expect(button).toBeDisabled();
     });
 

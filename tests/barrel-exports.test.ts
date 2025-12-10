@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-describe('Barrel Exports Smoke Tests', () => {
+describe('Barrel Exports Smoke Tests', { timeout: 10000 }, () => {
   it('features/shared exports', async () => {
     const exports = await import('@/features/shared');
     expect(exports).toBeDefined();

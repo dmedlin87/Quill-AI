@@ -571,6 +571,7 @@ describe('DefaultAgentController', () => {
     const { controller: busyController } = makeController();
     const firstSend = busyController.sendMessage({ text: 'First', editorContext });
     await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 0)); // Ensure event loop cycles
     expect(mockSendMessage).toHaveBeenCalledTimes(2);
 
     await busyController.sendMessage({ text: 'Second', editorContext });
