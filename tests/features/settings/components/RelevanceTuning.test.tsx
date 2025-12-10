@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
 import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
 
@@ -33,15 +33,45 @@ describe('RelevanceTuning', () => {
   it('calls updateSuggestionWeight when slider changes', () => {
     render(<RelevanceTuning />);
 
-    // Find slider for 'plot' (value 1.0)
-    // The sliders are inputs with type range.
     const sliders = screen.getAllByRole('slider');
-    // Assuming 'plot' is first in the object keys of mock suggestionWeights
     const plotSlider = sliders[0];
 
     fireEvent.change(plotSlider, { target: { value: '1.5' } });
 
     expect(updateSuggestionWeight).toHaveBeenCalledWith('plot', 1.5);
+  });
+
+  it('calls updateSuggestionWeight when input is changed and blurred', () => {
+    render(<RelevanceTuning />);
+
+    // Find input for 'plot'
+    const inputs = screen.getAllByRole('spinbutton');
+    const plotInput = inputs[0];
+
+    // Changing value shouldn't trigger update yet
+    fireEvent.change(plotInput, { target: { value: '1.2' } });
+    expect(updateSuggestionWeight).not.toHaveBeenCalled();
+
+    // Blur should trigger update
+    fireEvent.blur(plotInput);
+    expect(updateSuggestionWeight).toHaveBeenCalledWith('plot', 1.2);
+  });
+
+  it('clamps manual input values between 0 and 2 on blur', () => {
+     render(<RelevanceTuning />);
+
+     const inputs = screen.getAllByRole('spinbutton');
+     const plotInput = inputs[0];
+
+     // Test > 2
+     fireEvent.change(plotInput, { target: { value: '5' } });
+     fireEvent.blur(plotInput);
+     expect(updateSuggestionWeight).toHaveBeenCalledWith('plot', 2);
+
+     // Test < 0
+     fireEvent.change(plotInput, { target: { value: '-1' } });
+     fireEvent.blur(plotInput);
+     expect(updateSuggestionWeight).toHaveBeenCalledWith('plot', 0);
   });
 
   it('calls resetSuggestionWeights when reset button is clicked', () => {
@@ -51,5 +81,42 @@ describe('RelevanceTuning', () => {
     fireEvent.click(resetButton);
 
     expect(resetSuggestionWeights).toHaveBeenCalled();
+  });
+
+  it('reverts invalid input on blur', () => {
+     render(<RelevanceTuning />);
+
+     const inputs = screen.getAllByRole('spinbutton');
+     const plotInput = inputs[0];
+
+     // Change to invalid
+     fireEvent.change(plotInput, { target: { value: '' } }); // Empty string -> NaN usually
+     fireEvent.blur(plotInput);
+
+     // Should call with original value or just reset local state?
+     // Implementation calls update with original value if NaN
+     expect(updateSuggestionWeight).toHaveBeenCalledWith('plot', 1.0);
+  });
+
+  it('updates input when slider changes (via prop update)', () => {
+    // This is tricky to test with mock store because we need to simulate re-render with new props.
+    // We can use rerender with updated mock return value.
+
+    const { rerender } = render(<RelevanceTuning />);
+    const inputs = screen.getAllByRole('spinbutton');
+    const plotInput = inputs[0] as HTMLInputElement;
+
+    expect(plotInput.value).toBe('1.00');
+
+    // Update mock and rerender
+    (useSettingsStore as any).mockReturnValue({
+      suggestionWeights: { ...suggestionWeights, plot: 1.5 },
+      updateSuggestionWeight,
+      resetSuggestionWeights,
+    });
+
+    rerender(<RelevanceTuning />);
+
+    expect(plotInput.value).toBe('1.50');
   });
 });
