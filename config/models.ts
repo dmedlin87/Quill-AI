@@ -27,7 +27,17 @@ type ModelBuild = Record<ModelRole, ModelDefinition>;
 
 type Pricing = { inputPrice: number; outputPrice: number };
 
-const MODEL_BUILD_ENV = (process.env.VITE_MODEL_BUILD || process.env.MODEL_BUILD) as
+const getEnv = (key: string): string | undefined => {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key];
+  }
+  if (import.meta.env) {
+    return import.meta.env[key];
+  }
+  return undefined;
+};
+
+const MODEL_BUILD_ENV = (getEnv('VITE_MODEL_BUILD') || getEnv('MODEL_BUILD')) as
   | ModelBuildKey
   | undefined;
 

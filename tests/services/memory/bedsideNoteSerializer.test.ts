@@ -100,4 +100,51 @@ describe('serializeBedsideNote', () => {
 
     expect(discoveryLines.length).toBeLessThanOrEqual(DEFAULT_BEDSIDE_NOTE_MAX_ITEMS.recentDiscoveries);
   });
+
+  it('returns empty text when content has no populated sections', () => {
+    const emptyContent = {} as unknown as BedsideNoteContent;
+
+    const result = serializeBedsideNote(emptyContent);
+
+    expect(result.text).toBe('');
+    expect(result.tokens).toBe(estimateTokens(''));
+  });
+
+  it('skips malformed goal objects and normalizes noisy list input', () => {
+    const malformedContent = {
+      activeGoals: [
+        // Missing usable title – should be dropped by normalizeGoals
+        { title: '   ', note: 'Should not appear' },
+        // Valid goal with extra whitespace that should be trimmed
+        { title: '  Keep goal  ', note: '   spaced   ' },
+      ],
+      warnings: ['  Duplicate warning  ', 'Duplicate warning', '   ', '\nDuplicate warning  '],
+      recentDiscoveries: ['Discovery one', '', '  ', '\tDiscovery one'],
+    } as unknown as BedsideNoteContent;
+
+    const { text } = serializeBedsideNote(malformedContent);
+
+    const sections = text.split('\n\n');
+
+    const goalsSection = sections.find(section => section.startsWith('Active Goals')) || '';
+    const goalLines = goalsSection
+      .split('\n')
+      .filter(line => line.startsWith('- '));
+    expect(goalLines).toHaveLength(1);
+    expect(goalLines[0]).toContain('Keep goal');
+    expect(goalLines[0]).not.toContain('Should not appear');
+
+    const warningsSection = sections.find(section => section.startsWith('Warnings & Risks')) || '';
+    const warningLines = warningsSection
+      .split('\n')
+      .filter(line => line.startsWith('- '));
+    expect(warningLines).toHaveLength(1);
+    expect(warningLines[0]).toContain('Duplicate warning');
+
+    const discoveriesSection = sections.find(section => section.startsWith('Recent Discoveries')) || '';
+    const discoveryLines = discoveriesSection
+      .split('\n')
+      .filter(line => line.startsWith('- '));
+    expect(discoveryLines).toHaveLength(1);
+  });
 });

@@ -175,4 +175,33 @@ describe('bedside history search', () => {
     );
     expect(recordedTexts).toHaveLength(3);
   });
+
+  it('filters bedside history candidates by arc and chapter scope', async () => {
+    setBedsideEmbeddingGenerator(() => [1, 0]);
+
+    const base = (overrides: Partial<MemoryNote>) => baseBedsideNote(overrides);
+
+    const projectOnly = base({ id: 'project-only', topicTags: ['meta:bedside-note'] });
+    const wrongArc = base({
+      id: 'wrong-arc',
+      topicTags: ['meta:bedside-note', 'arc:other', 'chapter:ch-1'],
+    });
+    const arcOnly = base({
+      id: 'arc-only',
+      topicTags: ['meta:bedside-note', 'arc:arc-1'],
+    });
+    const fullMatch = base({
+      id: 'match',
+      topicTags: ['meta:bedside-note', 'arc:arc-1', 'chapter:ch-1'],
+    });
+
+    storedData.push(projectOnly, wrongArc, arcOnly, fullMatch);
+
+    const results = await searchBedsideHistory('project-1', 'Scoped query', {
+      arcId: 'arc-1',
+      chapterId: 'ch-1',
+    });
+
+    expect(results.map(r => r.note.id)).toEqual(['match']);
+  });
 });

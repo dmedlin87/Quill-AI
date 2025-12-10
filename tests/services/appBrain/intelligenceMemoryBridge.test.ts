@@ -665,6 +665,98 @@ describe('intelligenceMemoryBridge', () => {
       );
       expect(worldRuleConflicts).toHaveLength(0);
     });
+
+    it('filters out non-critical conflicts when minSeverity is critical', async () => {
+      vi.mocked(memory.getWatchedEntities).mockResolvedValueOnce([
+        {
+          id: 'watch-1',
+          name: 'Seth',
+          projectId: 'test-project',
+          priority: 'low',
+          reason: 'monitor',
+          monitoringEnabled: true,
+          createdAt: Date.now(),
+        },
+      ]);
+
+      const baseHud = createMockIntelligence().hud;
+
+      const intelligence = createMockIntelligence({
+        entities: {
+          nodes: [
+            {
+              id: 'loc-1',
+              name: 'Forbidden Tower',
+              type: 'location',
+              aliases: [],
+              firstMention: 0,
+              mentionCount: 1,
+              mentions: [{ offset: 100, chapterId: 'ch-1' }],
+              attributes: {},
+            },
+            {
+              id: 'char-1',
+              name: 'Seth',
+              type: 'character',
+              aliases: [],
+              firstMention: 0,
+              mentionCount: 2,
+              mentions: [{ offset: 0, chapterId: 'ch-1' }],
+              attributes: {},
+            },
+          ],
+          edges: [],
+          processedAt: Date.now(),
+        } as any,
+        hud: {
+          ...baseHud,
+          context: {
+            ...(baseHud?.context ?? {}),
+            activeEntities: [
+              {
+                id: 'char-1',
+                name: 'Seth',
+                type: 'character',
+                aliases: [],
+                firstMention: 0,
+                mentionCount: 2,
+                mentions: [{ offset: 0, chapterId: 'ch-1' }],
+                attributes: {},
+              },
+            ],
+            activeRelationships: [],
+            openPromises: [],
+            recentEvents: [],
+          },
+        } as any,
+        timeline: {
+          events: [
+            {
+              id: 'ev-1',
+              description: 'Event at midnight',
+              temporalMarker: 'midnight',
+              offset: 50,
+              chapterId: 'ch-1',
+              relativePosition: 'unknown',
+              dependsOn: [],
+            },
+          ],
+          causalChains: [],
+          promises: [],
+          processedAt: Date.now(),
+        } as any,
+      });
+
+      const result = await analyzeIntelligenceAgainstMemory(intelligence, {
+        projectId: 'test-project',
+        worldRules: ['No one can enter the Forbidden Tower after dark.'],
+        minSeverity: 'critical',
+      });
+
+      expect(result.conflicts.length).toBe(1);
+      expect(result.conflicts[0].severity).toBe('critical');
+      expect(result.conflicts[0].reference.type).toBe('lore');
+    });
   });
 
   describe('voice with lore characters', () => {
@@ -859,6 +951,57 @@ describe('intelligenceMemoryBridge', () => {
       // Info-level conflicts should not trigger createMemory
       // (watched entity alerts are info-level)
       expect(memory.createMemory).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('memory retrieval robustness', () => {
+    it('bubbles errors when memory search fails', async () => {
+      const intelligence = createMockIntelligence({
+        voice: {
+          profiles: {},
+          consistencyAlerts: ['Seth shows avgSentenceLength shift of 35% between halves.'],
+        },
+      });
+
+      vi.mocked(memory.searchMemoriesByTags).mockRejectedValueOnce(new Error('search failed'));
+
+      await expect(
+        analyzeIntelligenceAgainstMemory(intelligence, {
+          projectId: 'test-project',
+        }),
+      ).rejects.toThrow('search failed');
+    });
+
+    it('handles partial memory data when no goals or watched entities are present', async () => {
+      vi.mocked(memory.getActiveGoals).mockResolvedValueOnce([]);
+      vi.mocked(memory.getWatchedEntities).mockResolvedValueOnce([]);
+      vi.mocked(memory.getMemories).mockResolvedValueOnce([]);
+
+      const intelligence = createMockIntelligence({
+        timeline: {
+          events: [],
+          causalChains: [],
+          promises: [
+            {
+              id: 'promise-partial-1',
+              type: 'foreshadowing',
+              description: 'Subtle unresolved hint that lacks matching plan memory',
+              quote: 'hint text',
+              offset: 100,
+              resolved: false,
+              chapterId: 'ch-1',
+            },
+          ],
+          processedAt: Date.now(),
+        },
+      });
+
+      const result = await analyzeIntelligenceAgainstMemory(intelligence, {
+        projectId: 'test-project',
+      });
+
+      expect(result.conflicts).toHaveLength(0);
+      expect(result.memoriesCreated).toBe(0);
     });
   });
 

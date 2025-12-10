@@ -581,122 +581,26 @@ describe('DefaultAgentController', () => {
   });
 
   it('handles initialization failure gracefully', async () => {
-      // We need to catch the rejection in initializeChat since sendMessage awaits it.
-      // But initializeChat catches errors internally in sendMessage call?
-      // No, initializeChat calls createChatSessionFromContext which we mocked to throw.
-      mockCreateChatSessionFromContext.mockRejectedValueOnce(new Error('Init failed'));
+    // We mock createChatSessionFromContext to throw an error.
+    mockCreateChatSessionFromContext.mockRejectedValueOnce(new Error('Init failed'));
 
-      const events = {
-          onStateChange: vi.fn(),
-          onMessage: vi.fn(),
-          onError: vi.fn(),
-      };
+    const events = {
+      onStateChange: vi.fn(),
+      onMessage: vi.fn(),
+      onError: vi.fn(),
+    };
 
-      const { controller } = makeController({ events });
+    const { controller } = makeController({ events });
 
-      // When sendMessage calls initializeChat, it awaits it.
-      // initializeChat does:
-      /*
-          const { chat, memoryContext } = await createChatSessionFromContext({...});
-          this.chat = chat;
-          this.chat?.sendMessage(...).catch(console.error);
-      */
-      // So if createChatSessionFromContext throws, initializeChat throws.
-      // sendMessage catches it?
-      /*
-         try { ...
-             if (!this.chat && this.currentPersona) {
-               await this.initializeChat(this.currentPersona, this.context.projectId ?? null);
-             }
-         ... } catch (error) { ... }
-      */
-      // Wait, sendMessage implementation:
-      /*
-        if (!this.chat && this.currentPersona) {
-          await this.initializeChat(this.currentPersona, this.context.projectId ?? null);
-        }
-        const chat = this.chat;
-        if (!chat) {
-          this.updateState({ status: 'error', lastError: 'Agent session is not initialized.' });
-          return;
-        }
-      */
-      // If initializeChat throws, it bubbles up to sendMessage?
-      // In the implementation:
-      /*
-      async initializeChat(persona: Persona, projectId?: string | null): Promise<void> {
-        // ...
-        const { chat, memoryContext } = await createChatSessionFromContext({...});
-        // ...
-      }
-      */
-      // If `createChatSessionFromContext` throws, `initializeChat` throws.
-      // `sendMessage` does NOT wrap `initializeChat` call in try/catch block for initialization specifically?
-      // No, `sendMessage` has a big try/catch block only around the tool loop part?
+    // Now sendMessage should catch the error internally, see that chat is null,
+    // and update state to error.
+    await controller.sendMessage({ text: 'Hello', editorContext });
 
-      // Checking source:
-      /*
-        // Ensure we have an initialized chat session
-        if (!this.chat && this.currentPersona) {
-          await this.initializeChat(this.currentPersona, this.context.projectId ?? null);
-        }
-        const chat = this.chat;
-        if (!chat) {
-           // ...
-           return;
-        }
+    const stateCalls = (events.onStateChange as any).mock.calls;
+    const lastState = stateCalls[stateCalls.length - 1]?.[0];
 
-        // ...
-
-        try {
-           // execution loop
-        } catch (error) {
-           // ...
-        }
-      */
-
-      // The `initializeChat` call is OUTSIDE the `try/catch`.
-      // So if it throws, `sendMessage` promise rejects.
-      // This seems to be a bug in the implementation or expected behavior.
-      // If I want to test "handles initialization failure gracefully", I might need to expect rejection or fix the implementation.
-      // But looking at "Success criteria", I am supposed to improve coverage.
-      // If the code crashes on init failure, I should probably catch it or expect it.
-
-      // Let's modify the test to expect the rejection, OR modify the code to catch it.
-      // The prompt says "Ensure branches around retry/loop limits and error logging are exercised."
-
-      // If I want to trigger the branch `if (!chat) { ... status: 'error' ... }`, `initializeChat` must NOT throw but fail to set `this.chat`.
-      // But `initializeChat` sets `this.chat` if `createChatSessionFromContext` succeeds.
-      // If `createChatSessionFromContext` throws, `this.chat` remains null (or whatever it was).
-      // So if `initializeChat` throws, we crash.
-
-      // To test the branch `if (!chat)`, we need `initializeChat` to complete but `this.chat` to be null.
-      // But `initializeChat` blindly assigns `this.chat = chat`.
-      // So if `createChatSessionFromContext` returns null chat? (Typings might prevent this).
-
-      // Alternatively, we can swallow the error in `sendMessage` or `initializeChat`.
-      // Given I shouldn't change code unless necessary for bugs, and crashing on init seems like a bug...
-      // But maybe I should just expect the throw in the test.
-
-      // Let's try wrapping the call in expect().rejects.
-
-      await expect(controller.sendMessage({ text: 'Hello', editorContext }))
-        .rejects
-        .toThrow('Init failed');
-
-      // And because it threw, the state change to error inside sendMessage (the `if (!chat)` block) is NOT reached.
-      // So the test failed because I was looking for 'error' state from that block.
-
-      // If I want to reach `if (!chat)`, I need `initializeChat` to swallow error?
-      // Or I can mock `initializeChat` on the controller instance if I could.
-      // But `initializeChat` is a method on the class I am testing.
-
-      // Let's see if I can fix the implementation to wrap `initializeChat` in try/catch?
-      // That would be a bug fix.
-      // "only add tests (and minimal bugfixes if necessary, with failing tests first)"
-
-      // Okay, failing test confirmed (it crashes).
-      // I will wrap `initializeChat` call in try-catch in `AgentController.ts`.
+    expect(lastState.status).toBe('error');
+    expect(lastState.lastError).toBe('Agent session is not initialized.');
   });
 
   it('aborts previous request when abortCurrentRequest is called', async () => {
