@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getProactiveThinker, startProactiveThinker, stopProactiveThinker, resetProactiveThinker } from '../../../services/appBrain/proactiveThinker';
+import { getProactiveThinker, startProactiveThinker, stopProactiveThinker, resetProactiveThinker, ProactiveThinker } from '../../../services/appBrain/proactiveThinker';
 import { eventBus } from '../../../services/appBrain/eventBus';
 import { ai } from '../../../services/gemini/client';
 import { evolveBedsideNote, getVoiceProfileForCharacter, upsertVoiceProfile } from '../../../services/memory';
@@ -482,6 +482,32 @@ describe('ProactiveThinker', () => {
     }));
   });
 
+  it('applies weighting rules and sorting for related memory suggestions', () => {
+    vi.mocked(useSettingsStore.getState).mockReturnValue({
+        suggestionWeights: {
+            plot: 0.01, // Hard mute
+            character: 0.4, // Downgrade from high to medium
+            style: 2.0, // Boost from low to high
+        },
+    } as any);
+
+    const weighted = (thinker as any).applyAdaptiveRelevance([
+        { title: 'Plot callback', type: 'related_memory', tags: ['plot'], priority: 'high' },
+        { title: 'Character arc', type: 'related_memory', tags: ['character'], priority: 'high' },
+        { title: 'Style tweak', type: 'related_memory', tags: ['style'], priority: 'low' },
+    ]);
+
+    expect(weighted).toHaveLength(2);
+    expect(weighted[0]).toMatchObject({
+        title: 'Style tweak',
+        priority: 'high',
+    });
+    expect(weighted[1]).toMatchObject({
+        title: 'Character arc',
+        priority: 'medium',
+    });
+  });
+
   it('should fetch long term memory context with matches', async () => {
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
 
@@ -536,5 +562,183 @@ describe('ProactiveThinker', () => {
     expect(ai.models.generateContent).toHaveBeenCalledWith(expect.objectContaining({
         contents: expect.not.stringContaining('LONG-TERM MEMORY'),
     }));
+  });
+
+  it('skips bedside evolution when disabled or cooling down', async () => {
+    const disabledThinker = new ProactiveThinker({ allowBedsideEvolve: false });
+    disabledThinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    await (disabledThinker as any).maybeEvolveBedsideNote('Plan text', {
+      changeReason: 'test',
+    });
+
+    expect(evolveBedsideNote).not.toHaveBeenCalled();
+
+    disabledThinker.stop();
+
+    const coolingThinker = new ProactiveThinker({ allowBedsideEvolve: true });
+    coolingThinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    (coolingThinker as any).state.lastBedsideEvolveAt = Date.now();
+
+    await (coolingThinker as any).maybeEvolveBedsideNote('Plan text', {
+      changeReason: 'test',
+    });
+
+    expect(evolveBedsideNote).not.toHaveBeenCalled();
+
+    coolingThinker.stop();
+  });
+
+  it('maps categories and weighting for adaptive relevance', () => {
+    vi.mocked(useSettingsStore.getState).mockReturnValue({
+        suggestionWeights: {
+            other: 0.01,
+        },
+    } as any);
+
+    const weighted = (thinker as any).applyAdaptiveRelevance([
+        { title: 'Misc item', type: 'related_memory', tags: ['other'], priority: 'high' },
+        { title: 'Continuity note', type: 'continuity', priority: 'medium', tags: ['continuity'] },
+    ]);
+
+    expect(weighted).toHaveLength(1);
+    expect(weighted[0]).toMatchObject({
+        title: 'Continuity note',
+        priority: 'medium',
+    });
+    expect((thinker as any).getSuggestionCategory({ type: 'related_memory', tags: ['continuity'] })).toBe('continuity');
+    expect((thinker as any).getSuggestionCategory({ type: 'unknown' })).toBe('unknown');
+  });
+
+  it('formats age across ranges', () => {
+    const now = Date.now();
+    vi.setSystemTime(now);
+
+    expect((thinker as any).formatAge(now - 2 * 86400000)).toBe('2d ago');
+    expect((thinker as any).formatAge(now - 2 * 3600000)).toBe('2h ago');
+    expect((thinker as any).formatAge(now - 5 * 60000)).toBe('5m ago');
+    expect((thinker as any).formatAge(now)).toBe('just now');
+  });
+
+  it('handles long-term memory fetch errors gracefully', async () => {
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+    vi.mocked(searchBedsideHistory).mockRejectedValue(new Error('fail'));
+
+    const result = await (thinker as any).fetchLongTermMemoryContext(mockGetState());
+
+    expect(result).toEqual({ text: '', matches: [] });
+  });
+
+  it('evolves bedside notes when allowed and logs failures', async () => {
+    const cooldownThinker = new ProactiveThinker({ allowBedsideEvolve: true, bedsideCooldownMs: 0 });
+    cooldownThinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    await (cooldownThinker as any).maybeEvolveBedsideNote('Plan text', {
+      changeReason: 'test',
+    });
+
+    expect(evolveBedsideNote).toHaveBeenCalledWith(
+      mockProjectId,
+      'Plan text',
+      expect.objectContaining({ changeReason: 'test' })
+    );
+
+    vi.mocked(evolveBedsideNote).mockRejectedValueOnce(new Error('oops'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await (cooldownThinker as any).maybeEvolveBedsideNote('Plan text', {
+      changeReason: 'test',
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Bedside evolve failed:'), expect.any(Error));
+
+    cooldownThinker.stop();
+    warnSpy.mockRestore();
+  });
+
+  it('parses thinking results and handles malformed JSON', () => {
+    vi.setSystemTime(new Date('2024-01-01T00:00:00Z'));
+    const parsed = (thinker as any).parseThinkingResult(JSON.stringify({
+      significant: true,
+      suggestions: [{ title: 'Raw', description: 'Desc', priority: 'low', type: 'plot' }],
+      reasoning: 'Because',
+    }));
+
+    expect(parsed).toMatchObject({
+      significant: true,
+      rawThinking: 'Because',
+    });
+    expect(parsed.suggestions[0]).toMatchObject({
+      title: 'Raw',
+      description: 'Desc',
+      priority: 'low',
+      type: 'related_memory',
+      tags: ['plot'],
+      source: { id: 'proactive-thinker' },
+      createdAt: new Date('2024-01-01T00:00:00Z').getTime(),
+    });
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fallback = (thinker as any).parseThinkingResult('{oops');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to parse thinking result:'), expect.any(Error));
+    expect(fallback).toEqual({ suggestions: [], significant: false });
+    warnSpy.mockRestore();
+  });
+
+  it('clears debounce timers and supports start helper', () => {
+    const dummyState = () => mockGetState();
+    const started = startProactiveThinker(dummyState, mockProjectId, mockOnSuggestion);
+    (started as any).debounceTimer = setTimeout(() => {}, 1000);
+
+    (started as any).clearDebounceTimer();
+
+    expect((started as any).debounceTimer).toBeNull();
+    stopProactiveThinker();
+  });
+
+  it('formats events and handles missing project context', async () => {
+    const eventsText = (thinker as any).formatEventsForPrompt([
+      { type: 'TEXT_CHANGED', payload: { delta: 1 }, timestamp: 0 },
+    ]);
+
+    expect(eventsText).toContain('TEXT_CHANGED');
+
+    const emptyEventsText = (thinker as any).formatEventsForPrompt([]);
+    expect(emptyEventsText).toBe('No recent events.');
+
+    const noProjectThinker = new ProactiveThinker();
+    vi.mocked(searchBedsideHistory).mockResolvedValue([{ note: { text: 'Memory', createdAt: Date.now(), id: '1' }, similarity: 1 } as any]);
+    const result = await (noProjectThinker as any).fetchLongTermMemoryContext(mockGetState());
+    expect(result).toEqual({ text: '', matches: [] });
+  });
+
+  it('logs bedside evolve failures during thinking', async () => {
+    vi.mocked(ai.models.generateContent).mockResolvedValue({
+      text: JSON.stringify({
+        significant: true,
+        suggestions: [{ title: 'Issue', description: 'desc', priority: 'medium', type: 'plot' }],
+      }),
+    } as any);
+    vi.mocked(getImportantReminders).mockResolvedValue([{ title: 'R', description: 'D' } as any]);
+    vi.mocked(evolveBedsideNote).mockRejectedValue(new Error('fail evolve'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
+
+    await thinker.forceThink();
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Bedside evolve failed:'), expect.any(Error));
+
+    warnSpy.mockRestore();
+  });
+
+  it('returns null when forcing think without setup or events', async () => {
+    expect(await thinker.forceThink()).toBeNull();
+
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+    expect(await thinker.forceThink()).toBeNull();
   });
 });

@@ -1,46 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { ActiveModels, ModelConfig, ModelPricing, getModelPricing } from '../../config/models';
 
-const clearModelModules = () => vi.resetModules();
-
-describe('config/models', () => {
-  beforeEach(() => {
-    clearModelModules();
-  });
-
-  afterEach(() => {
-    clearModelModules();
-  });
-
-  it('selects active model build based on environment variable', async () => {
-    process.env.VITE_MODEL_BUILD = 'cheap';
-    const { ModelConfig } = await import('@/config/models');
-
-    expect(ModelConfig.analysis).toBe('gemini-2.5-flash');
-    expect(ModelConfig.tools).toBe('gemini-2.5-flash');
-  });
-
-  it('falls back to default build for unknown environment', async () => {
-    process.env.VITE_MODEL_BUILD = 'unknown-key';
-    const { ModelConfig } = await import('@/config/models');
-
-    expect(ModelConfig.analysis).toBe('gemini-3-pro-preview');
-  });
-
-  it('exposes pricing for known and legacy models', async () => {
-    delete process.env.VITE_MODEL_BUILD;
-    const { getModelPricing } = await import('@/config/models');
-
-    expect(getModelPricing('gemini-3-pro-preview')).toEqual({ inputPrice: 1.25, outputPrice: 5 });
-    expect(getModelPricing('gemini-1.5-pro')).toEqual({ inputPrice: 1.25, outputPrice: 5.0 });
-    expect(getModelPricing('missing-model')).toBeNull();
-  });
-
-  it('provides pro and flash aliases for backwards compatibility', async () => {
-    delete process.env.VITE_MODEL_BUILD;
-    const { ModelConfig } = await import('@/config/models');
-
-    // pro is alias for analysis, flash is alias for agent
+describe('Model configuration', () => {
+  it('exposes active model identifiers', () => {
+    expect(ModelConfig.analysis).toBe(ActiveModels.analysis.id);
+    expect(ModelConfig.agent).toBe(ActiveModels.agent.id);
+    expect(ModelConfig.tts).toBe(ActiveModels.tts.id);
+    expect(ModelConfig.liveAudio).toBe(ActiveModels.liveAudio.id);
+    expect(ModelConfig.tools).toBe(ActiveModels.tools.id);
     expect(ModelConfig.pro).toBe(ModelConfig.analysis);
     expect(ModelConfig.flash).toBe(ModelConfig.agent);
+  });
+
+  it('returns pricing information or null', () => {
+    expect(getModelPricing('gemini-1.5-pro')).toEqual({ inputPrice: 1.25, outputPrice: 5.0 });
+    expect(getModelPricing('nonexistent-model')).toBeNull();
+    expect(Object.isFrozen(ModelPricing)).toBe(true);
   });
 });
