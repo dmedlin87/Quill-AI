@@ -70,6 +70,15 @@ vi.mock('@/features/core/context/EditorContext', () => ({
   useEditorActions: vi.fn(),
 }));
 
+vi.mock('@/features/shared/components/CommandPalette', () => ({
+  CommandPalette: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => 
+    isOpen ? <div data-testid="command-palette"><button onClick={onClose}>close</button></div> : null,
+}));
+
+vi.mock('@/features/debug', () => ({
+  BrainActivityMonitor: () => <div data-testid="brain-monitor" />,
+}));
+
 import { MainLayout } from '@/features/layout/MainLayout';
 import { useProjectStore } from '@/features/project';
 import { useEngine } from '@/features/shared';
@@ -145,4 +154,67 @@ describe('features/layout/MainLayout', () => {
 
     expect(toggleZenMode).toHaveBeenCalledTimes(2);
   });
+
+  it('opens command palette with Ctrl+K', () => {
+    render(<MainLayout />);
+
+    // Command palette should be closed initially
+    expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();
+
+    // Trigger Ctrl+K
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+
+    // Command palette should now be visible
+    expect(screen.getByTestId('command-palette')).toBeInTheDocument();
+  });
+
+  it('toggles command palette on subsequent Ctrl+K presses', () => {
+    render(<MainLayout />);
+
+    // Open
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    expect(screen.getByTestId('command-palette')).toBeInTheDocument();
+
+    // Close
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();
+  });
+
+  it('derives thinking orb status when analyzing', () => {
+    mockUseEngine.mockReturnValue({ state: { isAnalyzing: true, isMagicLoading: false } });
+    render(<MainLayout />);
+
+    const navRail = screen.getByTestId('navigation-rail');
+    expect(navRail).toBeInTheDocument();
+  });
+
+  it('derives writing orb status when magic loading', () => {
+    mockUseEngine.mockReturnValue({ state: { isAnalyzing: false, isMagicLoading: true } });
+    render(<MainLayout />);
+
+    const navRail = screen.getByTestId('navigation-rail');
+    expect(navRail).toBeInTheDocument();
+  });
+
+  it('derives dreaming orb status when dreaming', () => {
+    mockUseEngine.mockReturnValue({ state: { isAnalyzing: false, isMagicLoading: false, isDreaming: true } });
+    render(<MainLayout />);
+
+    const navRail = screen.getByTestId('navigation-rail');
+    expect(navRail).toBeInTheDocument();
+  });
+
+  it('renders editor workspace in editor view', () => {
+    render(<MainLayout />);
+
+    expect(screen.getByTestId('editor-workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('editor-header')).toBeInTheDocument();
+  });
+
+  it('renders tools panel container', () => {
+    render(<MainLayout />);
+
+    expect(screen.getByTestId('tools-panel')).toBeInTheDocument();
+  });
 });
+

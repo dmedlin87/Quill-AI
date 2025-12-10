@@ -66,6 +66,28 @@ vi.mock('@/features/memory', () => ({
   MemoryManager: () => <div data-testid="memory-manager">Memory Manager</div>,
 }));
 
+vi.mock('@/features/settings', () => ({
+  DeveloperModeToggle: () => <div data-testid="developer-mode-toggle">Dev Mode</div>,
+  ThemeSelector: () => <div data-testid="theme-selector">Theme Selector</div>,
+}));
+
+vi.mock('@/features/settings/components/RelevanceTuning', () => ({
+  RelevanceTuning: () => <div data-testid="relevance-tuning">Relevance Tuning</div>,
+}));
+
+vi.mock('@/features/shared/components/DesignSystemKitchenSink', () => ({
+  DesignSystemKitchenSink: () => <div data-testid="design-system-kitchen-sink">Design System</div>,
+}));
+
+// Mock settings store
+let mockDeveloperModeEnabled = false;
+vi.mock('@/features/settings/store/useSettingsStore', () => ({
+  useSettingsStore: vi.fn((selector) => {
+    const state = { developerModeEnabled: mockDeveloperModeEnabled };
+    return typeof selector === 'function' ? selector(state) : state;
+  }),
+}));
+
 describe('ToolsPanel', () => {
   const defaultProps = {
     isZenMode: false,
@@ -89,6 +111,7 @@ describe('ToolsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockActiveTab = SidebarTab.ANALYSIS;
+    mockDeveloperModeEnabled = false;
   });
 
   describe('Visibility', () => {
@@ -217,6 +240,47 @@ describe('ToolsPanel', () => {
       expect(screen.queryByTestId('voice-mode')).not.toBeInTheDocument();
       expect(screen.queryByTestId('knowledge-graph')).not.toBeInTheDocument();
       expect(screen.queryByTestId('lore-manager')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Tab Content: Settings', () => {
+    it('renders Settings tab with ThemeSelector', () => {
+      mockActiveTab = SidebarTab.SETTINGS;
+      render(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.getByText('Settings')).toBeInTheDocument();
+      expect(screen.getByTestId('theme-selector')).toBeInTheDocument();
+    });
+
+    it('does not render DesignSystemKitchenSink when developer mode is off', () => {
+      mockActiveTab = SidebarTab.SETTINGS;
+      mockDeveloperModeEnabled = false;
+      render(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.queryByTestId('design-system-kitchen-sink')).not.toBeInTheDocument();
+    });
+
+    it('renders DesignSystemKitchenSink when developer mode is enabled', () => {
+      mockActiveTab = SidebarTab.SETTINGS;
+      mockDeveloperModeEnabled = true;
+      render(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.getByTestId('design-system-kitchen-sink')).toBeInTheDocument();
+    });
+  });
+
+  describe('Panel Header', () => {
+    it('renders DeveloperModeToggle', () => {
+      render(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.getByTestId('developer-mode-toggle')).toBeInTheDocument();
+    });
+
+    it('renders expand/collapse button', () => {
+      render(<ToolsPanel {...defaultProps} />);
+
+      const button = screen.getByTitle('Expand to fullscreen');
+      expect(button).toBeInTheDocument();
     });
   });
 });

@@ -155,8 +155,8 @@ vi.mock('@/features/editor/hooks/useEditorSelection', () => ({
 vi.mock('@/features/editor/hooks/useEditorBranching', () => ({
   useEditorBranching: (activeChapter: any, currentText: string, updateText: any) => {
     const React = require('react');
-    const [branches, setBranches] = React.useState([]);
-    const [activeBranchId, setActiveBranchId] = React.useState(null);
+    const [branches, setBranches] = React.useState(() => activeChapter?.branches || []);
+    const [activeBranchId, setActiveBranchId] = React.useState(() => activeChapter?.activeBranchId ?? null);
 
     return {
       branches,
@@ -182,9 +182,9 @@ vi.mock('@/features/editor/hooks/useEditorBranching', () => ({
 
 // Mock useEditorComments
 vi.mock('@/features/editor/hooks/useEditorComments', () => ({
-  useEditorComments: () => {
+  useEditorComments: (activeChapter: any) => {
     const React = require('react');
-    const [inlineComments, setInlineComments] = React.useState([]);
+    const [inlineComments, setInlineComments] = React.useState(() => activeChapter?.comments || []);
     
     return {
       inlineComments,

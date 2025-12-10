@@ -26,14 +26,14 @@ describe('AppBrainActionsContext', () => {
       const actions = createNoOpAppBrainActions();
 
       // Navigation
-      expect(await actions.navigateToText({ chapterId: '1', text: 'test' })).toBe('');
+      expect(await actions.navigateToText({ query: 'test', chapter: '1' })).toBe('');
       expect(await actions.jumpToChapter('1')).toBe('');
-      expect(await actions.jumpToScene('1')).toBe('');
+      expect(await actions.jumpToScene('action', 'next')).toBe('');
       expect(actions.scrollToPosition(0)).toBeUndefined();
 
       // Editing
-      expect(await actions.updateManuscript({ chapterId: '1', changes: [] })).toBe('');
-      expect(await actions.appendText('text')).toBe('');
+      expect(await actions.updateManuscript({ searchText: 'old', replacementText: 'new', description: 'test' })).toBe('');
+      expect(await actions.appendText('text', 'description')).toBe('');
       expect(await actions.undo()).toBe('');
       expect(await actions.redo()).toBe('');
 
@@ -44,13 +44,13 @@ describe('AppBrainActionsContext', () => {
       // UI Control
       expect(await actions.switchPanel('panel')).toBe('');
       expect(await actions.toggleZenMode()).toBe('');
-      expect(await actions.highlightText({ from: 0, to: 1 })).toBe('');
-      expect(actions.setMicrophoneState('idle')).toBeUndefined();
+      expect(await actions.highlightText(0, 1)).toBe('');
+      expect(actions.setMicrophoneState({ status: 'idle' })).toBeUndefined();
 
       // Knowledge
       expect(await actions.queryLore('query')).toBe('');
       expect(await actions.getCharacterInfo('char')).toBe('');
-      expect(await actions.getTimelineContext()).toBe('');
+      expect(await actions.getTimelineContext('nearby')).toBe('');
 
       // Generation
       expect(await actions.rewriteSelection({ mode: 'expand' })).toBe('');
