@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useCallback, useState, useMemo, useEffect, useRef } from 'react';
 
 import { useProjectStore } from '@/features/project';
-import { useDocumentHistory, useEditorSelection, useEditorComments, useEditorBranching } from '@/features/editor';
+import { useDocumentHistory } from '@/features/editor/hooks/useDocumentHistory';
+import { useEditorSelection } from '@/features/editor/hooks/useEditorSelection';
+import { useEditorComments } from '@/features/editor/hooks/useEditorComments';
+import { useEditorBranching } from '@/features/editor/hooks/useEditorBranching';
 
 import { HistoryItem, HighlightRange, EditorContext as EditorContextType } from '@/types';
 
@@ -11,7 +14,7 @@ import {
   emitSelectionChanged,
   emitTextChanged,
   emitZenModeToggled,
-} from '@/services/appBrain';
+} from '@/services/appBrain/eventBus';
 
 import { Editor } from '@tiptap/react';
 import { Branch, InlineComment } from '@/types/schema';

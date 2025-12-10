@@ -17,42 +17,78 @@ const {
   emitSelectionChanged,
   emitTextChanged,
   emitZenModeToggled,
+  mockUseProjectStore,
+  mockGetActiveChapter,
 } = vi.hoisted(() => ({
   emitCursorMoved: vi.fn(),
   emitEditMade: vi.fn(),
   emitSelectionChanged: vi.fn(),
   emitTextChanged: vi.fn(),
   emitZenModeToggled: vi.fn(),
+  mockUseProjectStore: vi.fn(),
+  mockGetActiveChapter: vi.fn(),
 }));
 
-vi.mock('@/services/appBrain', async () => {
-  const actual = await vi.importActual<typeof import('@/services/appBrain')>('@/services/appBrain');
+vi.mock('@/services/appBrain/eventBus', () => ({
+  emitCursorMoved,
+  emitEditMade,
+  emitSelectionChanged,
+  emitTextChanged,
+  emitZenModeToggled,
+}));
 
-  return {
-    ...actual,
-    emitCursorMoved,
-    emitEditMade,
-    emitSelectionChanged,
-    emitTextChanged,
-    emitZenModeToggled,
-  };
-});
+// Also mock the barrel file just in case, but keep it simple
+vi.mock('@/services/appBrain', () => ({
+  emitCursorMoved,
+  emitEditMade,
+  emitSelectionChanged,
+  emitTextChanged,
+  emitZenModeToggled,
+  createEmptyAppBrainState: () => ({
+    manuscript: {},
+    intelligence: {},
+    analysis: {},
+    lore: {},
+    ui: {
+      cursor: {},
+      selection: null,
+      microphone: {},
+    },
+    session: {},
+  }),
+}));
 
 // Mock useProjectStore
-const mockGetActiveChapter = vi.fn(() => ({
+vi.mock('@/features/project', () => ({
+  useProjectStore: mockUseProjectStore,
+}));
+
+// Default mock implementation
+mockGetActiveChapter.mockReturnValue({
   id: 'chapter-1',
   content: 'Initial chapter content',
   branches: [],
   comments: [],
-}));
+});
 
-vi.mock('@/features/project', () => ({
-  useProjectStore: () => ({
+mockUseProjectStore.mockImplementation((selector: any) => {
+  const state = {
     activeChapterId: 'chapter-1',
     updateChapterContent: vi.fn(),
     updateChapterBranchState: vi.fn(),
     getActiveChapter: mockGetActiveChapter,
-  }),
+  };
+  return selector ? selector(state) : state;
+});
+
+// Mock useSettingsStore for useEditorComments
+vi.mock('@/features/settings', () => ({
+  useSettingsStore: (selector: any) => {
+    const state = {
+      critiqueIntensity: 'standard',
+    };
+    return selector ? selector(state) : state;
+  },
 }));
 
 // Mock useDocumentHistory
@@ -81,6 +117,85 @@ vi.mock('@/features/editor/hooks/useDocumentHistory', () => ({
     reset: mockReset,
     hasUnsavedChanges: false,
   }},
+}));
+
+// Mock useEditorSelection to avoid Tiptap dependencies
+vi.mock('@/features/editor/hooks/useEditorSelection', () => ({
+  useEditorSelection: () => {
+    const React = require('react');
+    const [selectionRange, setSelectionRange] = React.useState(null);
+    const [selectionPos, setSelectionPos] = React.useState(null);
+    
+    return {
+      selectionRange,
+      selectionPos,
+      cursorPosition: 0,
+      setSelection: React.useCallback(() => {}, []),
+      setSelectionState: React.useCallback((range: any, pos: any) => {
+        setSelectionRange(range);
+        setSelectionPos(pos);
+      }, []),
+      clearSelection: React.useCallback(() => {
+        setSelectionRange(null);
+        setSelectionPos(null);
+      }, []),
+      activeHighlight: null,
+      handleNavigateToIssue: React.useCallback(() => {}, []),
+      scrollToPosition: React.useCallback(() => {}, []),
+      getEditorContext: React.useCallback(() => ({
+        cursorPosition: 0,
+        selection: selectionRange,
+        totalLength: 0
+      }), [selectionRange])
+    };
+  }
+}));
+
+// Mock useEditorBranching
+vi.mock('@/features/editor/hooks/useEditorBranching', () => ({
+  useEditorBranching: (activeChapter: any, currentText: string, updateText: any) => {
+    const React = require('react');
+    const [branches, setBranches] = React.useState([]);
+    const [activeBranchId, setActiveBranchId] = React.useState(null);
+
+    return {
+      branches,
+      activeBranchId,
+      isOnMain: !activeBranchId,
+      createBranch: React.useCallback((name: string) => {
+        setBranches((prev: any[]) => [...prev, { id: 'branch-' + Date.now(), name, content: 'Current text content' }]);
+      }, []),
+      switchBranch: React.useCallback((branchId: string | null) => {
+        setActiveBranchId(branchId);
+      }, []),
+      mergeBranch: React.useCallback(() => {}, []),
+      deleteBranch: React.useCallback((branchId: string) => {
+        if (activeBranchId === branchId) setActiveBranchId(null);
+        setBranches((prev: any[]) => prev.filter((b: any) => b.id !== branchId));
+      }, [activeBranchId]),
+      renameBranch: React.useCallback((branchId: string, newName: string) => {
+        setBranches((prev: any[]) => prev.map((b: any) => b.id === branchId ? { ...b, name: newName } : b));
+      }, []),
+    };
+  }
+}));
+
+// Mock useEditorComments
+vi.mock('@/features/editor/hooks/useEditorComments', () => ({
+  useEditorComments: () => {
+    const React = require('react');
+    const [inlineComments, setInlineComments] = React.useState([]);
+    
+    return {
+      inlineComments,
+      visibleComments: inlineComments,
+      setInlineComments: React.useCallback((comments: any[]) => setInlineComments(comments), []),
+      dismissComment: React.useCallback((id: string) => {
+        setInlineComments((prev: any[]) => prev.map((c: any) => c.id === id ? { ...c, dismissed: true } : c));
+      }, []),
+      clearComments: React.useCallback(() => setInlineComments([]), []),
+    };
+  }
 }));
 
 // Wrapper component for hooks
@@ -570,10 +685,10 @@ describe('EditorContext', () => {
           // Switch chapter
           chapterId = 'ch2';
            // activeChapterId comes from useProjectStore hook
-           const useProjectStoreSpy = vi.spyOn(require('@/features/project'), 'useProjectStore');
-           useProjectStoreSpy.mockReturnValue({
+           mockUseProjectStore.mockReturnValue({
                 activeChapterId: 'ch2',
                 updateChapterContent: vi.fn(),
+                updateChapterBranchState: vi.fn(),
                 getActiveChapter: mockGetActiveChapter
            });
 
