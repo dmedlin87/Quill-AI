@@ -1,29 +1,42 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ToolsPanel } from '@/features/layout/ToolsPanel';
 import { SidebarTab } from '@/types';
 
 // Mock layout store with configurable activeTab
 let mockActiveTab = SidebarTab.ANALYSIS;
+let mockIsToolsCollapsed = false;
+let mockIsToolsPanelExpanded = false;
+let mockToolsPanelWidth = 380;
 const mockHandleFixRequest = vi.fn();
 const mockHandleSelectGraphCharacter = vi.fn();
 const mockHandleInterviewCharacter = vi.fn();
 const mockClearChatInitialMessage = vi.fn();
 const mockExitInterview = vi.fn();
+const mockSetToolsPanelWidth = vi.fn((width: number) => {
+  mockToolsPanelWidth = width;
+});
+const mockToggleToolsPanelExpanded = vi.fn(() => {
+  mockIsToolsPanelExpanded = !mockIsToolsPanelExpanded;
+});
 
 vi.mock('@/features/layout/store/useLayoutStore', () => ({
   useLayoutStore: vi.fn((selector) => {
     const state = {
       activeTab: mockActiveTab,
-      isToolsCollapsed: false,
+      isToolsCollapsed: mockIsToolsCollapsed,
       chatInitialMessage: undefined,
       interviewTarget: null,
+      toolsPanelWidth: mockToolsPanelWidth,
+      isToolsPanelExpanded: mockIsToolsPanelExpanded,
       clearChatInitialMessage: mockClearChatInitialMessage,
       exitInterview: mockExitInterview,
       handleFixRequest: mockHandleFixRequest,
       handleSelectGraphCharacter: mockHandleSelectGraphCharacter,
       handleInterviewCharacter: mockHandleInterviewCharacter,
+      setToolsPanelWidth: mockSetToolsPanelWidth,
+      toggleToolsPanelExpanded: mockToggleToolsPanelExpanded,
     };
     return typeof selector === 'function' ? selector(state) : state;
   }),
@@ -111,20 +124,29 @@ describe('ToolsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockActiveTab = SidebarTab.ANALYSIS;
+    mockIsToolsCollapsed = false;
+    mockIsToolsPanelExpanded = false;
+    mockToolsPanelWidth = 380;
     mockDeveloperModeEnabled = false;
   });
 
   describe('Visibility', () => {
-    it('renders panel when not collapsed and not zen mode', () => {
-      render(<ToolsPanel {...defaultProps} />);
+    it.each([
+      { collapsed: false, zen: false, expanded: false, shouldRender: true },
+      { collapsed: true, zen: false, expanded: false, shouldRender: false },
+      { collapsed: false, zen: true, expanded: false, shouldRender: false },
+      { collapsed: false, zen: false, expanded: true, shouldRender: true },
+    ])('renders based on collapse/zen/expanded state %#', ({ collapsed, zen, expanded, shouldRender }) => {
+      mockIsToolsCollapsed = collapsed;
+      mockIsToolsPanelExpanded = expanded;
 
-      expect(screen.getByRole('complementary')).toBeInTheDocument();
-    });
+      render(<ToolsPanel {...defaultProps} isZenMode={zen} />);
 
-    it('does not render when zen mode is active', () => {
-      render(<ToolsPanel {...defaultProps} isZenMode={true} />);
-
-      expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+      if (shouldRender) {
+        expect(screen.getByRole('complementary')).toBeInTheDocument();
+      } else {
+        expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+      }
     });
 
     it('has correct aria-label based on active tab', () => {
@@ -281,6 +303,54 @@ describe('ToolsPanel', () => {
 
       const button = screen.getByTitle('Expand to fullscreen');
       expect(button).toBeInTheDocument();
+    });
+
+    it('toggles aria labels and layout classes when expanding and collapsing', () => {
+      const { rerender } = render(<ToolsPanel {...defaultProps} />);
+
+      const panel = screen.getByRole('complementary');
+      const button = screen.getByLabelText('Expand to fullscreen');
+
+      expect(panel.className).toContain('relative');
+      expect(panel.className).not.toContain('fixed');
+
+      fireEvent.click(button);
+      expect(mockToggleToolsPanelExpanded).toHaveBeenCalled();
+
+      rerender(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.getByLabelText('Exit fullscreen')).toBeInTheDocument();
+      expect(screen.getByRole('complementary').className).toContain('fixed');
+      expect(screen.getByRole('complementary').className).toContain('inset-0');
+
+      fireEvent.click(screen.getByLabelText('Exit fullscreen'));
+      rerender(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.getByLabelText('Expand to fullscreen')).toBeInTheDocument();
+      expect(screen.getByRole('complementary').className).toContain('relative');
+    });
+  });
+
+  describe('Resize Handle', () => {
+    it('calls setToolsPanelWidth with drag delta and clears resizing on mouseup', () => {
+      mockToolsPanelWidth = 400;
+      const { unmount } = render(<ToolsPanel {...defaultProps} />);
+
+      const resizeHandle = screen.getByTitle('Drag to resize');
+
+      fireEvent.mouseDown(resizeHandle, { clientX: 500 });
+      expect(screen.getByRole('complementary').className).toContain('select-none');
+
+      fireEvent.mouseMove(document, { clientX: 450 });
+      expect(mockSetToolsPanelWidth).toHaveBeenCalledWith(450);
+
+      fireEvent.mouseUp(document);
+      expect(screen.getByRole('complementary').className).not.toContain('select-none');
+
+      mockSetToolsPanelWidth.mockClear();
+      unmount();
+      fireEvent.mouseMove(document, { clientX: 400 });
+      expect(mockSetToolsPanelWidth).not.toHaveBeenCalled();
     });
   });
 });
