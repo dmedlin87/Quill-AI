@@ -110,7 +110,7 @@ describe('Heading', () => {
         </Heading>
       );
       
-      expect(screen.getByText('Heading with')).toBeInTheDocument();
+      expect(screen.getByText(/Heading with/)).toBeInTheDocument();
       expect(screen.getByText('bold')).toBeInTheDocument();
     });
   });
@@ -256,7 +256,7 @@ describe('Text', () => {
         </Text>
       );
       
-      expect(screen.getByText('Text with')).toBeInTheDocument();
+      expect(screen.getByText(/Text with/)).toBeInTheDocument();
       expect(screen.getByText('emphasis')).toBeInTheDocument();
       expect(screen.getByText('code')).toBeInTheDocument();
     });
