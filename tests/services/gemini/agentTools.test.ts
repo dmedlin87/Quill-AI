@@ -124,6 +124,12 @@ describe('agentTools', () => {
     expect(getToolsByCategory('generation')).toBe(GENERATION_TOOLS);
     expect(getToolsByCategory('memory')).toBe(MEMORY_TOOLS);
   });
+
+  it('falls back safely for unknown categories', () => {
+    // @ts-expect-error validating defensive branch
+    // The exhaustive check returns the unexpected value to surface misuse
+    expect(getToolsByCategory('unexpected')).toBe('unexpected');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
