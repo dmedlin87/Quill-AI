@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getVoiceProfileForCharacter, upsertVoiceProfile, mergeVoiceMetrics } from '../../../services/memory/voiceProfiles';
-import { createMemory, getMemories, updateMemory } from '../../../services/memory/memoryService';
+import { createMemory, updateMemory } from '../../../services/memory/memoryService';
+import { getMemories } from '../../../services/memory/memoryQueries';
 import { generateVoiceProfile } from '../../../services/intelligence/voiceProfiler';
 
 vi.mock('../../../services/memory/memoryService', () => ({
   createMemory: vi.fn(),
-  getMemories: vi.fn(),
   updateMemory: vi.fn(),
+}));
+
+vi.mock('../../../services/memory/memoryQueries', () => ({
+  getMemories: vi.fn(),
 }));
 
 vi.mock('../../../services/intelligence/voiceProfiler', () => ({
