@@ -228,6 +228,36 @@ The actual chapter content.`;
     });
   });
 
+  describe('line ending normalization', () => {
+    it('treats mixed CRLF and LF line endings equivalently when parsing chapters', () => {
+      const text = [
+        'Chapter 1',
+        'First chapter content.',
+        '',
+        'Chapter 2',
+        'Second chapter content.',
+      ].join('\r\n') + '\nThird line stays LF only.';
+
+      const result = parseManuscript(text);
+
+      expect(result.length).toBeGreaterThanOrEqual(2);
+      const allContent = result.map(c => c.content).join(' ');
+      expect(allContent).toContain('First chapter content.');
+      expect(allContent).toContain('Second chapter content.');
+      expect(allContent).toContain('Third line stays LF only.');
+    });
+
+    it('handles an empty manuscript file fixture without error', () => {
+      const text = loadFixture('empty.txt');
+
+      const result = parseManuscript(text);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].title.toLowerCase()).toContain('chapter');
+      expect(result[0].content).toBe('');
+    });
+  });
+
   describe('edge cases', () => {
     it('handles empty input', () => {
       const result = parseManuscript('');

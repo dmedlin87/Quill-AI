@@ -205,6 +205,46 @@ describe('memoryQueries', () => {
         toCollection: vi.fn(),
       };
     });
+
+    it('returns empty array when combined filters exclude all notes', async () => {
+      const originalMemories = (db as any).memories;
+
+      const mockNotes: MemoryNote[] = [
+        createMockNote({
+          id: 'n1',
+          scope: 'project',
+          projectId: 'proj-1',
+          type: 'fact',
+          importance: 0.95,
+          topicTags: ['character:alice'],
+        }),
+        createMockNote({
+          id: 'n2',
+          scope: 'project',
+          projectId: 'proj-1',
+          type: 'fact',
+          importance: 0.4,
+          topicTags: ['character:alice', 'arc:1'],
+        }),
+      ];
+
+      // Use array-like path so all filters are applied in process
+      (db as any).memories = mockNotes;
+
+      const result = await getMemories({
+        scope: 'project',
+        projectId: 'proj-1',
+        type: 'fact',
+        minImportance: 0.9,
+        topicTags: ['character:alice', 'arc:missing'],
+        limit: 10,
+      });
+
+      expect(result).toEqual([]);
+
+      // Restore original mocked table shape for subsequent tests
+      (db as any).memories = originalMemories;
+    });
   });
 
   describe('getMemoriesForConsolidation', () => {

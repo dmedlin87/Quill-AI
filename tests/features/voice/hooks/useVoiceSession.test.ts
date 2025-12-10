@@ -243,4 +243,52 @@ describe('useVoiceSession', () => {
     expect(result.current.isConnected).toBe(false);
     expect(mockAudioContextImpl.createAnalyser).not.toHaveBeenCalled();
   });
+
+  it('updates isAiSpeaking based on analyser output volume (AI speaking vs silence)', async () => {
+    const { result } = renderHook(() => useVoiceSession());
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    // Wait for connection to be established
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(true);
+    });
+
+    // Output analyser returns low volume first (AI not speaking)
+    const firstAnalyserCall = mockAudioContextImpl.createAnalyser.mock.results[1]?.value as any;
+    const originalGetByteFrequencyData = firstAnalyserCall.getByteFrequencyData;
+
+    // First tick: low volume
+    firstAnalyserCall.getByteFrequencyData = vi.fn((arr: Uint8Array) => {
+      arr.fill(0); // avg = 0 => below threshold
+    });
+
+    // Execute one visualizer frame
+    await act(async () => {
+      // requestAnimationFrame callback is scheduled inside hook; trigger it manually
+      const raf = (window.requestAnimationFrame as any as vi.Mock);
+      const cb = raf.mock.calls[0]?.[0] as FrameRequestCallback;
+      cb(0);
+    });
+
+    expect(result.current.isAiSpeaking).toBe(false);
+
+    // Second tick: high volume (AI speaking)
+    firstAnalyserCall.getByteFrequencyData = vi.fn((arr: Uint8Array) => {
+      arr.fill(255); // avg > 10 => above threshold
+    });
+
+    await act(async () => {
+      const raf = (window.requestAnimationFrame as any as vi.Mock);
+      const cb = raf.mock.calls[1]?.[0] as FrameRequestCallback;
+      cb(16);
+    });
+
+    expect(result.current.isAiSpeaking).toBe(true);
+
+    // Restore original analyser behavior for any follow-up frames
+    firstAnalyserCall.getByteFrequencyData = originalGetByteFrequencyData;
+  });
 });

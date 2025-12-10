@@ -140,7 +140,12 @@ const extractAttributes = (text: string): ExtractedAttribute[] => {
 // CONTRADICTION DETECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
-const generateId = (): string => Math.random().toString(36).substring(2, 11);
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 11);
+};
 
 // Check if two values are compatible (same or related)
 const areValuesCompatible = (category: string, val1: string, val2: string): boolean => {

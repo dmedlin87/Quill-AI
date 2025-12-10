@@ -282,12 +282,16 @@ describe('useAgentOrchestrator', () => {
         const { result } = renderHook(() => useAgentOrchestrator());
         await waitFor(() => expect(result.current.isReady).toBe(true));
 
+        // Capture message count after init (may include persona switch announcement)
+        const initialMessageCount = result.current.messages.length;
+
         await act(async () => {
             await result.current.sendMessage('   ');
         });
 
         expect(runAgentToolLoop).not.toHaveBeenCalled();
-        expect(result.current.messages).toEqual([]);
+        // No new messages should be added for empty input
+        expect(result.current.messages.length).toBe(initialMessageCount);
     });
 
     it('supports aborting an in-flight request without emitting a final response', async () => {

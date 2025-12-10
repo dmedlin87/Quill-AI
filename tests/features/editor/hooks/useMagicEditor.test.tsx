@@ -71,7 +71,7 @@ describe('useMagicEditor', () => {
 
   const renderHarness = (selectionRange: SelectionRange | null = baseSelection) => {
     const ref = React.createRef<ReturnType<typeof useMagicEditor>>();
-    render(
+    const { unmount } = render(
       <MagicEditorHarness
         ref={ref}
         selectionRange={selectionRange}
@@ -80,12 +80,12 @@ describe('useMagicEditor', () => {
         commit={commitMock}
       />
     );
-    return ref;
+    return { ref, unmount };
   };
 
   it('captures rewrite flow and applies variations with validation', async () => {
     rewriteTextMock.mockResolvedValue({ result: ['Improved'], usage: { tokens: 1 } });
-    const ref = renderHarness();
+    const { ref } = renderHarness();
 
     // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
@@ -112,7 +112,7 @@ describe('useMagicEditor', () => {
 
   it('handles stale selections by clearing when text changes', async () => {
     rewriteTextMock.mockResolvedValue({ result: ['Improved'], usage: { tokens: 1 } });
-    const ref = renderHarness();
+    const { ref } = renderHarness();
 
     // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
@@ -134,7 +134,7 @@ describe('useMagicEditor', () => {
   });
 
   it('returns an error when applying without a captured selection', async () => {
-    const ref = renderHarness(null);
+    const { ref } = renderHarness(null);
 
     // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
@@ -151,7 +151,7 @@ describe('useMagicEditor', () => {
 
   it('handles rewrite failure gracefully', async () => {
     rewriteTextMock.mockRejectedValue(new Error('API Error'));
-    const ref = renderHarness();
+    const { ref } = renderHarness();
     await waitFor(() => expect(ref.current).not.toBeNull());
 
     await act(async () => {
@@ -164,7 +164,7 @@ describe('useMagicEditor', () => {
 
   it('handles help failure gracefully', async () => {
     getContextualHelpMock.mockRejectedValue(new Error('Help API Error'));
-    const ref = renderHarness();
+    const { ref } = renderHarness();
     await waitFor(() => expect(ref.current).not.toBeNull());
 
     await act(async () => {
@@ -184,7 +184,7 @@ describe('useMagicEditor', () => {
        return { result: 'Help', usage: { tokens: 1 }};
     });
 
-    const ref = renderHarness();
+    const { ref } = renderHarness();
     await waitFor(() => expect(ref.current).not.toBeNull());
 
     await act(async () => {
@@ -201,7 +201,7 @@ describe('useMagicEditor', () => {
 
   it('applies contextual replacements after help requests', async () => {
     getContextualHelpMock.mockResolvedValue({ result: 'Answer', usage: { tokens: 2 } });
-    const ref = renderHarness();
+    const { ref } = renderHarness();
 
     // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
@@ -222,7 +222,7 @@ describe('useMagicEditor', () => {
 
   it('tracks usage for help requests', async () => {
     getContextualHelpMock.mockResolvedValue({ result: 'Info', usage: { tokens: 4 } });
-    const ref = renderHarness();
+    const { ref } = renderHarness();
 
     await waitFor(() => expect(ref.current).not.toBeNull());
 
@@ -249,7 +249,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 5 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -285,7 +285,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 5 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -321,7 +321,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 5 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -343,7 +343,7 @@ describe('useMagicEditor', () => {
     });
 
     it('does nothing when applyAll is called with no suggestions', async () => {
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       await waitFor(() => expect(ref.current).not.toBeNull());
 
       await act(async () => {
@@ -378,7 +378,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 5 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -424,7 +424,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 5 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       await waitFor(() => expect(ref.current).not.toBeNull());
 
       await act(async () => {
@@ -457,7 +457,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 5 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -497,7 +497,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 5 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       await waitFor(() => expect(ref.current).not.toBeNull());
 
       await act(async () => {
@@ -524,7 +524,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 2 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -536,7 +536,7 @@ describe('useMagicEditor', () => {
     it('handles grammar check error gracefully', async () => {
       fetchGrammarSuggestionsMock.mockRejectedValue(new Error('Grammar service unavailable'));
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -563,7 +563,7 @@ describe('useMagicEditor', () => {
         });
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       await waitFor(() => expect(ref.current).not.toBeNull());
 
       await act(async () => {
@@ -592,7 +592,7 @@ describe('useMagicEditor', () => {
         ],
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       await waitFor(() => expect(ref.current).not.toBeNull());
 
       await act(async () => {
@@ -613,7 +613,7 @@ describe('useMagicEditor', () => {
         });
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       await waitFor(() => expect(ref.current).not.toBeNull());
 
       await act(async () => {
@@ -645,7 +645,7 @@ describe('useMagicEditor', () => {
         usage: { tokens: 5 },
       });
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -661,7 +661,7 @@ describe('useMagicEditor', () => {
     });
 
     it('shows error when no grammar suggestion to apply', async () => {
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -686,7 +686,7 @@ describe('useMagicEditor', () => {
           })
       );
 
-      const ref = renderHarness();
+      const { ref } = renderHarness();
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
       expect(ref.current).not.toBeNull();
@@ -710,7 +710,7 @@ describe('useMagicEditor', () => {
 
     it('does not process empty or whitespace-only selection', async () => {
       const emptySelection: SelectionRange = { start: 0, end: 3, text: '   ' };
-      const ref = renderHarness(emptySelection);
+      const { ref } = renderHarness(emptySelection);
 
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
@@ -727,7 +727,7 @@ describe('useMagicEditor', () => {
 
     it('does not process grammar check on empty selection', async () => {
       const emptySelection: SelectionRange = { start: 0, end: 3, text: '   ' };
-      const ref = renderHarness(emptySelection);
+      const { ref } = renderHarness(emptySelection);
 
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
@@ -746,7 +746,7 @@ describe('useMagicEditor', () => {
   describe('tone tuner mode', () => {
     it('passes tone parameter to rewrite', async () => {
       rewriteTextMock.mockResolvedValue({ result: ['Formal version'], usage: { tokens: 1 } });
-      const ref = renderHarness();
+      const { ref } = renderHarness();
 
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
@@ -771,7 +771,7 @@ describe('useMagicEditor', () => {
   describe('thesaurus help', () => {
     it('handles thesaurus requests', async () => {
       getContextualHelpMock.mockResolvedValue({ result: 'synonym1, synonym2', usage: { tokens: 2 } });
-      const ref = renderHarness();
+      const { ref } = renderHarness();
 
       // STRICT: Verify hook ref is initialized with expected shape
     await waitFor(() => {
@@ -785,6 +785,38 @@ describe('useMagicEditor', () => {
       expect(getContextualHelpMock).toHaveBeenCalledWith('Draft', 'Thesaurus', expect.any(AbortSignal));
       expect(ref.current?.state.magicHelpType).toBe('Thesaurus');
       expect(ref.current?.state.magicHelpResult).toBe('synonym1, synonym2');
+    });
+  });
+
+  describe('cleanup and null checks', () => {
+    it('aborts pending operations on unmount', async () => {
+        // Create a signal mock to check if it gets aborted
+        const abortSpy = vi.spyOn(AbortController.prototype, 'abort');
+
+        rewriteTextMock.mockImplementation(() => new Promise(() => {})); // Never resolve
+
+        const { ref, unmount } = renderHarness();
+
+        await act(async () => {
+            ref.current?.actions.handleRewrite('Test');
+        });
+
+        unmount();
+
+        expect(abortSpy).toHaveBeenCalled();
+    });
+
+    it('does not crash if editor instance (selection) is null', async () => {
+        const { ref } = renderHarness(null);
+        await waitFor(() => expect(ref.current).not.toBeNull());
+
+        await act(async () => {
+             // Calling actions that rely on selection
+             await ref.current?.actions.handleRewrite('Rewrite');
+        });
+
+        // Should not crash and not call service
+        expect(rewriteTextMock).not.toHaveBeenCalled();
     });
   });
 });

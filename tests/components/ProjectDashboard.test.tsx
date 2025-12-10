@@ -63,6 +63,23 @@ describe('ProjectDashboard', () => {
     expect(store.loadProject).toHaveBeenCalledWith('p1');
   });
 
+  it('renders an empty shelf state when there are no projects', () => {
+    const store = {
+      ...baseStore(),
+      projects: [],
+    };
+    mockUseProjectStore.mockReturnValue(store);
+
+    render(<ProjectDashboard />);
+
+    // Library header and primary actions are still available
+    expect(screen.getByText('Quill AI Library')).toBeInTheDocument();
+    expect(screen.getByText('New Novel')).toBeInTheDocument();
+    expect(screen.getByText('Import Draft')).toBeInTheDocument();
+    // No existing project cards rendered
+    expect(screen.queryByText('Mystery Novel')).not.toBeInTheDocument();
+  });
+
   it('creates a new project through the modal', async () => {
     const store = baseStore();
     mockUseProjectStore.mockReturnValue(store);
@@ -77,6 +94,30 @@ describe('ProjectDashboard', () => {
 
     await waitFor(() => {
       expect(store.createProject).toHaveBeenCalledWith('New Saga', 'Me', undefined);
+    });
+  });
+
+  it('shows a working state while creating a project', async () => {
+    const store = baseStore();
+    const pending = new Promise<string>(() => {});
+    store.createProject = vi.fn(() => pending);
+    mockUseProjectStore.mockReturnValue(store);
+
+    render(<ProjectDashboard />);
+
+    fireEvent.click(screen.getByText('New Novel'));
+    const titleInput = await screen.findByPlaceholderText('e.g. The Winds of Winter');
+
+    fireEvent.change(titleInput, { target: { value: 'Long Running Project' } });
+
+    const submitButton = screen.getByText('Create Project').closest('button');
+    if (!submitButton) throw new Error('Create button not found');
+
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(submitButton).toBeDisabled();
+      expect(submitButton).toHaveTextContent('Working...');
     });
   });
 

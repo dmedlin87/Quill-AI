@@ -786,6 +786,32 @@ describe('ProactiveThinker', () => {
     stopProactiveThinker();
   });
 
+  it('caps pending events at maxBatchSize', () => {
+    const cappedThinker = new ProactiveThinker({
+      enabled: true,
+      maxBatchSize: 3,
+      minEventsToThink: 1,
+      debounceMs: 10_000,
+    });
+
+    cappedThinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+    for (let i = 0; i < 5; i += 1) {
+      callback({
+        type: 'TEXT_CHANGED',
+        payload: { delta: 1, length: 100 + i },
+        timestamp: Date.now(),
+      });
+    }
+
+    const status = cappedThinker.getStatus();
+    expect(status.pendingEvents.length).toBe(3);
+
+    cappedThinker.stop();
+  });
+
   it('formats events and handles missing project context', async () => {
     const eventsText = (thinker as any).formatEventsForPrompt([
       { type: 'TEXT_CHANGED', payload: { delta: 1 }, timestamp: 0 },

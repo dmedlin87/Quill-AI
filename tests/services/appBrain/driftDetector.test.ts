@@ -131,4 +131,33 @@ describe('driftDetector', () => {
     const conflicts = checkNarrativeDrift(intelligence, plan);
     expect(conflicts).toHaveLength(0);
   });
+
+  it('does not flag drift when tension is just below the high threshold for slow intent', () => {
+    const intelligence = mockIntelligence({
+      structural: { stats: { avgTension: 0.69 } } as any,
+    });
+
+    const plan: BedsideNoteContent = {
+      currentFocus: 'quiet, introspection and calm', // implies slow
+      activeGoals: [],
+    };
+
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(0);
+  });
+
+  it('does not flag drift when tension is just above the low threshold for fast intent', () => {
+    const intelligence = mockIntelligence({
+      structural: { stats: { avgTension: 0.31 } } as any,
+    });
+
+    const plan: BedsideNoteContent = {
+      activeGoals: [
+        { title: 'Fast action chase sequence', status: 'active', progress: 0 },
+      ],
+    };
+
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(0);
+  });
 });

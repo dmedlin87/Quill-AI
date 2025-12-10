@@ -837,4 +837,84 @@ describe('useProjectStore', () => {
       vi.useRealTimers();
     });
   });
+
+  describe('concurrent operations and closing projects', () => {
+    it('allows loading a project while pending writes are being flushed', async () => {
+      vi.useFakeTimers();
+
+      const { updateChapterContent, flushPendingWrites, loadProject } = useProjectStore.getState();
+      const { db } = await import('@/services/db');
+
+      // Configure DB so both persistence and load paths succeed
+      vi.mocked(db.chapters.get).mockResolvedValue({ id: 'c1', projectId: 'p1' } as any);
+      vi.mocked(db.projects.get).mockResolvedValue({
+        id: 'p1',
+        title: 'Concurrent Project',
+        author: 'Author',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        manuscriptIndex: { characters: {}, lastUpdated: {} },
+      } as any);
+      vi.mocked(db.chapters.where).mockReturnValue({
+        equals: vi.fn().mockReturnValue({
+          sortBy: vi.fn().mockResolvedValue([
+            { id: 'c1', projectId: 'p1', title: 'Chapter 1', content: 'from db', order: 0, updatedAt: 0 },
+          ]),
+        }),
+      } as any);
+
+      // Schedule a debounced write
+      const persistPromise = updateChapterContent('c1', 'pending content');
+
+      // Start loading a project while the write is still pending
+      const loadPromise = loadProject('p1');
+
+      // Flush pending writes while load is in flight
+      const flushResult = await flushPendingWrites({ reason: 'test-concurrent' });
+      await persistPromise;
+      await loadPromise;
+
+      const state = useProjectStore.getState();
+      expect(flushResult.pendingCount).toBe(1);
+      expect(state.currentProject?.id).toBe('p1');
+      expect(state.chapters).toHaveLength(1);
+      expect(state.activeChapterId).toBe('c1');
+      expect(state.isLoading).toBe(false);
+
+      vi.useRealTimers();
+    });
+
+    it('resets project-related state when closeProject is called', () => {
+      useProjectStore.setState({
+        projects: [{
+          id: 'p1',
+          title: 'Loaded Project',
+          author: 'Author',
+          manuscriptIndex: { characters: {}, lastUpdated: {} },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any],
+        currentProject: {
+          id: 'p1',
+          title: 'Loaded Project',
+          author: 'Author',
+          manuscriptIndex: { characters: {}, lastUpdated: {} },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+        chapters: [{ id: 'c1', projectId: 'p1', title: 'Chapter', content: '', order: 0, updatedAt: 0 } as any],
+        activeChapterId: 'c1',
+      });
+
+      const { closeProject } = useProjectStore.getState();
+      closeProject();
+
+      const state = useProjectStore.getState();
+      expect(state.currentProject).toBeNull();
+      expect(state.chapters).toEqual([]);
+      expect(state.activeChapterId).toBeNull();
+      // projects list is left intact so the library view can still render
+      expect(state.projects).toHaveLength(1);
+    });
+  });
 });

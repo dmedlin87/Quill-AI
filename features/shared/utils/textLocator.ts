@@ -8,36 +8,37 @@ export interface TextRange {
 
 const whitespaceRegex = /\s/;
 
-interface NormalizedSegment {
-  char: string;
-  start: number;
-  end: number;
-}
+// Global matcher instance to avoid re-instantiation overhead
+const sharedMatcher = new diff_match_patch();
 
-const buildNormalizedMap = (text: string): NormalizedSegment[] => {
-  const segments: NormalizedSegment[] = [];
+const buildNormalizedMap = (text: string) => {
+  const len = text.length;
+  // Use a string concatenation for normalized text and array for mapping.
+  // This avoids creating thousands of small objects.
+  let normalizedStr = "";
+  // mapping[i] stores the original start index for the character at normalizedStr[i]
+  const mapping: number[] = [];
+
   let cursor = 0;
-
-  while (cursor < text.length) {
+  while (cursor < len) {
     const char = text[cursor];
 
     if (whitespaceRegex.test(char)) {
       const blockStart = cursor;
-      while (cursor < text.length && whitespaceRegex.test(text[cursor])) {
+      while (cursor < len && whitespaceRegex.test(text[cursor])) {
         cursor++;
       }
-      segments.push({ char: ' ', start: blockStart, end: cursor });
+      normalizedStr += " ";
+      mapping.push(blockStart);
     } else {
-      segments.push({ char, start: cursor, end: cursor + 1 });
+      normalizedStr += char;
+      mapping.push(cursor);
       cursor++;
     }
   }
 
-  return segments;
+  return { normalizedStr, mapping, originalLength: len };
 };
-
-const buildNormalizedString = (segments: NormalizedSegment[]): string =>
-  segments.map(segment => segment.char).join('');
 
 const collapseWhitespace = (text: string): string =>
   text.replace(/\s+/g, ' ');
@@ -54,32 +55,38 @@ const clampRange = (start: number, length: number, maxLength: number): TextRange
 };
 
 const mapNormalizedRangeToOriginal = (
-  map: NormalizedSegment[],
+  mapping: number[],
+  originalLength: number,
   normalizedStart: number,
   normalizedLength: number,
-  maxLength: number
 ): TextRange | null => {
-  if (!map.length || normalizedLength === 0) {
+  if (normalizedLength === 0) {
     return null;
   }
 
-  const endIndex = normalizedStart + normalizedLength - 1;
-  if (endIndex >= map.length) {
+  // Last index in the normalized match
+  const normalizedEndIndex = normalizedStart + normalizedLength - 1;
+
+  if (normalizedStart < 0 || normalizedEndIndex >= mapping.length) {
     return null;
   }
 
-  const startSegment = map[normalizedStart];
-  const endSegment = map[endIndex];
+  const start = mapping[normalizedStart];
 
-  if (!startSegment || !endSegment) {
-    return null;
-  }
+  // Calculate end position
+  // If we are not at the very end of the normalized string, we can look at the next mapping item
+  // or calculate based on the current mapping item.
+  // However, normalized characters usually map 1:1 except for whitespace blocks.
+  // If normalized[normalizedEndIndex] is a character, it ends at mapping[normalizedEndIndex] + 1.
+  // If it is a space, it ends after the whitespace block.
+  // The easiest way is to find the start of the *next* character in normalized string,
+  // or if it's the last one, use originalLength.
 
-  const start = Math.max(0, startSegment.start);
-  const end = Math.min(maxLength, endSegment.end);
-
-  if (start >= end) {
-    return null;
+  let end: number;
+  if (normalizedEndIndex + 1 < mapping.length) {
+    end = mapping[normalizedEndIndex + 1];
+  } else {
+    end = originalLength;
   }
 
   return { start, end };
@@ -95,16 +102,19 @@ export const findQuoteRange = (fullText: string, quote: string): TextRange | nul
   const trimmedQuote = quote.trim();
   if (!trimmedQuote) return null;
 
+  // 1. Exact match
   const exactIndex = fullText.indexOf(quote);
   if (exactIndex !== -1) {
     return clampRange(exactIndex, quote.length, fullText.length);
   }
 
+  // 2. Trimmed match
   const trimmedIndex = fullText.indexOf(trimmedQuote);
   if (trimmedIndex !== -1) {
     return clampRange(trimmedIndex, trimmedQuote.length, fullText.length);
   }
 
+  // 3. Partial match (first 20 chars)
   if (trimmedQuote.length > 20) {
     const partial = trimmedQuote.substring(0, 20);
     const partialIndex = fullText.indexOf(partial);
@@ -113,38 +123,37 @@ export const findQuoteRange = (fullText: string, quote: string): TextRange | nul
     }
   }
 
-  // Try normalized search first (better for whitespace differences)
-  const matcher = new diff_match_patch();
+  // 4. Normalized search (collapsed whitespace)
+  // This is expensive, so we only do it if simpler checks fail
   const normalizedQuote = collapseWhitespace(trimmedQuote);
 
   if (normalizedQuote) {
-    const normalizedMap = buildNormalizedMap(fullText);
-    if (normalizedMap.length) {
-      const normalizedFull = buildNormalizedString(normalizedMap);
-      if (normalizedFull) {
-        try {
-          const normalizedIndex = matcher.match_main(normalizedFull, normalizedQuote, 0);
-          if (normalizedIndex !== -1) {
-            const normalizedRange = mapNormalizedRangeToOriginal(
-              normalizedMap,
-              normalizedIndex,
-              normalizedQuote.length,
-              fullText.length
-            );
-            if (normalizedRange) {
-              return normalizedRange;
-            }
+    const { normalizedStr, mapping, originalLength } = buildNormalizedMap(fullText);
+
+    if (normalizedStr) {
+      try {
+        const normalizedIndex = sharedMatcher.match_main(normalizedStr, normalizedQuote, 0);
+        if (normalizedIndex !== -1) {
+          const normalizedRange = mapNormalizedRangeToOriginal(
+            mapping,
+            originalLength,
+            normalizedIndex,
+            normalizedQuote.length,
+          );
+          if (normalizedRange) {
+            return normalizedRange;
           }
-        } catch (e) {
-          // Ignore normalized fuzzy match errors
         }
+      } catch (e) {
+        // Ignore normalized fuzzy match errors
       }
     }
   }
 
-  // Fallback to direct fuzzy search (better for typos)
+  // 5. Direct fuzzy search (better for typos)
+  // Fallback if normalized search didn't work (or if logic flow reaches here)
   try {
-    const fuzzyIndex = matcher.match_main(fullText, trimmedQuote, 0);
+    const fuzzyIndex = sharedMatcher.match_main(fullText, trimmedQuote, 0);
     if (fuzzyIndex !== -1) {
       return clampRange(fuzzyIndex, trimmedQuote.length, fullText.length);
     }

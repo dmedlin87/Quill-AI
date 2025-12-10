@@ -349,6 +349,18 @@ describe('Proactive Memory Suggestions', () => {
 
       expect(suggestions.length).toBeLessThanOrEqual(5);
     });
+
+    it('returns no suggestions when nothing in the chapter is actionable', async () => {
+      vi.mocked(searchMemoriesByTags).mockResolvedValue([]);
+
+      const suggestions = await generateSuggestionsForChapter(mockProjectId, {
+        chapterId: 'ch-empty',
+        chapterTitle: 'Empty Chapter',
+      });
+
+      expect(searchMemoriesByTags).not.toHaveBeenCalled();
+      expect(suggestions).toHaveLength(0);
+    });
   });
 
   describe('createChapterSwitchHandler', () => {
@@ -453,6 +465,27 @@ describe('Proactive Memory Suggestions', () => {
 
       const reminders = await getImportantReminders(mockProjectId);
       expect(reminders).toHaveLength(0);
+    });
+
+    it('rate limits high-importance issue reminders to five entries', async () => {
+      const issues = Array.from({ length: 7 }).map((_, index) => ({
+        id: `issue-${index}`,
+        text: `Issue ${index}`,
+        type: 'issue' as const,
+        scope: 'project' as const,
+        projectId: mockProjectId,
+        topicTags: ['plot'],
+        importance: 0.9,
+        createdAt: Date.now() - index,
+      }));
+
+      vi.mocked(getMemoriesCached).mockResolvedValue(issues as any);
+      vi.mocked(getGoalsCached).mockResolvedValue([]);
+
+      const reminders = await getImportantReminders(mockProjectId);
+
+      expect(reminders).toHaveLength(5);
+      expect(reminders.every(r => r.source.type === 'memory')).toBe(true);
     });
   });
 });

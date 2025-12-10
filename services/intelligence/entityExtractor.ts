@@ -69,7 +69,12 @@ const RELATIONSHIP_PATTERNS: Array<{ pattern: RegExp; type: RelationshipType }> 
 // UTILITY FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const generateId = (): string => Math.random().toString(36).substring(2, 11);
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 11);
+};
 
 const normalizeEntityName = (name: string): string => {
   return name.trim().replace(/[.,!?;:'"]/g, '');
@@ -537,6 +542,9 @@ const detectAliases = (text: string, entities: EntityNode[]): void => {
       }
     }
   }
+
+  // Resolve pronouns to entities (adds to mention counts)
+  // Note: This function doesn't need to be defined here as it is called in extractEntities
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
