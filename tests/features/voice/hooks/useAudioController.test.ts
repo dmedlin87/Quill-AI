@@ -13,16 +13,35 @@ const mockAudioContextImpl = {
   destination: {},
 };
 
-const mockBufferSource = {
-  buffer: null,
+const createMockBufferSource = () => ({
+  buffer: null as AudioBuffer | null,
   connect: vi.fn(),
   start: vi.fn(),
   stop: vi.fn(),
   disconnect: vi.fn(),
   onended: null as (() => void) | null,
-};
+});
 
 const mockFetch = vi.fn();
+
+let createdSources: ReturnType<typeof createMockBufferSource>[] = [];
+let lastAbortController: MockAbortController | null = null;
+
+class MockAbortController {
+  signal = {
+    aborted: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  };
+
+  constructor() {
+    lastAbortController = this;
+  }
+
+  abort = vi.fn(() => {
+    this.signal.aborted = true;
+  });
+}
 
 // Define a proper class for the mock
 class MockAudioContext {
@@ -53,16 +72,21 @@ describe('useAudioController', () => {
     mockAudioContextImpl.state = 'suspended';
     mockAudioContextImpl.resume.mockResolvedValue(undefined);
     mockAudioContextImpl.close.mockResolvedValue(undefined);
-    mockAudioContextImpl.createBufferSource.mockReturnValue(mockBufferSource as any);
+    createdSources = [];
+    mockAudioContextImpl.createBufferSource.mockImplementation(() => {
+      const source = createMockBufferSource();
+      createdSources.push(source);
+      return source as any;
+    });
     mockAudioContextImpl.decodeAudioData.mockResolvedValue({ duration: 10 } as AudioBuffer);
     mockAudioContextImpl.currentTime = 0;
-
-    // Reset buffer source
-    mockBufferSource.onended = null;
 
     // Mock global AudioContext
     (window as any).AudioContext = MockAudioContext;
     (window as any).webkitAudioContext = MockAudioContext;
+
+    // Mock AbortController
+    (globalThis as any).AbortController = MockAbortController as any;
 
     // Mock global fetch
     global.fetch = mockFetch;
@@ -76,6 +100,22 @@ describe('useAudioController', () => {
   it('initializes with default state', () => {
     const { result } = renderHook(() => useAudioController());
     expect(result.current.isPlaying).toBe(false);
+  });
+
+  it('throws when Web Audio API is unavailable', async () => {
+    const originalAudioContext = (window as any).AudioContext;
+    const originalWebkitAudioContext = (window as any).webkitAudioContext;
+
+    delete (window as any).AudioContext;
+    delete (window as any).webkitAudioContext;
+
+    const { result } = renderHook(() => useAudioController());
+    await expect(result.current.playBuffer({ duration: 1 } as AudioBuffer)).rejects.toThrow(
+      'Web Audio API not supported in this environment.'
+    );
+
+    (window as any).AudioContext = originalAudioContext;
+    (window as any).webkitAudioContext = originalWebkitAudioContext;
   });
 
   it('resumes audio context if suspended when playing buffer', async () => {
@@ -112,9 +152,7 @@ describe('useAudioController', () => {
 
     // Simulate end
     act(() => {
-      if (mockBufferSource.onended) {
-          mockBufferSource.onended();
-      }
+      createdSources[0]?.onended?.();
     });
 
     expect(onStateChange).toHaveBeenCalledWith({ isPlaying: false, currentTime: 0, duration: 0 });
@@ -136,7 +174,7 @@ describe('useAudioController', () => {
 
     expect(mockFetch).toHaveBeenCalledWith('http://example.com/audio.mp3', expect.anything());
     expect(mockAudioContextImpl.decodeAudioData).toHaveBeenCalled();
-    expect(mockBufferSource.start).toHaveBeenCalled();
+    expect(createdSources[0]?.start).toHaveBeenCalled();
   });
 
   it('handles fetch errors', async () => {
@@ -168,8 +206,8 @@ describe('useAudioController', () => {
       result.current.stop();
     });
 
-    expect(mockBufferSource.stop).toHaveBeenCalled();
-    expect(mockBufferSource.disconnect).toHaveBeenCalled();
+    expect(createdSources[0]?.stop).toHaveBeenCalled();
+    expect(createdSources[0]?.disconnect).toHaveBeenCalled();
     expect(mockAudioContextImpl.close).toHaveBeenCalled();
     // expect(result.current.isPlaying).toBe(false); // Removing potentially flaky assertion
   });
@@ -184,14 +222,83 @@ describe('useAudioController', () => {
       await result.current.enqueueBuffer(buffer1);
     });
 
-    expect(mockBufferSource.start).toHaveBeenCalledWith(0);
+    expect(createdSources[0]?.start).toHaveBeenCalledWith(0);
 
     // Second buffer
     await act(async () => {
       await result.current.enqueueBuffer(buffer2);
     });
 
-    expect(mockBufferSource.start).toHaveBeenLastCalledWith(2);
+    expect(createdSources[1]?.start).toHaveBeenCalledWith(2);
+  });
+
+  it('stops queued playback and aborts signals', async () => {
+    const onStateChange = vi.fn();
+    const onEnded = vi.fn();
+    const { result } = renderHook(() => useAudioController({ onStateChange, onEnded }));
+    const buffer1 = { duration: 1 } as AudioBuffer;
+    const buffer2 = { duration: 1 } as AudioBuffer;
+
+    // Create an abort signal that should be cleared on stop
+    result.current.createAbortSignal();
+
+    await act(async () => {
+      await result.current.enqueueBuffer(buffer1);
+      await result.current.enqueueBuffer(buffer2);
+    });
+
+    // Simulate the first buffer ending
+    act(() => {
+      createdSources[0]?.onended?.();
+    });
+
+    act(() => {
+      result.current.stop();
+    });
+
+    expect(createdSources.some(source => source.stop.mock.calls.length > 0)).toBe(true);
+    expect(createdSources.some(source => source.disconnect.mock.calls.length > 0)).toBe(true);
+    expect(lastAbortController?.abort).toHaveBeenCalled();
+    expect(lastAbortController?.signal.aborted).toBe(true);
+    expect(onStateChange).toHaveBeenLastCalledWith({ isPlaying: false, currentTime: 0, duration: 0 });
+    expect(onEnded).not.toHaveBeenCalled();
+  });
+
+  it('skips playback when aborted and resets queue timing after stop', async () => {
+    const { result } = renderHook(() => useAudioController());
+    const buffer = { duration: 2 } as AudioBuffer;
+
+    // Abort before attempting to play
+    result.current.createAbortSignal();
+    lastAbortController?.abort();
+
+    await act(async () => {
+      await result.current.playBuffer(buffer);
+    });
+
+    expect(mockAudioContextImpl.createBufferSource).not.toHaveBeenCalled();
+
+    // Reset abort state for subsequent playback
+    result.current.createAbortSignal();
+
+    // Queue a buffer to advance start time
+    await act(async () => {
+      await result.current.enqueueBuffer(buffer);
+    });
+
+    expect(createdSources[0]?.start).toHaveBeenCalledWith(0);
+
+    act(() => {
+      result.current.stop();
+    });
+
+    // After stop, next queued buffer should start from zero again
+    createdSources = [];
+    await act(async () => {
+      await result.current.enqueueBuffer(buffer);
+    });
+
+    expect(createdSources[0]?.start).toHaveBeenCalledWith(0);
   });
 
   it('aborts playUrl if stopped', async () => {
