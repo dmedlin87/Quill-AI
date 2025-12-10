@@ -262,8 +262,10 @@ describe('generateSpeech', () => {
 
     expect(result).toBeNull();
     // AudioContext should still be safely closed via safeCloseAudioContext
-    expect(lastCreatedAudioContext).not.toBeNull();
-    expect(lastCreatedAudioContext!.close).toHaveBeenCalled();
+    const ctxInstance = MockAudioContextConstructor.mock.results[0]?.value as ReturnType<
+      typeof createMockAudioContext
+    >;
+    expect(ctxInstance.close).toHaveBeenCalled();
   });
 });
 
