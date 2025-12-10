@@ -187,4 +187,72 @@ describe('useMemoryIntelligence', () => {
         expect(getMemoryHealthStats).toHaveBeenCalled();
         expect(result.current.healthStats?.totalMemories).toBe(10);
     });
+
+    it('returns an error when observing intelligence with no project ID', async () => {
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: null }));
+
+        const mockIntel = { some: 'data' } as any;
+
+        const observation = await act(async () => {
+            return await result.current.observeIntelligence(mockIntel);
+        });
+
+        expect(observeIntelligenceResults).not.toHaveBeenCalled();
+        expect(observation.errors).toContain('No project ID');
+    });
+
+    it('returns an error when observing analysis with no project ID', async () => {
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: null }));
+
+        const mockAnalysis = { summary: 'Sum' } as any;
+
+        const observation = await act(async () => {
+            return await result.current.observeAnalysis(mockAnalysis);
+        });
+
+        expect(observeAnalysisResults).not.toHaveBeenCalled();
+        expect(observation.errors).toContain('No project ID');
+    });
+
+    it('clears health stats when project ID is cleared', async () => {
+        const { result, rerender } = renderHook(
+            (props: { projectId: string | null }) =>
+                useMemoryIntelligence({ projectId: props.projectId }),
+            { initialProps: { projectId: mockProjectId } },
+        );
+
+        await act(async () => {
+            await result.current.refreshHealthStats();
+        });
+
+        expect(result.current.healthStats?.totalMemories).toBe(10);
+
+        rerender({ projectId: null });
+
+        await act(async () => {
+            await result.current.refreshHealthStats();
+        });
+
+        expect(result.current.healthStats).toBeNull();
+    });
+
+    it('cleans up consolidation interval on unmount', async () => {
+        const clearSpy = vi.spyOn(global, 'clearInterval');
+
+        const { unmount } = renderHook(() =>
+            useMemoryIntelligence({
+                projectId: mockProjectId,
+                consolidateOnMount: false,
+                consolidationIntervalMs: 5000,
+            }),
+        );
+
+        // Interval registered but not yet fired
+        expect(runConsolidation).not.toHaveBeenCalled();
+
+        unmount();
+
+        expect(clearSpy).toHaveBeenCalled();
+        clearSpy.mockRestore();
+    });
 });

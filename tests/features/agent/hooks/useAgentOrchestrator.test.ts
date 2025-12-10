@@ -277,4 +277,71 @@ describe('useAgentOrchestrator', () => {
         expect(result.current.state.status).toBe('idle');
         expect(runAgentToolLoop).toHaveBeenCalled(); // Means it proceeded
     });
+
+    it('ignores empty or whitespace-only messages', async () => {
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        await act(async () => {
+            await result.current.sendMessage('   ');
+        });
+
+        expect(runAgentToolLoop).not.toHaveBeenCalled();
+        expect(result.current.messages).toEqual([]);
+    });
+
+    it('supports aborting an in-flight request without emitting a final response', async () => {
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        (runAgentToolLoop as any).mockImplementation(({ abortSignal }: any) => {
+            return new Promise(resolve => {
+                abortSignal.addEventListener('abort', () => {
+                    resolve({ text: 'Should be ignored after abort' });
+                });
+            });
+        });
+
+        let sendPromise: Promise<void> | undefined;
+
+        await act(async () => {
+            sendPromise = result.current.sendMessage('Hello, interrupt me');
+        });
+
+        await act(async () => {
+            result.current.abort();
+        });
+
+        await act(async () => {
+            await sendPromise;
+        });
+
+        const texts = result.current.messages.map(m => m.text);
+        expect(texts).toContain('Hello, interrupt me');
+        expect(texts).not.toContain('Should be ignored after abort');
+        expect(result.current.state.status).toBe('idle');
+        expect(result.current.state.lastError).toBeUndefined();
+    });
+
+    it('uses a fallback ToolResult when a tool execution throws', async () => {
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        (executeAgentToolCall as any).mockRejectedValue(new Error('Kaboom'));
+
+        (runAgentToolLoop as any).mockImplementation(async ({ processToolCalls }: any) => {
+            await processToolCalls([{ id: 'call1', name: 'explode_tool', args: {} }]);
+            return { text: 'After tool error' };
+        });
+
+        await act(async () => {
+            await result.current.sendMessage('Trigger exploding tool');
+        });
+
+        const modelMessages = result.current.messages.filter(m => m.role === 'model');
+        const combinedText = modelMessages.map(m => m.text).join('\n');
+
+        expect(combinedText).toContain('⚠️ explode_tool failed: Kaboom');
+        expect(result.current.state.status).toBe('idle');
+    });
 });

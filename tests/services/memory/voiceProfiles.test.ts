@@ -3,6 +3,7 @@ import { getVoiceProfileForCharacter, upsertVoiceProfile, mergeVoiceMetrics } fr
 import { createMemory, updateMemory } from '../../../services/memory/memoryService';
 import { getMemories } from '../../../services/memory/memoryQueries';
 import { generateVoiceProfile } from '../../../services/intelligence/voiceProfiler';
+import type { DialogueLine } from '../../../types/intelligence';
 
 vi.mock('../../../services/memory/memoryService', () => ({
   createMemory: vi.fn(),
@@ -20,7 +21,15 @@ vi.mock('../../../services/intelligence/voiceProfiler', () => ({
 describe('Voice Profiles', () => {
   const mockProjectId = 'project-123';
   const mockCharacter = 'Alice';
-  const mockDialogue = [{ speaker: 'Alice', quote: 'Hello world.' }];
+  const mockDialogue: DialogueLine[] = [{
+    id: 'dialogue-1',
+    quote: 'Hello world.',
+    speaker: 'Alice',
+    offset: 0,
+    length: 'Hello world.'.length,
+    replyTo: null,
+    sentiment: 0,
+  }];
   const mockProfile = {
     speakerName: 'Alice',
     metrics: { avgSentenceLength: 10, sentenceVariance: 0, contractionRatio: 0, questionRatio: 0, exclamationRatio: 0, latinateRatio: 0, uniqueWordCount: 10 },
@@ -74,14 +83,14 @@ describe('Voice Profiles', () => {
   describe('upsertVoiceProfile', () => {
     it('should create a new profile if none exists', async () => {
       vi.mocked(getMemories).mockResolvedValue([]);
-      const uuidSpy = vi.spyOn(crypto, 'randomUUID').mockReturnValue('new-voice-id');
+      const uuidSpy = vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-0000-0000-000000000000');
       vi.mocked(generateVoiceProfile).mockReturnValue(mockProfile as any);
 
       const result = await upsertVoiceProfile(mockProjectId, '  ALIce  ', mockDialogue);
 
       expect(result).toEqual(mockProfile);
       expect(createMemory).toHaveBeenCalledWith(expect.objectContaining({
-        id: 'new-voice-id',
+        id: '00000000-0000-0000-0000-000000000000',
         topicTags: ['voice_profile', 'character:alice'],
         structuredContent: { voiceProfile: mockProfile },
       }));
