@@ -390,6 +390,27 @@ describe('entityExtractor', () => {
       expect(marcus?.mentions.length).toBe(marcus?.mentionCount);
     });
 
+    it('falls back to all candidates if gender filtering yields no results during pronoun resolution', () => {
+      // Alice is female. "He" is male.
+      // InferGender will likely return 'female' for Alice due to ending 'a' (Alice -> no ending match? "a" ending? Yes 'a' is in femaleEndings).
+      // But we want to ensure "He" resolves to her if she's the only candidate (fallback path)
+      // or at least that the code path is taken.
+
+      const text = `Bella was there. He smiled.`;
+      // Bella -> female ending 'a'.
+      // Pronoun 'He'.
+      // MALE_PRONOUNS matches 'he'.
+      // genderedCandidates will be empty (Bella is female).
+      // candidates remains [Bella].
+      // So He resolves to Bella (awkward but correct for fallback logic).
+
+      const paragraphs = [createTestParagraph(0, text.length)];
+      const result = extractEntities(text, paragraphs, [], 'c1');
+      const bella = result.nodes.find(n => n.name === 'Bella');
+
+      expect(bella?.mentionCount).toBe(2); // 1 name + 1 pronoun
+    });
+
     it('merges entity graphs upgrading relationship types and evidence', () => {
       const base = extractEntities(`Sarah and Marcus walked together.`, [createTestParagraph(0, 40)], [], 'c1');
       const extra = extractEntities(`Sarah loves Marcus deeply.`, [createTestParagraph(0, 30)], [], 'c2');
@@ -406,6 +427,79 @@ describe('entityExtractor', () => {
 
       expect(edge?.type).toBe('related_to'); // upgraded from interacts
       expect(edge?.evidence.length).toBeGreaterThan(0);
+    });
+
+    it('merges edge details correctly (chapters, evidence, count)', () => {
+      // Manual graph construction to test merge logic explicitly
+      const graph1 = {
+        nodes: [{ id: 'n1', name: 'A', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} }, { id: 'n2', name: 'B', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} }],
+        edges: [{ id: 'e1', source: 'n1', target: 'n2', type: 'interacts', coOccurrences: 1, sentiment: 0, chapters: ['c1'], evidence: ['text1'] }],
+        processedAt: 0
+      } as any;
+
+      const graph2 = {
+        nodes: [{ id: 'n1', name: 'A', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} }, { id: 'n2', name: 'B', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} }],
+        edges: [{ id: 'e2', source: 'n1', target: 'n2', type: 'interacts', coOccurrences: 2, sentiment: 0, chapters: ['c2'], evidence: ['text2'] }],
+        processedAt: 0
+      } as any;
+
+      const merged = mergeEntityGraphs([graph1, graph2]);
+      const edge = merged.edges[0];
+
+      expect(edge.coOccurrences).toBe(3);
+      expect(edge.chapters).toEqual(expect.arrayContaining(['c1', 'c2']));
+      expect(edge.evidence).toHaveLength(2);
+    });
+
+    it('handles missing other node in getRelatedEntities gracefully', () => {
+      // Graph with edge but missing node definition
+      const graph = {
+        nodes: [{ id: 'n1', name: 'A', mentionCount: 1, mentions: [], aliases: [], type: 'character', firstMention: 0, attributes: {} }],
+        edges: [{ source: 'n1', target: 'n99', type: 'interacts', coOccurrences: 1, chapters: [], evidence: [], sentiment: 0, id: 'e1' }],
+        processedAt: 0
+      } as any;
+
+      const related = getRelatedEntities(graph, 'n1');
+      expect(related).toHaveLength(0);
+    });
+
+    it('merges nodes keeping the earliest first mention', () => {
+      const graph1 = {
+        nodes: [{ id: 'n1', name: 'A', firstMention: 100, mentionCount: 1, mentions: [], aliases: [], attributes: {} }],
+        edges: [],
+        processedAt: 0
+      } as any;
+
+      const graph2 = {
+        nodes: [{ id: 'n1', name: 'A', firstMention: 50, mentionCount: 1, mentions: [], aliases: [], attributes: {} }],
+        edges: [],
+        processedAt: 0
+      } as any;
+
+      const merged = mergeEntityGraphs([graph1, graph2]);
+      const node = merged.nodes[0];
+
+      expect(node.firstMention).toBe(50);
+    });
+
+    it('preserves existing specific relationship type when merging', () => {
+      const graph1 = {
+        nodes: [{ id: 'n1', name: 'A', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} }, { id: 'n2', name: 'B', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} }],
+        edges: [{ id: 'e1', source: 'n1', target: 'n2', type: 'related_to', coOccurrences: 1, sentiment: 0, chapters: ['c1'], evidence: [] }],
+        processedAt: 0
+      } as any;
+
+      const graph2 = {
+        nodes: [{ id: 'n1', name: 'A', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} }, { id: 'n2', name: 'B', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} }],
+        edges: [{ id: 'e2', source: 'n1', target: 'n2', type: 'opposes', coOccurrences: 1, sentiment: 0, chapters: ['c2'], evidence: [] }],
+        processedAt: 0
+      } as any;
+
+      const merged = mergeEntityGraphs([graph1, graph2]);
+      const edge = merged.edges[0];
+
+      // Should remain 'related_to' because existing type wasn't 'interacts'
+      expect(edge.type).toBe('related_to');
     });
   });
 });

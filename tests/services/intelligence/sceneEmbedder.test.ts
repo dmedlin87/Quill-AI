@@ -9,6 +9,7 @@ import {
   findSimilarScenes,
   getScenesByTheme,
   searchScenes,
+  SceneEmbedding
 } from '@/services/intelligence/sceneEmbedder';
 import type { Scene, StructuralFingerprint } from '@/types/intelligence';
 
@@ -108,5 +109,151 @@ describe('sceneEmbedder', () => {
 
     const arc = analyzeEmotionalArc(embeddings);
     expect(arc.length).toBe(1);
+  });
+
+  it('handles empty text gracefully (magnitude 0)', () => {
+    // Case 1: Empty text -> no tokens, no structural features -> all zeros
+    const emptyScene = { ...baseScene, id: 'empty', startOffset: 0, endOffset: 0 };
+    const emptyText = '';
+
+    const embedding = embedScene(emptyScene, emptyText, 'ch1');
+
+    expect(embedding.embedding.every(v => v === 0)).toBe(true);
+    expect(embedding.themes).toEqual([]);
+    expect(embedding.keyTerms).toEqual([]);
+  });
+
+  it('handles stop-word only text gracefully (max 0 in TF, but structural features present)', () => {
+    // Case 2: Pure stop words -> TF max will be 0, but structural features (sentences etc) persist
+    const scene = { ...baseScene, id: 'stopwords', startOffset: 0, endOffset: 15 };
+    const stopWordsText = 'the a an is are';
+
+    const embedding = embedScene(scene, stopWordsText, 'ch1');
+
+    // Should have some non-zero values (structural)
+    expect(embedding.embedding.some(v => v > 0)).toBe(true);
+    // But themes and keyTerms should be empty because tokens are filtered out
+    expect(embedding.themes).toEqual([]);
+    expect(embedding.keyTerms).toEqual([]);
+  });
+
+  it('analyzes emotional arc transitions correctly', () => {
+    // Create 3 fake embeddings with specific properties to trigger transition logic
+    const embeddings = [
+      {
+        sceneId: 's1',
+        emotionalTone: 'neutral',
+        tensionLevel: 'low',
+        embedding: [],
+        themes: [],
+        keyTerms: [],
+        pacingCategory: 'moderate',
+        chapterId: 'c1',
+        metadata: {}
+      } as unknown as SceneEmbedding,
+      {
+        sceneId: 's2',
+        emotionalTone: 'negative', // Change from neutral
+        tensionLevel: 'high',      // Change from low (rising)
+        embedding: [],
+        themes: [],
+        keyTerms: [],
+        pacingCategory: 'fast',
+        chapterId: 'c1',
+        metadata: {}
+      } as unknown as SceneEmbedding,
+      {
+        sceneId: 's3',
+        emotionalTone: 'negative', // Same as prev
+        tensionLevel: 'medium',    // Change from high (falling)
+        embedding: [],
+        themes: [],
+        keyTerms: [],
+        pacingCategory: 'slow',
+        chapterId: 'c1',
+        metadata: {}
+      } as unknown as SceneEmbedding
+    ];
+
+    const arc = analyzeEmotionalArc(embeddings);
+
+    expect(arc).toHaveLength(2);
+
+    // Transition s1 -> s2
+    // Tone: neutral -> negative
+    // Tension: low(1) -> high(3) => rising
+    // The code prioritizes tone change first if present, then tension?
+    // Let's check logic:
+    // if tone diff -> set transition string
+    // if tension diff -> OVERWRITE transition string
+    // So tension change takes precedence in the output string if both change?
+    // Reading code:
+    // let transition = 'stable';
+    // if (tone diff) transition = 'tone -> tone';
+    // if (tension diff) transition = 'tension rising/falling';
+    // Yes, tension overwrites tone.
+
+    expect(arc[0].transition).toBe('tension rising');
+
+    // Transition s2 -> s3
+    // Tone: negative -> negative (no change)
+    // Tension: high(3) -> medium(2) => falling
+    expect(arc[1].transition).toBe('tension falling');
+  });
+
+  it('detects mixed emotional tone correctly', () => {
+    // Needs > 5 total emotional words, ratio between 0.35 and 0.65
+    // 3 positive, 3 negative = 6 total, ratio 0.5
+    const mixedText = 'happy sad love hate joy fear';
+    const scene = { ...baseScene, id: 'mixed' };
+
+    const embedding = embedScene(scene, mixedText, 'ch1');
+    expect(embedding.emotionalTone).toBe('mixed');
+  });
+
+  it('exercises searchScenes match reason branches', () => {
+    const embeddings = [
+      {
+        sceneId: 's1',
+        embedding: new Array(64).fill(0.5), // High similarity potential
+        themes: ['war'],
+        keyTerms: ['general'],
+        emotionalTone: 'negative',
+        tensionLevel: 'high',
+        pacingCategory: 'fast',
+        chapterId: 'c1',
+        metadata: {}
+      } as unknown as SceneEmbedding
+    ];
+
+    // 1. High semantic score, no keywords/themes
+    // Mock embedQuery to return matching vector
+    // But embedQuery is deterministic based on text.
+    // Instead, we trust the integration.
+    // We can manually call searchScenes with a query that triggers specific paths?
+    // It's hard to force high semantic score without matching keywords if we use real embedQuery.
+    // However, we can mock embedQuery? No, imported directly.
+
+    // Let's try to hit the branches by crafting the query.
+    // Query: "war" -> matches theme 'war'.
+    // Query: "general" -> matches keyword 'general'.
+
+    // Branch 1: Semantic > 0.3
+    // Branch 2: Term boost > 0
+    // Branch 3: Theme match
+
+    const results = searchScenes('general war', embeddings, { minScore: 0 });
+
+    expect(results).toHaveLength(1);
+    const reason = results[0].matchReason;
+
+    // Expect all parts if possible, or at least check logic coverage
+    // "general" is in keyTerms -> termBoost > 0
+    // "war" is in themes -> theme match
+
+    expect(reason).toContain('keywords: general');
+    expect(reason).toContain('themes: war');
+    // Semantic match depends on the random hash collision of 'general war' vs 0.5 array
+    // Likely low semantic score with garbage embedding, but keyword matches should trigger.
   });
 });

@@ -514,4 +514,105 @@ describe('Intelligence service - context utilities', () => {
     expect(ctx).toContain('[ISSUES IN SECTION]');
     expect(ctx).toContain('pacing_slow');
   });
+
+  it('updateHUDForCursor delegates to buildHUD', async () => {
+    const buildHUD = vi.fn(() => ({ hud: 'updated' } as any));
+    vi.doMock('../../../services/intelligence/contextBuilder', () => ({
+      buildHUD,
+      buildAIContextString: vi.fn(),
+      buildCompressedContext: vi.fn(),
+    }));
+
+    const { updateHUDForCursor } = await import('../../../services/intelligence');
+    const intelligence = { chapterId: 'ch-1' } as any;
+    const result = updateHUDForCursor(intelligence, 123);
+
+    expect(buildHUD).toHaveBeenCalledWith(intelligence, 123);
+    expect(result).toEqual({ hud: 'updated' });
+  });
+});
+
+describe('Intelligence service - cross-chapter processing', () => {
+  it('mergeChapterIntelligence aggregates stats and merges sub-data', async () => {
+    const mergeEntityGraphs = vi.fn(() => ({
+      nodes: [{ name: 'Alice', type: 'character' }, { name: 'Bob', type: 'character' }],
+      edges: [],
+    }));
+    const mergeTimelines = vi.fn(() => ({ events: [], causalChains: [] }));
+
+    vi.doMock('../../../services/intelligence/entityExtractor', () => ({
+      extractEntities: vi.fn(),
+      mergeEntityGraphs,
+    }));
+
+    vi.doMock('../../../services/intelligence/timelineTracker', () => ({
+      buildTimeline: vi.fn(),
+      mergeTimelines,
+    }));
+
+    const { mergeChapterIntelligence } = await import('../../../services/intelligence');
+
+    const ch1 = {
+      structural: { stats: { totalWords: 100 }, scenes: [{ tension: 0.8 }] },
+      entities: { id: 'e1' },
+      timeline: { id: 't1' },
+    } as any;
+    const ch2 = {
+      structural: { stats: { totalWords: 50 }, scenes: [{ tension: 0.2 }] },
+      entities: { id: 'e2' },
+      timeline: { id: 't2' },
+    } as any;
+
+    const result = mergeChapterIntelligence([ch1, ch2]);
+
+    expect(mergeEntityGraphs).toHaveBeenCalled();
+    expect(mergeTimelines).toHaveBeenCalled();
+    expect(result.projectStats.totalWords).toBe(150);
+    expect(result.projectStats.totalScenes).toBe(2);
+    expect(result.projectStats.avgTension).toBeCloseTo(0.5);
+    expect(result.projectStats.topCharacters).toEqual(['Alice', 'Bob']);
+  });
+
+  it('mergeChapterIntelligence handles empty input gracefully', async () => {
+    const mergeEntityGraphs = vi.fn(() => ({ nodes: [], edges: [] }));
+    const mergeTimelines = vi.fn(() => ({ events: [], causalChains: [] }));
+
+    vi.doMock('../../../services/intelligence/entityExtractor', () => ({
+      extractEntities: vi.fn(),
+      mergeEntityGraphs,
+    }));
+
+    vi.doMock('../../../services/intelligence/timelineTracker', () => ({
+      buildTimeline: vi.fn(),
+      mergeTimelines,
+    }));
+
+    const { mergeChapterIntelligence } = await import('../../../services/intelligence');
+
+    const result = mergeChapterIntelligence([]);
+
+    expect(result.projectStats.totalWords).toBe(0);
+    expect(result.projectStats.avgTension).toBe(0.5); // Fallback
+    expect(result.projectStats.topCharacters).toEqual([]);
+  });
+});
+
+describe('Intelligence service - factory functions', () => {
+  it('createEmptyIntelligence initializes all fields with defaults', async () => {
+    const { createEmptyIntelligence } = await import('../../../services/intelligence');
+
+    const result = createEmptyIntelligence('new-chapter');
+
+    expect(result.chapterId).toBe('new-chapter');
+    expect(result.structural.scenes).toEqual([]);
+    expect(result.structural.stats.totalWords).toBe(0);
+    expect(result.entities.nodes).toEqual([]);
+    expect(result.timeline.events).toEqual([]);
+    expect(result.style.vocabulary.uniqueWords).toBe(0);
+    expect(result.voice.profiles).toEqual({});
+    expect(result.heatmap.sections).toEqual([]);
+    expect(result.delta.changedRanges).toEqual([]);
+    expect(result.hud.situational.currentScene).toBeNull();
+    expect(result.hud.stats.wordCount).toBe(0);
+  });
 });
