@@ -41,6 +41,17 @@ vi.mock('@/services/gemini/client', () => ({
   },
 }));
 
+const forceThinkMock = vi.fn();
+
+vi.mock('@/services/appBrain/proactiveThinker', () => ({
+  getProactiveThinker: () => ({
+    forceThink: forceThinkMock,
+  }),
+  startProactiveThinker: vi.fn(),
+  stopProactiveThinker: vi.fn(),
+  resetProactiveThinker: vi.fn(),
+}));
+
 describe('AppBrainRuntime', () => {
   const mockState = createMockAppBrainState();
   const mockGetState = vi.fn(() => mockState);
@@ -213,6 +224,51 @@ describe('AppBrainRuntime', () => {
     it('returns null when not running', () => {
       const runtime = getAppBrainRuntime();
       expect(runtime.getConfig()).toBe(null);
+    });
+  });
+
+  describe('forceThink', () => {
+    it('logs a warning and does nothing when runtime is not running', async () => {
+      const runtime = getAppBrainRuntime();
+      const warnSpy = vi.spyOn(appBrainLogger, 'warn');
+
+      await runtime.forceThink();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Runtime',
+        'Cannot force think: runtime not running',
+      );
+      expect(forceThinkMock).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('delegates to the proactive thinker when running', async () => {
+      const runtime = getAppBrainRuntime();
+
+      runtime.start({
+        projectId: 'test-project',
+        getState: mockGetState,
+      });
+
+      forceThinkMock.mockResolvedValueOnce(undefined);
+
+      await runtime.forceThink();
+
+      expect(forceThinkMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('propagates errors from the proactive thinker', async () => {
+      const runtime = getAppBrainRuntime();
+
+      runtime.start({
+        projectId: 'test-project',
+        getState: mockGetState,
+      });
+
+      const error = new Error('Tick loop failed');
+      forceThinkMock.mockRejectedValueOnce(error);
+
+      await expect(runtime.forceThink()).rejects.toThrow('Tick loop failed');
     });
   });
 });
