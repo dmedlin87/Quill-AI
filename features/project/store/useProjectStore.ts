@@ -36,6 +36,7 @@ interface ProjectState {
   
   flushPendingWrites: (options?: { reason?: string; keepAlive?: boolean }) => Promise<{ pendingCount: number; errors: unknown[] }>;
   getActiveChapter: () => Chapter | undefined;
+  closeProject: () => void;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => {
@@ -473,6 +474,14 @@ export const useProjectStore = create<ProjectState>((set, get) => {
   getActiveChapter: () => {
       const { chapters, activeChapterId } = get();
       return chapters.find(c => c.id === activeChapterId);
+  },
+
+  closeProject: () => {
+      set({
+          currentProject: null,
+          chapters: [],
+          activeChapterId: null,
+      });
   }
   };
 });

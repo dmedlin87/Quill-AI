@@ -65,7 +65,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
   const handleHomeClick = () => {
     // Navigate back to project dashboard instead of reloading
-    useLayoutStore.getState().resetToProjectDashboard?.() ?? window.location.reload();
+    useLayoutStore.getState().resetToProjectDashboard();
   };
 
   return (

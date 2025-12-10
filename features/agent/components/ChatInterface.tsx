@@ -126,6 +126,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const [isDeepMode, setIsDeepMode] = useState(false);
   const [showRelevanceSettings, setShowRelevanceSettings] = useState(false);
+  const [showAgentSettings, setShowAgentSettings] = useState(false);
 
   const chatRef = useRef<QuillAgent | null>(null);
 
@@ -483,49 +484,88 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             />
           )}
           <div className="flex items-center gap-2">
-            <ExperienceSelector compact />
-            <div className="w-px h-4 bg-[var(--border-secondary)]" />
-            <CritiqueIntensitySelector compact />
+            {/* Context indicators */}
+            <div className="flex items-center gap-1.5">
+              {lore && <span title="Lore Bible Active" className="text-[var(--interactive-accent)] text-sm">📖</span>}
+              {analysis && <span title="Analysis Context Active" className="text-purple-600 text-sm">🧠</span>}
+              {editorContext.selection && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--interactive-accent)]/10 text-[var(--interactive-accent)] text-[10px] font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  Selection
+                </span>
+              )}
+            </div>
+            
+            {/* Settings toggle */}
             <button
-              onClick={() => setShowRelevanceSettings(!showRelevanceSettings)}
-              className={`p-1 rounded hover:bg-[var(--interactive-bg-hover)] transition-colors ${showRelevanceSettings ? 'bg-[var(--surface-active)] text-[var(--interactive-accent)]' : 'text-[var(--text-tertiary)]'}`}
-              title="Configure Proactive Suggestions"
+              onClick={() => setShowAgentSettings(!showAgentSettings)}
+              className={`p-1.5 rounded-md transition-colors ${showAgentSettings ? 'bg-[var(--interactive-bg-active)] text-[var(--interactive-accent)]' : 'text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--text-secondary)]'}`}
+              title="Agent Settings"
+              aria-expanded={showAgentSettings}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path fillRule="evenodd" d="M3.5 2A1.5 1.5 0 002 3.5V5c0 1.149.266 2.233.737 3.233a1.5 1.5 0 00-2.487 1.288v1.378a3 3 0 00.998 2.228 1.5 1.5 0 001.754 2.373A3 3 0 005.5 18a4.5 4.5 0 008.835.417 1.5 1.5 0 001.852-2.31 3 3 0 00.912-2.128v-1.378a1.5 1.5 0 00-2.438-1.334A8.963 8.963 0 0018 5V3.5A1.5 1.5 0 0016.5 2h-13zM6 5a2 2 0 114 0 2 2 0 01-4 0zm1.5 9a1.5 1.5 0 103 0 1.5 1.5 0 00-3 0zm5.5-5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" clipRule="evenodd" />
+                <path fillRule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
               </svg>
             </button>
-            <div className="flex gap-2 text-xs ml-1">
-              {lore && <span title="Lore Bible Active" className="text-[var(--interactive-accent)] font-bold">📖</span>}
-              {analysis && <span title="Deep Analysis Context Active" className="text-purple-600 font-bold">🧠</span>}
-            </div>
           </div>
         </div>
 
-        {/* Settings Panel */}
+        {/* Collapsible Agent Settings Panel */}
         <AnimatePresence>
-          {showRelevanceSettings && (
+          {showAgentSettings && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden bg-[var(--surface-primary)] border border-[var(--border-secondary)] rounded-lg shadow-inner"
+              className="overflow-hidden"
             >
-              <RelevanceTuning />
+              <div className="pt-2 space-y-3">
+                {/* Experience & Critique Row */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-medium">Experience</span>
+                    <ExperienceSelector compact />
+                  </div>
+                  <div className="w-px h-4 bg-[var(--border-secondary)]" />
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-medium">Critique</span>
+                    <CritiqueIntensitySelector compact />
+                  </div>
+                </div>
+                
+                {/* Relevance Tuning */}
+                <div className="bg-[var(--surface-primary)] border border-[var(--border-secondary)] rounded-lg shadow-inner">
+                  <button
+                    onClick={() => setShowRelevanceSettings(!showRelevanceSettings)}
+                    className="w-full flex items-center justify-between p-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    <span className="font-medium">Proactive Suggestions</span>
+                    <svg 
+                      xmlns="http://www.w3.org/2000/svg" 
+                      viewBox="0 0 20 20" 
+                      fill="currentColor" 
+                      className={`w-4 h-4 transition-transform ${showRelevanceSettings ? 'rotate-180' : ''}`}
+                    >
+                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <AnimatePresence>
+                    {showRelevanceSettings && (
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: 'auto' }}
+                        exit={{ height: 0 }}
+                        className="overflow-hidden border-t border-[var(--border-secondary)]"
+                      >
+                        <RelevanceTuning />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Context Row */}
-        <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
-           <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${editorContext.selection ? 'bg-[var(--interactive-accent)]' : 'bg-[var(--text-tertiary)]'}`}></div>
-              <span>{editorContext.selection ? 'Selection Active' : 'Cursor Active'}</span>
-           </div>
-           <div className="font-mono">
-              Ln {Math.floor(editorContext.cursorPosition / 80) + 1} : Col {editorContext.cursorPosition % 80}
-           </div>
-        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -617,15 +657,35 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
              />
           </div>
           
-          <Button
-            variant={isDeepMode ? 'primary' : 'ghost'}
-            size="md"
-            onClick={() => setIsDeepMode(prev => !prev)}
-            title="Deep Mode: Enables Voice Analysis."
-            className={isDeepMode ? 'bg-purple-600 hover:bg-purple-700 border-transparent text-white' : ''}
-          >
-             {isDeepMode ? '🧠 Deep' : '👻 Deep'}
-          </Button>
+          {/* Deep Analysis Toggle - clearer UX */}
+          <div className="relative group">
+            <Button
+              variant={isDeepMode ? 'primary' : 'ghost'}
+              size="md"
+              onClick={() => setIsDeepMode(prev => !prev)}
+              aria-pressed={isDeepMode}
+              className={`relative ${isDeepMode ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 border-transparent text-white shadow-md' : 'border-purple-200 hover:border-purple-400 hover:bg-purple-50'}`}
+            >
+              <span className="flex items-center gap-1.5">
+                {isDeepMode ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path d="M10 1a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 1zM5.05 3.05a.75.75 0 011.06 0l1.062 1.06A.75.75 0 116.11 5.173L5.05 4.11a.75.75 0 010-1.06zm9.9 0a.75.75 0 010 1.06l-1.06 1.062a.75.75 0 01-1.062-1.061l1.061-1.06a.75.75 0 011.06 0zM10 7a3 3 0 100 6 3 3 0 000-6zm-6.5 3a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5a.75.75 0 01.75.75zm14.25-.75a.75.75 0 010 1.5h-1.5a.75.75 0 010-1.5h1.5zM5.172 13.89a.75.75 0 011.06 1.06l-1.06 1.061a.75.75 0 11-1.061-1.06l1.06-1.061zm8.718 1.06a.75.75 0 10-1.06 1.061l1.06 1.06a.75.75 0 001.06-1.06l-1.06-1.061zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-purple-400">
+                    <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                  </svg>
+                )}
+                <span className="text-sm font-medium">{isDeepMode ? 'Deep On' : 'Deep'}</span>
+              </span>
+            </Button>
+            {/* Tooltip on hover */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-[var(--ink-900)] text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-lg">
+              <strong>Deep Analysis Mode</strong>
+              <p className="text-[var(--text-muted)] mt-0.5">Enables voice fingerprint & style matching</p>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--ink-900)]" />
+            </div>
+          </div>
 
           <Button 
             variant="primary"

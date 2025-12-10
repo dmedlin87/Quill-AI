@@ -418,6 +418,29 @@ export const EditorWorkspace: React.FC = () => {
                 <span>Highlight a sentence and press <strong>Shift + Enter</strong> to open Magic tools inline.</span>
               </div>
             )}
+            
+            {/* Analysis Highlight Legend */}
+            {analysisHighlights.length > 0 && (
+              <div className="flex items-center gap-4 text-[10px] text-[var(--text-muted)] bg-[var(--surface-secondary)]/50 rounded-lg px-3 py-2">
+                <span className="font-medium uppercase tracking-wide">Highlights:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[var(--error-500)]" />
+                  <span>Plot Issue</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[var(--warning-500)]" />
+                  <span>Pacing</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[var(--magic-500)]" />
+                  <span>Setting</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span>Grammar</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {selectionRange && selectionPos && (

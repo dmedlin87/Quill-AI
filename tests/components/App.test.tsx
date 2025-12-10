@@ -112,7 +112,7 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByText('Loading your library...')).toBeInTheDocument();
     expect(screen.queryByTestId('main-layout')).not.toBeInTheDocument();
   });
 
