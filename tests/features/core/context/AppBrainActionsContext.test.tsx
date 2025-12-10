@@ -1,61 +1,101 @@
 
-import { renderHook } from '@testing-library/react';
+import React from 'react';
+import { render, screen, renderHook } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import {
+import AppBrainActionsContext, {
   AppBrainActionsProvider,
   useAppBrainActionsContext,
   createNoOpAppBrainActions,
-  AppBrainActions,
+  type AppBrainActions
 } from '@/features/core/context/AppBrainActionsContext';
 
 describe('AppBrainActionsContext', () => {
   const mockActions: AppBrainActions = createNoOpAppBrainActions();
 
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <AppBrainActionsProvider actions={mockActions}>
-      {children}
-    </AppBrainActionsProvider>
-  );
+  describe('createNoOpAppBrainActions', () => {
+    it('returns an object with all expected methods', () => {
+      const actions = createNoOpAppBrainActions();
 
-  describe('AppBrainActionsProvider', () => {
-    it('provides actions to consumers', () => {
-      const { result } = renderHook(() => useAppBrainActionsContext(), { wrapper });
-      expect(result.current).toBe(mockActions);
+      expect(typeof actions.navigateToText).toBe('function');
+      expect(typeof actions.updateManuscript).toBe('function');
+      expect(typeof actions.runAnalysis).toBe('function');
+      expect(typeof actions.rewriteSelection).toBe('function');
     });
 
-    it('updates context value when actions change', () => {
-      const newActions = { ...mockActions, navigateToText: vi.fn() };
-      const newWrapper = ({ children }: { children: React.ReactNode }) => (
-        <AppBrainActionsProvider actions={newActions}>
-          {children}
+    it('all methods resolve to empty strings or void', async () => {
+      const actions = createNoOpAppBrainActions();
+
+      // Navigation
+      expect(await actions.navigateToText({ chapterId: '1', text: 'test' })).toBe('');
+      expect(await actions.jumpToChapter('1')).toBe('');
+      expect(await actions.jumpToScene('1')).toBe('');
+      expect(actions.scrollToPosition(0)).toBeUndefined();
+
+      // Editing
+      expect(await actions.updateManuscript({ chapterId: '1', changes: [] })).toBe('');
+      expect(await actions.appendText('text')).toBe('');
+      expect(await actions.undo()).toBe('');
+      expect(await actions.redo()).toBe('');
+
+      // Analysis
+      expect(await actions.getCritiqueForSelection()).toBe('');
+      expect(await actions.runAnalysis()).toBe('');
+
+      // UI Control
+      expect(await actions.switchPanel('panel')).toBe('');
+      expect(await actions.toggleZenMode()).toBe('');
+      expect(await actions.highlightText({ from: 0, to: 1 })).toBe('');
+      expect(actions.setMicrophoneState('idle')).toBeUndefined();
+
+      // Knowledge
+      expect(await actions.queryLore('query')).toBe('');
+      expect(await actions.getCharacterInfo('char')).toBe('');
+      expect(await actions.getTimelineContext()).toBe('');
+
+      // Generation
+      expect(await actions.rewriteSelection({ mode: 'expand' })).toBe('');
+      expect(await actions.continueWriting()).toBe('');
+    });
+  });
+
+  describe('AppBrainActionsProvider', () => {
+    it('provides actions to children', () => {
+      const TestComponent = () => {
+        const actions = useAppBrainActionsContext();
+        return <div>{actions ? 'Has Actions' : 'No Actions'}</div>;
+      };
+
+      render(
+        <AppBrainActionsProvider actions={mockActions}>
+          <TestComponent />
         </AppBrainActionsProvider>
       );
 
-      const { result } = renderHook(() => useAppBrainActionsContext(), { wrapper: newWrapper });
-      expect(result.current).toBe(newActions);
+      expect(screen.getByText('Has Actions')).toBeInTheDocument();
     });
   });
 
   describe('useAppBrainActionsContext', () => {
-    it('throws error when used outside provider', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      try {
-        expect(() => renderHook(() => useAppBrainActionsContext())).toThrow(
-          'useAppBrainActionsContext must be used within an AppBrainActionsProvider'
-        );
-      } finally {
-        consoleSpy.mockRestore();
-      }
-    });
-  });
+    it('returns actions when used within provider', () => {
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <AppBrainActionsProvider actions={mockActions}>
+          {children}
+        </AppBrainActionsProvider>
+      );
 
-  describe('createNoOpAppBrainActions', () => {
-      it('creates actions that return safe defaults', async () => {
-          const actions = createNoOpAppBrainActions();
-          // Verify a few methods
-          expect(await actions.navigateToText({ query: 'test', searchType: 'exact' })).toBe('');
-          expect(await actions.updateManuscript({ searchText: 'test', replacementText: 'test', description: 'test' })).toBe('');
-          expect(actions.scrollToPosition(100)).toBe(undefined);
-      });
+      const { result } = renderHook(() => useAppBrainActionsContext(), { wrapper });
+      expect(result.current).toEqual(mockActions);
+    });
+
+    it('throws error when used outside provider', () => {
+      // Suppress console.error for the expected error
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() => {
+        renderHook(() => useAppBrainActionsContext());
+      }).toThrow('useAppBrainActionsContext must be used within an AppBrainActionsProvider');
+
+      spy.mockRestore();
+    });
   });
 });

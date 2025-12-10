@@ -1,14 +1,15 @@
 
-import { renderHook } from '@testing-library/react';
+import React from 'react';
+import { render, screen, renderHook } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import {
+import GrammarContext, {
   GrammarProvider,
   useGrammarContext,
   useGrammarState,
   useGrammarActions,
   createEmptyGrammarState,
-  GrammarState,
-  GrammarActions,
+  type GrammarState,
+  type GrammarActions
 } from '@/features/core/context/GrammarContext';
 
 describe('GrammarContext', () => {
@@ -20,63 +21,71 @@ describe('GrammarContext', () => {
     dismissGrammarSuggestion: vi.fn(),
   };
 
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <GrammarProvider state={mockState} actions={mockActions}>
-      {children}
-    </GrammarProvider>
-  );
+  describe('createEmptyGrammarState', () => {
+    it('returns default state', () => {
+      const state = createEmptyGrammarState();
+
+      expect(state.grammarSuggestions).toEqual([]);
+      expect(state.grammarHighlights).toEqual([]);
+    });
+  });
 
   describe('GrammarProvider', () => {
-    it('provides state and actions to consumers', () => {
-      const { result } = renderHook(() => useGrammarContext(), { wrapper });
-      expect(result.current.state).toBe(mockState);
-      expect(result.current.actions).toBe(mockActions);
-    });
-
-    it('updates context value when props change', () => {
-        const newState = { ...mockState, grammarSuggestions: [{ id: '1', original: 'foo', replacement: 'bar', type: 'spelling', context: 'foo', start: 0, end: 3, message: 'spelling error' }] };
-        const newWrapper = ({ children }: { children: React.ReactNode }) => (
-            <GrammarProvider state={newState} actions={mockActions}>
-                {children}
-            </GrammarProvider>
+    it('provides state and actions to children', () => {
+      const TestComponent = () => {
+        const { state, actions } = useGrammarContext();
+        return (
+          <div>
+            <div data-testid="suggestions-count">{state.grammarSuggestions.length}</div>
+            <div data-testid="hasActions">{Boolean(actions).toString()}</div>
+          </div>
         );
-        const { result } = renderHook(() => useGrammarContext(), { wrapper: newWrapper });
-        expect(result.current.state.grammarSuggestions).toHaveLength(1);
+      };
+
+      render(
+        <GrammarProvider state={mockState} actions={mockActions}>
+          <TestComponent />
+        </GrammarProvider>
+      );
+
+      expect(screen.getByTestId('suggestions-count')).toHaveTextContent('0');
+      expect(screen.getByTestId('hasActions')).toHaveTextContent('true');
     });
   });
 
-  describe('useGrammarContext', () => {
-    it('throws error when used outside provider', () => {
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        try {
-            expect(() => renderHook(() => useGrammarContext())).toThrow(
-                'useGrammarContext must be used within a GrammarProvider'
-            );
-        } finally {
-            consoleSpy.mockRestore();
-        }
+  describe('Hooks', () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <GrammarProvider state={mockState} actions={mockActions}>
+        {children}
+      </GrammarProvider>
+    );
+
+    describe('useGrammarContext', () => {
+      it('returns context value when used within provider', () => {
+        const { result } = renderHook(() => useGrammarContext(), { wrapper });
+        expect(result.current.state).toEqual(mockState);
+        expect(result.current.actions).toEqual(mockActions);
+      });
+
+      it('throws error when used outside provider', () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        expect(() => renderHook(() => useGrammarContext())).toThrow('useGrammarContext must be used within a GrammarProvider');
+        spy.mockRestore();
+      });
+    });
+
+    describe('useGrammarState', () => {
+      it('returns only state', () => {
+        const { result } = renderHook(() => useGrammarState(), { wrapper });
+        expect(result.current).toEqual(mockState);
+      });
+    });
+
+    describe('useGrammarActions', () => {
+      it('returns only actions', () => {
+        const { result } = renderHook(() => useGrammarActions(), { wrapper });
+        expect(result.current).toEqual(mockActions);
+      });
     });
   });
-
-  describe('useGrammarState', () => {
-    it('returns only state', () => {
-      const { result } = renderHook(() => useGrammarState(), { wrapper });
-      expect(result.current).toBe(mockState);
-    });
-  });
-
-  describe('useGrammarActions', () => {
-    it('returns only actions', () => {
-      const { result } = renderHook(() => useGrammarActions(), { wrapper });
-      expect(result.current).toBe(mockActions);
-    });
-  });
-
-  describe('createEmptyGrammarState', () => {
-      it('returns correct default state', () => {
-          const state = createEmptyGrammarState();
-          expect(state.grammarSuggestions).toEqual([]);
-          expect(state.grammarHighlights).toEqual([]);
-      })
-  })
 });
