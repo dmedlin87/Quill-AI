@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { AnalysisPanel } from '@/features/analysis/components/AnalysisPanel';
 import { AnalysisResult } from '@/types';
+import { Contradiction } from '@/types/schema';
 import * as sharedFeatures from '@/features/shared';
 
 // Mock dependencies
@@ -38,15 +39,16 @@ vi.mock('@/features/analysis/components/IssueCard', () => ({
 }));
 
 const mockAnalysisResult: AnalysisResult = {
-  pacing: { score: 8, issues: [] },
+  pacing: { score: 8, analysis: '', slowSections: [], fastSections: [] },
   plotIssues: [
     { issue: 'Plot Hole', suggestion: 'Fix it', quote: 'bad text', location: 'Chapter 1' }
   ],
   settingAnalysis: {
       issues: [
-          { issue: 'Anachronism', suggestion: 'Remove it', quote: 'phone', location: 'Scene 1' }
+          { issue: 'Anachronism', suggestion: 'Remove it', quote: 'phone' }
       ],
-      consistencyScore: 9
+      analysis: '',
+      score: 9
   },
   characters: [],
   summary: 'Executive Summary Text',
@@ -120,7 +122,7 @@ describe('AnalysisPanel', () => {
         const warning = { message: 'Warning' };
         render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} warning={warning} hasSelection={true} />);
 
-        const button = screen.getByText('Analyze selection only');
+        const button = screen.getByText('Analyze Selection');
         expect(button).toBeEnabled();
         fireEvent.click(button);
         expect(defaultProps.onAnalyzeSelection).toHaveBeenCalled();
@@ -130,7 +132,7 @@ describe('AnalysisPanel', () => {
         const warning = { message: 'Warning' };
         render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} warning={warning} hasSelection={false} />);
 
-        const button = screen.getByText('Analyze selection only');
+        const button = screen.getByText('Analyze Selection');
         expect(button).toBeDisabled();
     });
 
@@ -168,7 +170,7 @@ describe('AnalysisPanel', () => {
          const analysisWithoutLocation = {
             ...mockAnalysisResult,
             plotIssues: [
-                { issue: 'Plot Hole', suggestion: 'Fix it', quote: 'bad text' }
+                { issue: 'Plot Hole', suggestion: 'Fix it', quote: 'bad text', location: '' }
             ]
         };
         render(<AnalysisPanel {...defaultProps} analysis={analysisWithoutLocation} />);
@@ -200,7 +202,7 @@ describe('AnalysisPanel', () => {
         const analysisMinimal = {
            ...mockAnalysisResult,
            plotIssues: [
-               { issue: 'Plot Hole', suggestion: 'Fix it' }
+               { issue: 'Plot Hole', suggestion: 'Fix it', location: '' }
            ]
        };
        render(<AnalysisPanel {...defaultProps} analysis={analysisMinimal} />);
@@ -211,13 +213,13 @@ describe('AnalysisPanel', () => {
    });
 
    it('displays contradictions and handles navigation', () => {
-       const contradictions = [
-           { type: 'trait_mismatch', characterName: 'Bob', attribute: 'Eye Color', originalValue: 'Blue', newValue: 'Green', position: 100 }
-       ];
+        const contradictions: Contradiction[] = [
+            { type: 'character_attribute' as const, characterName: 'Bob', attribute: 'Eye Color', originalValue: 'Blue', newValue: 'Green', position: 100, originalChapterId: 'ch1', newChapterId: 'ch2' }
+        ];
        render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} contradictions={contradictions} />);
 
        expect(screen.getByText('Contradictions')).toBeInTheDocument();
-       expect(screen.getByText('Trait Mismatch')).toBeInTheDocument();
+       expect(screen.getByText('Character Attribute')).toBeInTheDocument();
        expect(screen.getByText('Bob • Eye Color')).toBeInTheDocument();
        expect(screen.getByText('Blue → Green')).toBeInTheDocument();
 
@@ -227,19 +229,29 @@ describe('AnalysisPanel', () => {
    });
 
    it('displays contradictions without character name or attribute', () => {
-        const contradictions = [
-            { type: 'contradiction', originalValue: 'A', newValue: 'B', position: 200 }
+        const contradictions: Contradiction[] = [
+            { type: 'timeline' as const, originalValue: 'A', newValue: 'B', position: 200, originalChapterId: 'ch1', newChapterId: 'ch2' }
         ];
         render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} contradictions={contradictions} />);
 
-        expect(screen.getByText('Contradiction')).toBeInTheDocument();
+        expect(screen.getByText('Timeline')).toBeInTheDocument();
         expect(screen.getByText('detail')).toBeInTheDocument();
     });
 
    it('displays derived lore', () => {
        const derivedLore = {
            worldRules: ['Magic is real'],
-           characters: [{ name: 'Alice', bio: 'A mage', traits: [] }]
+            characters: [{ 
+                name: 'Alice', 
+                bio: 'A mage', 
+                traits: [], 
+                arc: 'Hero Journey', 
+                arcStages: [], 
+                relationships: [], 
+                plotThreads: [], 
+                inconsistencies: [], 
+                developmentSuggestion: '' 
+            }]
        };
        render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} derivedLore={derivedLore} />);
 
