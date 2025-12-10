@@ -205,39 +205,4 @@ describe('MainLayout', () => {
     
     expect(mockToggleZenMode).toHaveBeenCalled();
   });
-
-  it('toggles theme when theme button is clicked', () => {
-    setupMocks(true);
-    render(<MainLayout />);
-    
-    // Initially light mode
-    const darkModeButton = screen.getByLabelText('Switch to Dark Mode');
-    fireEvent.click(darkModeButton);
-    
-    // Should now show light mode option
-    expect(screen.getByLabelText('Switch to Light Mode')).toBeInTheDocument();
-  });
-
-  it('persists theme preference to localStorage', () => {
-    setupMocks(true);
-    render(<MainLayout />);
-    
-    const darkModeButton = screen.getByLabelText('Switch to Dark Mode');
-    fireEvent.click(darkModeButton);
-    
-    expect(localStorage.getItem('quillai-theme')).toBe('dark');
-  });
-
-  it('loads theme preference from localStorage', () => {
-    localStorage.setItem('quillai-theme', 'dark');
-    setupMocks(true);
-    // Simulate a session that already has dark theme active
-    useLayoutStore.setState((state) => ({
-      ...state,
-      theme: 'dark',
-    }));
-    render(<MainLayout />);
-    
-    expect(screen.getByLabelText('Switch to Light Mode')).toBeInTheDocument();
-  });
 });

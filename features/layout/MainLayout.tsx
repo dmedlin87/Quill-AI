@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MainView } from '@/types';
 import { ProjectSidebar, StoryBoard, useProjectStore } from '@/features/project';
@@ -13,6 +13,7 @@ import { ToolsPanelContainer } from './ToolsPanelContainer';
 import { ZenModeOverlay } from './ZenModeOverlay';
 import { useLayoutStore } from './store/useLayoutStore';
 import { BrainActivityMonitor } from '@/features/debug';
+import { CommandPalette } from '@/features/shared/components/CommandPalette';
 
 /**
  * Derive orb status from engine state
@@ -32,6 +33,8 @@ function deriveOrbStatus(isAnalyzing: boolean, isMagicLoading: boolean, isDreami
  * All sub-components handle their own concerns.
  */
 export const MainLayout: React.FC = () => {
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
   // Contexts - these provide data, not UI state
   const { currentProject, getActiveChapter } = useProjectStore((state) => ({
     currentProject: state.currentProject,
@@ -60,6 +63,18 @@ export const MainLayout: React.FC = () => {
 
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Command palette keyboard shortcut (Ctrl+K / Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // If no project is selected, show Dashboard/Upload
   if (!currentProject) {
@@ -115,6 +130,12 @@ export const MainLayout: React.FC = () => {
 
       {/* 6. Developer Brain Activity Monitor */}
       <BrainActivityMonitor />
+
+      {/* 7. Command Palette */}
+      <CommandPalette 
+        isOpen={isCommandPaletteOpen} 
+        onClose={() => setIsCommandPaletteOpen(false)} 
+      />
     </div>
   );
 };

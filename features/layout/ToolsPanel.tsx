@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SidebarTab, AnalysisWarning } from '@/types';
 import { ChatInterface, ActivityFeed } from '@/features/agent';
@@ -76,6 +76,10 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
     handleFixRequest,
     handleSelectGraphCharacter,
     handleInterviewCharacter,
+    toolsPanelWidth,
+    isToolsPanelExpanded,
+    setToolsPanelWidth,
+    toggleToolsPanelExpanded,
   } = useLayoutStore((state) => ({
     activeTab: state.activeTab,
     isToolsCollapsed: state.isToolsCollapsed,
@@ -88,30 +92,94 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
     handleFixRequest: state.handleFixRequest,
     handleSelectGraphCharacter: state.handleSelectGraphCharacter,
     handleInterviewCharacter: state.handleInterviewCharacter,
+    toolsPanelWidth: state.toolsPanelWidth,
+    isToolsPanelExpanded: state.isToolsPanelExpanded,
+    setToolsPanelWidth: state.setToolsPanelWidth,
+    toggleToolsPanelExpanded: state.toggleToolsPanelExpanded,
   }));
+
+  // Resize handling
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeRef.current = { startX: e.clientX, startWidth: toolsPanelWidth };
+  }, [toolsPanelWidth]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const delta = resizeRef.current.startX - e.clientX;
+      setToolsPanelWidth(resizeRef.current.startWidth + delta);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      resizeRef.current = null;
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, setToolsPanelWidth]);
 
   const isDeveloperMode = useSettingsStore((state) => state.developerModeEnabled);
 
   const shouldShow = !isToolsCollapsed && !isZenMode;
+  const panelWidth = isToolsPanelExpanded ? '100%' : toolsPanelWidth;
 
   return (
     <AnimatePresence mode="wait">
       {shouldShow && (
         <motion.aside
           initial={{ width: 0, opacity: 0, x: 50 }}
-          animate={{ width: 380, opacity: 1, x: 0 }}
+          animate={{ width: panelWidth, opacity: 1, x: 0 }}
           exit={{ width: 0, opacity: 0, x: 50 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="glass-strong border-l-0 flex flex-col z-30 shrink-0 overflow-hidden"
+          className={`glass-strong border-l-0 flex flex-col z-30 shrink-0 overflow-hidden ${isToolsPanelExpanded ? 'fixed inset-0 z-50' : 'relative'} ${isResizing ? 'select-none' : ''}`}
           role="complementary"
           aria-label={`${activeTab} panel`}
         >
+          {/* Resize Handle */}
+          {!isToolsPanelExpanded && (
+            <div
+              onMouseDown={handleResizeStart}
+              className={`absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-[var(--interactive-accent)] transition-colors z-10 ${isResizing ? 'bg-[var(--interactive-accent)]' : 'bg-transparent hover:bg-[var(--interactive-accent)]/50'}`}
+              title="Drag to resize"
+            />
+          )}
           {/* Panel Header */}
           <div className="h-14 border-b border-[var(--glass-border)] flex items-center justify-between px-5 shrink-0">
             <h3 className="text-[var(--text-sm)] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
               {activeTab}
             </h3>
-            <DeveloperModeToggle />
+            <div className="flex items-center gap-2">
+              {/* Expand/Collapse Button */}
+              <button
+                onClick={toggleToolsPanelExpanded}
+                className="p-1.5 rounded-md text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--text-secondary)] transition-colors"
+                title={isToolsPanelExpanded ? 'Exit fullscreen' : 'Expand to fullscreen'}
+                aria-label={isToolsPanelExpanded ? 'Exit fullscreen' : 'Expand to fullscreen'}
+              >
+                {isToolsPanelExpanded ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M3.28 2.22a.75.75 0 00-1.06 1.06L5.44 6.5H2.75a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69L3.28 2.22zM12 7.25a.75.75 0 01.75-.75h4.5a.75.75 0 010 1.5h-2.69l3.22 3.22a.75.75 0 11-1.06 1.06L13.5 9.06v2.69a.75.75 0 01-1.5 0v-4.5zM3.28 17.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 101.06 1.06zM12.75 12.75a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-2.69l-3.22 3.22a.75.75 0 01-1.06-1.06l3.22-3.22H8.25a.75.75 0 010-1.5h4.5z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path d="M13.28 2.22a.75.75 0 00-1.06 1.06L14.94 6H12.75a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.19l-2.72-2.72zM2.75 12.75a.75.75 0 000 1.5h2.19l-2.72 2.72a.75.75 0 101.06 1.06L6 15.31v2.19a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5z" />
+                  </svg>
+                )}
+              </button>
+              <DeveloperModeToggle />
+            </div>
           </div>
 
           {/* Panel Content */}

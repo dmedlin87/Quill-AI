@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
+import { AccessibleTooltip } from '@/features/shared/components/AccessibleTooltip';
 
 interface Props {
   collapsed: boolean;
@@ -53,43 +54,88 @@ export const ProjectSidebar: React.FC<Props> = ({ collapsed, toggleCollapsed }) 
 
       {/* Chapter List */}
       <div className="flex-1 overflow-y-auto p-2">
-         {chapters.map((chapter, index) => (
-           <button
-             key={chapter.id}
-             draggable
-             onDragStart={(e) => handleDragStart(e, index)}
-             onDragOver={(e) => handleDragOver(e, index)}
-             onDrop={(e) => handleDrop(e, index)}
-             onClick={() => selectChapter(chapter.id)}
-             className={`w-full text-left p-3 mb-1 rounded-lg flex items-center gap-3 transition-all duration-200 group ${
-               chapter.id === activeChapterId 
-                 ? 'bg-[var(--parchment-50)] shadow-sm border border-[var(--ink-100)]' 
-                 : 'border border-transparent hover:bg-[var(--parchment-50)]'
-             }`}
-           >
-             <span className={`w-5 h-5 rounded flex items-center justify-center text-[var(--text-xs)] font-bold shrink-0 ${
-               chapter.id === activeChapterId
-                 ? 'bg-[var(--magic-100)] text-[var(--magic-500)]'
-                 : 'bg-[var(--parchment-200)] text-[var(--ink-400)]'
-             }`}>
-               {index + 1}
-             </span>
-             
-             <span className={`flex-1 text-[var(--text-sm)] truncate ${
-               chapter.id === activeChapterId ? 'text-[var(--ink-800)] font-medium' : 'text-[var(--ink-600)]'
-             }`}>
-               {chapter.title}
-             </span>
-             
-             {chapter.lastAnalysis && (
-                <div 
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    chapter.lastAnalysis.pacing.score >= 7 ? 'bg-[var(--success-500)]' : 'bg-[var(--warning-500)]'
-                  }`} 
-                />
-             )}
-           </button>
-         ))}
+         {chapters.map((chapter, index) => {
+           // Calculate word count (simple calculation, no hook needed)
+           const wordCount = chapter.content.trim().split(/\s+/).filter(Boolean).length;
+           
+           // Format word count
+           const formattedWordCount = wordCount >= 1000 
+             ? `${(wordCount / 1000).toFixed(1)}k` 
+             : wordCount.toString();
+
+           return (
+             <div
+               key={chapter.id}
+               draggable
+               onDragStart={(e) => handleDragStart(e, index)}
+               onDragOver={(e) => handleDragOver(e, index)}
+               onDrop={(e) => handleDrop(e, index)}
+               onClick={() => selectChapter(chapter.id)}
+               className={`w-full text-left p-3 mb-1 rounded-lg flex items-center gap-2 transition-all duration-200 group cursor-pointer ${
+                 chapter.id === activeChapterId 
+                   ? 'bg-[var(--parchment-50)] shadow-sm border border-[var(--ink-100)]' 
+                   : 'border border-transparent hover:bg-[var(--parchment-50)]'
+               } ${draggedIndex === index ? 'opacity-50' : ''}`}
+             >
+               {/* Drag Handle */}
+               <div 
+                 className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-[var(--ink-300)] hover:text-[var(--ink-500)]"
+                 title="Drag to reorder"
+               >
+                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                   <circle cx="9" cy="6" r="2" />
+                   <circle cx="15" cy="6" r="2" />
+                   <circle cx="9" cy="12" r="2" />
+                   <circle cx="15" cy="12" r="2" />
+                   <circle cx="9" cy="18" r="2" />
+                   <circle cx="15" cy="18" r="2" />
+                 </svg>
+               </div>
+
+               {/* Chapter Number */}
+               <span className={`w-5 h-5 rounded flex items-center justify-center text-[var(--text-xs)] font-bold shrink-0 ${
+                 chapter.id === activeChapterId
+                   ? 'bg-[var(--magic-100)] text-[var(--magic-500)]'
+                   : 'bg-[var(--parchment-200)] text-[var(--ink-400)]'
+               }`}>
+                 {index + 1}
+               </span>
+               
+               {/* Title and Metadata */}
+               <div className="flex-1 min-w-0">
+                 <span className={`block text-[var(--text-sm)] truncate ${
+                   chapter.id === activeChapterId ? 'text-[var(--ink-800)] font-medium' : 'text-[var(--ink-600)]'
+                 }`}>
+                   {chapter.title}
+                 </span>
+                 <div className="flex items-center gap-2 mt-0.5">
+                   <span className="text-[10px] text-[var(--ink-400)]">
+                     {formattedWordCount} words
+                   </span>
+                   {chapter.updatedAt && (
+                     <span className="text-[10px] text-[var(--ink-300)]">
+                       · {new Date(chapter.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                     </span>
+                   )}
+                 </div>
+               </div>
+               
+               {/* Analysis Status Indicator */}
+               {chapter.lastAnalysis && (
+                 <AccessibleTooltip 
+                   content={`Score: ${chapter.lastAnalysis.pacing?.score ?? 'N/A'}/10`}
+                   position="left"
+                 >
+                   <div 
+                     className={`w-2 h-2 rounded-full shrink-0 ${
+                       (chapter.lastAnalysis.pacing?.score ?? 0) >= 7 ? 'bg-[var(--success-500)]' : 'bg-[var(--warning-500)]'
+                     }`} 
+                   />
+                 </AccessibleTooltip>
+               )}
+             </div>
+           );
+         })}
       </div>
 
       {/* Footer */}

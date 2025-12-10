@@ -76,18 +76,19 @@ describe('ProjectSidebar', () => {
   it('highlights active chapter', () => {
     render(<ProjectSidebar collapsed={false} toggleCollapsed={mockToggleCollapsed} />);
     
-    const chapter1Button = screen.getByText('Chapter 1').closest('button');
-    const chapter2Button = screen.getByText('Chapter 2').closest('button');
+    // Chapter items are now divs with cursor-pointer class
+    const chapter1Item = screen.getByText('Chapter 1').closest('[draggable="true"]');
+    const chapter2Item = screen.getByText('Chapter 2').closest('[draggable="true"]');
     
-    expect(chapter1Button).toHaveClass('bg-[var(--parchment-50)]');
-    expect(chapter2Button).not.toHaveClass('bg-[var(--parchment-50)]');
+    expect(chapter1Item).toHaveClass('bg-[var(--parchment-50)]');
+    expect(chapter2Item).not.toHaveClass('bg-[var(--parchment-50)]');
   });
 
   it('supports drag and drop reordering', () => {
     render(<ProjectSidebar collapsed={false} toggleCollapsed={mockToggleCollapsed} />);
     
-    const chapter1 = screen.getByText('Chapter 1').closest('button')!;
-    const chapter3 = screen.getByText('Chapter 3').closest('button')!;
+    const chapter1 = screen.getByText('Chapter 1').closest('[draggable="true"]')!;
+    const chapter3 = screen.getByText('Chapter 3').closest('[draggable="true"]')!;
     
     // Start drag
     fireEvent.dragStart(chapter1, {
@@ -106,7 +107,7 @@ describe('ProjectSidebar', () => {
   it('does not reorder when dropping on same position', () => {
     render(<ProjectSidebar collapsed={false} toggleCollapsed={mockToggleCollapsed} />);
     
-    const chapter1 = screen.getByText('Chapter 1').closest('button')!;
+    const chapter1 = screen.getByText('Chapter 1').closest('[draggable="true"]')!;
     
     fireEvent.dragStart(chapter1, {
       dataTransfer: { effectAllowed: 'move' },

@@ -4,6 +4,7 @@ import { EditorProvider, EngineProvider, UsageProvider, ErrorBoundary } from '@/
 import { AppBrainProvider } from '@/features/core';
 import { AnalysisProvider } from '@/features/analysis';
 import { MainLayout } from '@/features/layout';
+import { LoadingScreen } from '@/features/shared/components/LoadingScreen';
 
 const App: React.FC = () => {
   const { init: initStore, isLoading: isStoreLoading, flushPendingWrites } = useProjectStore();
@@ -51,7 +52,7 @@ const App: React.FC = () => {
     };
   }, [flushPendingWrites]);
 
-  if (isStoreLoading) return <div className="h-screen w-full flex items-center justify-center bg-gray-50 text-indigo-600"><p>Loading...</p></div>;
+  if (isStoreLoading) return <LoadingScreen message="Loading your library..." subMessage="Connecting to your manuscripts" />;
 
   return (
     <ErrorBoundary>
