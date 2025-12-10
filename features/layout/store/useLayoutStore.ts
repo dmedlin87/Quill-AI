@@ -145,6 +145,7 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     toggleTheme: () => set((state) => {
       const newMode = state.theme === 'light' ? 'dark' : 'light';
       applyTheme(newMode, state.visualTheme);
+      localStorage.setItem('quillai-theme', newMode);
       return { theme: newMode };
     }),
 

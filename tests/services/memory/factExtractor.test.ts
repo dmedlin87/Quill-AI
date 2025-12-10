@@ -167,6 +167,26 @@ describe('factExtractor', () => {
       expect(facts.some((f) => f.predicate.includes('conflict'))).toBe(true);
     });
 
+    it('does not add sentiment-derived facts when sentiment is neutral', () => {
+      const intelligence = createMockIntelligence({
+        entities: {
+          nodes: [
+            { id: 'e1', name: 'Sarah', type: 'character', aliases: [], firstMention: 0, mentionCount: 1, mentions: [], attributes: {} },
+            { id: 'e2', name: 'Marcus', type: 'character', aliases: [], firstMention: 0, mentionCount: 1, mentions: [], attributes: {} },
+          ],
+          edges: [
+            // sentiment within [-0.3, 0.3] should not produce extra relationship/conflict facts
+            { id: 'edge-1', source: 'e1', target: 'e2', type: 'interacts', coOccurrences: 1, sentiment: 0, chapters: [], evidence: [] },
+          ],
+        },
+      });
+
+      const facts = extractFacts(intelligence);
+
+      expect(facts.some((f) => f.predicate === 'has positive relationship with')).toBe(false);
+      expect(facts.some((f) => f.predicate === 'has conflict with')).toBe(false);
+    });
+
     it('extracts facts from timeline events', () => {
       const intelligence = createMockIntelligence({
         timeline: {
@@ -219,6 +239,22 @@ describe('factExtractor', () => {
       const facts = extractFacts(intelligence);
 
       expect(facts.some((f) => f.predicate === 'remains unresolved')).toBe(true);
+    });
+
+    it('marks resolved plot promises correctly', () => {
+      const intelligence = createMockIntelligence({
+        timeline: {
+          events: [],
+          causalChains: [],
+          promises: [
+            { id: 'p1', type: 'setup', description: 'The broken sword', quote: 'The sword finally mended', offset: 80, chapterId: 'ch-2', resolved: true },
+          ],
+        },
+      });
+
+      const facts = extractFacts(intelligence);
+
+      expect(facts.some((f) => f.predicate === 'was resolved')).toBe(true);
     });
 
     it('sorts facts by confidence descending', () => {
@@ -358,6 +394,50 @@ describe('factExtractor', () => {
       });
 
       expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    it('generates relationship and conflict tags for relationship-based facts', async () => {
+      const intelligence = createMockIntelligence({
+        entities: {
+          nodes: [
+            { id: 'e1', name: 'Sarah', type: 'character', aliases: [], firstMention: 0, mentionCount: 1, mentions: [], attributes: {} },
+            { id: 'e2', name: 'Marcus', type: 'character', aliases: [], firstMention: 0, mentionCount: 1, mentions: [], attributes: {} },
+          ],
+          edges: [
+            {
+              id: 'edge-1',
+              source: 'e1',
+              target: 'e2',
+              type: 'opposes',
+              coOccurrences: 3,
+              sentiment: -0.8,
+              chapters: [],
+              evidence: ['They fought in the alley'],
+            },
+          ],
+        },
+      });
+
+      await extractFactsToMemories(intelligence, {
+        projectId: 'proj-1',
+        createMemories: true,
+      });
+
+      expect(createMemory).toHaveBeenCalled();
+      const createdPayloads = vi.mocked(createMemory).mock.calls.map((call) => call[0]);
+      const relationshipMemory = createdPayloads.find((m) => m.topicTags?.includes('relationship'));
+
+      expect(relationshipMemory).toBeDefined();
+      // For a strong opposing relationship we should also tag it as a conflict
+      expect(relationshipMemory!.topicTags).toContain('conflict');
+      // Character tags should be derived from subject/object names
+      expect(relationshipMemory!.topicTags).toEqual(
+        expect.arrayContaining([
+          'source:relationship',
+          'character:sarah',
+          'character:marcus',
+        ]),
+      );
     });
   });
 

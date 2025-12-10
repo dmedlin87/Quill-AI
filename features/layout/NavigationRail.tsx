@@ -56,6 +56,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
     currentPersonaIndex: state.currentPersonaIndex,
     openTabWithPanel: state.openTabWithPanel,
     toggleView: state.toggleView,
+    toggleTheme: state.toggleTheme,
   }));
 
   const currentPersona = DEFAULT_PERSONAS[currentPersonaIndex];
@@ -144,6 +145,14 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
           className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
         >
           <ZenIcon />
+        </button>
+
+        <button
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:bg-[var(--interactive-bg)] hover:text-[var(--interactive-accent)] transition-all"
+        >
+          {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
         </button>
 
         <button

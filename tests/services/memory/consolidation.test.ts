@@ -175,6 +175,41 @@ describe('Memory Consolidation', () => {
 
       expect(result.merged).toBe(0);
     });
+
+    it('supports dryRun mode without mutating memories', async () => {
+      const memory1 = {
+        id: 'mem-1',
+        text: 'John is the main protagonist of the story',
+        type: 'observation' as const,
+        scope: 'project' as const,
+        projectId: mockProjectId,
+        topicTags: ['character:john'],
+        importance: 0.8,
+        createdAt: now - 1000,
+      };
+      const memory2 = {
+        id: 'mem-2',
+        text: 'John is the main protagonist in our story',
+        type: 'observation' as const,
+        scope: 'project' as const,
+        projectId: mockProjectId,
+        topicTags: ['character:john', 'story'],
+        importance: 0.6,
+        createdAt: now,
+      };
+
+      vi.mocked(getMemories).mockResolvedValue([memory1, memory2]);
+
+      const result = await mergeSimikarMemories({
+        projectId: mockProjectId,
+        mergeThreshold: 0.6,
+        dryRun: true,
+      });
+
+      expect(result.merged).toBeGreaterThanOrEqual(1);
+      expect(updateMemory).not.toHaveBeenCalled();
+      expect(deleteMemory).not.toHaveBeenCalled();
+    });
   });
 
   describe('archiveStaleMemories', () => {
