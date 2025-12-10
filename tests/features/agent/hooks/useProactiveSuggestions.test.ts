@@ -342,5 +342,119 @@ describe('useProactiveSuggestions', () => {
         });
 
         expect(result.current.suggestions).toContainEqual(mockSuggestion);
+
+        // Second emission with same ID should be ignored by the dedupe-by-id guard
+        act(() => {
+            if (handleSuggestion) {
+                handleSuggestion(mockSuggestion);
+            }
+        });
+
+        expect(result.current.suggestions.filter(s => s.id === 'bg1')).toHaveLength(1);
+    });
+
+    it('does not generate suggestions when projectId is null', async () => {
+        const { result } = renderHook(() =>
+            useProactiveSuggestions({ projectId: null }),
+        );
+
+        await act(async () => {
+            await result.current.checkForSuggestions('c1', 'Chapter 1');
+        });
+
+        expect(generateSuggestionsForChapter).not.toHaveBeenCalled();
+        expect(result.current.suggestions).toEqual([]);
+    });
+
+    it('does not generate suggestions when suggestions are disabled', async () => {
+        const { result } = renderHook(() =>
+            useProactiveSuggestions({ projectId: mockProjectId, enabled: false }),
+        );
+
+        await act(async () => {
+            await result.current.checkForSuggestions('c1', 'Chapter 1');
+        });
+
+        expect(generateSuggestionsForChapter).not.toHaveBeenCalled();
+        expect(result.current.suggestions).toEqual([]);
+    });
+
+    it('returns empty reminders when no project ID', async () => {
+        const { result } = renderHook(() =>
+            useProactiveSuggestions({ projectId: null }),
+        );
+
+        const reminders = await act(async () => {
+            return await result.current.getReminders();
+        });
+
+        expect(getImportantReminders).not.toHaveBeenCalled();
+        expect(reminders).toEqual([]);
+    });
+
+    it('fetches reminders and handles errors', async () => {
+        (getImportantReminders as any).mockResolvedValueOnce([
+            { id: 'r1', source: { id: 'src_r1' }, type: 'plot' },
+        ]);
+
+        const { result } = renderHook(() =>
+            useProactiveSuggestions({ projectId: mockProjectId }),
+        );
+
+        const reminders = await act(async () => {
+            return await result.current.getReminders();
+        });
+
+        expect(getImportantReminders).toHaveBeenCalledWith(mockProjectId);
+        expect(reminders[0].id).toBe('r1');
+
+        // Next call will throw and should be converted into an empty list
+        (getImportantReminders as any).mockRejectedValueOnce(new Error('fail'));
+
+        const afterError = await act(async () => {
+            return await result.current.getReminders();
+        });
+
+        expect(afterError).toEqual([]);
+    });
+
+    it('does not record feedback when no project ID is provided', async () => {
+        const { result } = renderHook(() =>
+            useProactiveSuggestions({ projectId: null }),
+        );
+
+        const suggestion = {
+            id: 's1',
+            source: { id: 'src1' },
+            type: 'plot',
+            title: 'Title',
+            description: 'Desc',
+        };
+
+        await act(async () => {
+            await result.current.provideFeedback(suggestion as any, 'dismissed');
+        });
+
+        expect(createMemory).not.toHaveBeenCalled();
+        expect(evolveBedsideNote).not.toHaveBeenCalled();
+    });
+
+    it('forceThink swallows errors from getProactiveThinker', async () => {
+        (getProactiveThinker as any).mockImplementationOnce(() => {
+            throw new Error('bad thinker');
+        });
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const { result } = renderHook(() =>
+            useProactiveSuggestions({ projectId: mockProjectId }),
+        );
+
+        await act(async () => {
+            await result.current.forceThink();
+        });
+
+        expect(warnSpy).toHaveBeenCalled();
+        warnSpy.mockRestore();
     });
 });

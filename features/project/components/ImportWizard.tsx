@@ -7,6 +7,7 @@ import React, {
   memo,
 } from 'react';
 import type { ParsedChapter } from '@/services/manuscriptParser';
+import { isApiConfigured } from '@/config/api';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -122,6 +123,11 @@ const calculateReadTime = (wordCount: number): number => {
   return Math.ceil(wordCount / 250); // 250 wpm average
 };
 
+const extractChapterNumber = (title: string): number | null => {
+  const match = title.match(/^(?:chapter|part)\s+(\d+)/i);
+  return match ? parseInt(match[1], 10) : null;
+};
+
 /**
  * Analyzes a chapter for common structural and content issues.
  * Detects short/long content, duplicate titles, orphaned fragments,
@@ -211,6 +217,26 @@ const analyzeChapterIssues = (
       message: `${artifactCount} potential page number artifacts detected`,
       autoFixable: true
     });
+  }
+
+  // Check for Sequence Gap: Missing Chapter 1
+  // If we have "Chapter 2" as the second item, the first item should probably be "Chapter 1"
+  if (allChapters.length > 1 && allChapters[0].id === chapter.id) {
+    const nextChapter = allChapters[1];
+    const nextNum = extractChapterNumber(nextChapter.title);
+    
+    if (nextNum === 2) {
+      const myNum = extractChapterNumber(chapter.title);
+      // If I am not explicitly Chapter 1
+      if (myNum !== 1) {
+        issues.push({
+          type: 'warning',
+          code: 'POSSIBLE_MISSING_CHAPTER_1',
+          message: 'Sequence Gap: Next is Chapter 2. Is this text implicitly Chapter 1?',
+          autoFixable: true
+        });
+      }
+    }
   }
   
   return issues;
@@ -881,7 +907,16 @@ export const ImportWizard: React.FC<Props> = ({
     initialChapters.forEach((ch, idx) => {
       enhanced.push(enhanceChapter(ch, idx, initialChapters.length, enhanced));
     });
-    return enhanced;
+    
+    // Re-run analysis now that all chapters are known (fixes forward-look dependencies like sequence gaps)
+    return enhanced.map(c => {
+      const issues = analyzeChapterIssues(c, enhanced);
+      const withIssues = { ...c, issues };
+      return {
+        ...withIssues,
+        qualityScore: calculateQualityScore(withIssues)
+      };
+    });
   });
   
   // UI State
@@ -1197,6 +1232,7 @@ export const ImportWizard: React.FC<Props> = ({
       const updated = prev.map((chapter, idx, arr) => {
         let content = chapter.content;
         let title = chapter.title;
+        let type = chapter.type;
 
         // Fix excess whitespace
         content = content.replace(/^\n{3,}/, '\n\n').replace(/\n{3,}$/, '\n\n');
@@ -1214,11 +1250,25 @@ export const ImportWizard: React.FC<Props> = ({
         if (duplicates.length > 0) {
           title = `${title} (${idx + 1})`;
         }
+
+        // Fix Sequence Gap (Missing Chapter 1)
+        // If we found "Chapter 2" as the second item, and the first item isn't Chapter 1, fix it.
+        if (idx === 0 && arr.length > 1) {
+           const nextNum = extractChapterNumber(arr[1].title);
+           if (nextNum === 2) {
+               const myNum = extractChapterNumber(title);
+               if (myNum !== 1) {
+                   title = "Chapter 1";
+                   type = 'chapter';
+               }
+           }
+        }
         
         return {
           ...chapter,
           content,
           title,
+          type,
           wordCount: calculateWordCount(content),
           charCount: content.length,
           paragraphCount: calculateParagraphCount(content)
@@ -1347,8 +1397,12 @@ export const ImportWizard: React.FC<Props> = ({
         return;
       }
       
-      // Navigation: Arrow keys when not in textarea
-      if (document.activeElement !== textareaRef.current) {
+      const activeEl = document.activeElement;
+      const isTyping = activeEl?.tagName === 'INPUT' || 
+                       activeEl?.tagName === 'TEXTAREA' || 
+                       (activeEl as HTMLElement)?.isContentEditable;
+
+      if (!isTyping) {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
           setSelectedIndex(prev => Math.max(0, prev - 1));
@@ -1361,10 +1415,11 @@ export const ImportWizard: React.FC<Props> = ({
           e.preventDefault();
           if (selectedChapter) toggleChapterSelection(selectedChapter.id);
         }
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          textareaRef.current?.focus();
-        }
+      }
+
+      if (e.key === 'Enter' && activeEl !== textareaRef.current) {
+        e.preventDefault();
+        textareaRef.current?.focus();
       }
       
       // Escape: Clear selection or close modals
@@ -1573,13 +1628,20 @@ export const ImportWizard: React.FC<Props> = ({
             )}
 
             {onAIEnhance && (
-              <button
-                onClick={enhanceWithAI}
-                disabled={isProcessing}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50"
-              >
-                <Icons.Sparkles /> {isProcessing ? 'Processing...' : 'Enhance with AI'}
-              </button>
+              <div className="relative group w-full">
+                <button
+                  onClick={enhanceWithAI}
+                  disabled={isProcessing || !isApiConfigured()}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Icons.Sparkles /> {isProcessing ? 'Processing...' : 'Enhance with AI'}
+                </button>
+                {!isApiConfigured() && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    API Key Missing
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

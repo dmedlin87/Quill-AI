@@ -85,6 +85,98 @@ describe('useManuscriptIntelligence', () => {
     expect(mocks.processDebounced).toHaveBeenCalled();
   });
 
+  it('debounces processing calls', () => {
+    const { result } = renderHook(() =>
+      useManuscriptIntelligence({ chapterId: 'c1', initialText: '' })
+    );
+
+    // Multiple rapid updates
+    act(() => {
+      result.current.updateText('a', 1);
+    });
+    act(() => {
+      vi.advanceTimersByTime(50); // Less than debounce delay (150ms)
+      result.current.updateText('ab', 2);
+    });
+    act(() => {
+      vi.advanceTimersByTime(50);
+      result.current.updateText('abc', 3);
+    });
+
+    // Should not have called debounced process yet
+    expect(mocks.processDebounced).not.toHaveBeenCalled();
+
+    // Advance past debounce delay
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    // Should be called once for the final state
+    expect(mocks.processDebounced).toHaveBeenCalledTimes(1);
+    expect(mocks.processDebounced).toHaveBeenCalledWith('abc', 3);
+  });
+
+  it('cancels pending timers on new input', () => {
+     const { result } = renderHook(() =>
+      useManuscriptIntelligence({ chapterId: 'c1', initialText: '' })
+    );
+
+    act(() => {
+      result.current.updateText('first', 5);
+    });
+
+    // Check that we have a timer running implicitly by advancing partial time
+    act(() => {
+        vi.advanceTimersByTime(100);
+    });
+    expect(mocks.processDebounced).not.toHaveBeenCalled();
+
+    // Update again - should cancel previous timer
+    act(() => {
+        result.current.updateText('second', 6);
+    });
+
+    // Advance time that would have triggered the first timer if not cancelled
+    act(() => {
+        vi.advanceTimersByTime(100);
+    });
+    // Total time 200ms since first call, but only 100ms since second.
+    // If not cancelled, first call would have fired at 150ms.
+    expect(mocks.processDebounced).not.toHaveBeenCalled();
+
+    // Finish second timer
+    act(() => {
+        vi.advanceTimersByTime(100);
+    });
+    expect(mocks.processDebounced).toHaveBeenCalledTimes(1);
+    expect(mocks.processDebounced).toHaveBeenCalledWith('second', 6);
+  });
+
+  it('resets processing state on error', async () => {
+    // Mock processManuscript to throw
+    mocks.processManuscript.mockImplementationOnce(() => {
+      throw new Error('Processing failed');
+    });
+
+    const { result } = renderHook(() =>
+      useManuscriptIntelligence({ chapterId: 'c1', initialText: 'Error trigger' })
+    );
+
+    // Trigger background process
+    act(() => {
+      try {
+        vi.runAllTimers();
+      } catch (e) {
+        // Expected error from processManuscript
+      }
+    });
+
+    // The hook swallows the error in the fallback path but resets state
+    // We check that isProcessing is false
+    expect(result.current.isProcessing).toBe(false);
+    expect(result.current.processingTier).toBe('idle');
+  });
+
   it('returns AI context using generated data', () => {
     const { result } = renderHook(() =>
       useManuscriptIntelligence({ chapterId: 'c1', initialText: 'Hello' })

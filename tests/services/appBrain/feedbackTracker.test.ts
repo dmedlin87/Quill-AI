@@ -106,4 +106,27 @@ describe('FeedbackTracker', () => {
     // 0.101 * 0.95 = 0.09595 -> clamped to 0.1
     expect(newWeight).toBe(0.1);
   });
+
+  it('handles categories without an existing weight entry', () => {
+    // Use a category key that is not present in DEFAULT_SUGGESTION_WEIGHTS
+    const missingCategory = 'experimental' as SuggestionCategory;
+
+    // Ensure the store has no explicit weight for this key
+    useSettingsStore.setState({
+      suggestionWeights: { ...DEFAULT_SUGGESTION_WEIGHTS },
+    });
+
+    eventBus.emit({
+      type: 'PROACTIVE_SUGGESTION_ACTION',
+      payload: {
+        suggestionId: 'test-missing',
+        action: 'dismissed',
+        suggestionCategory: missingCategory,
+      },
+    });
+
+    const newWeight = useSettingsStore.getState().suggestionWeights[missingCategory];
+    // Should start from the implicit default 1.0 and apply decay
+    expect(newWeight).toBeCloseTo(1 * 0.95, 3);
+  });
 });

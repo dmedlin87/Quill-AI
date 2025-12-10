@@ -327,4 +327,58 @@ describe('useAudioController', () => {
       // Should not have decoded data
       expect(mockAudioContextImpl.decodeAudioData).not.toHaveBeenCalled();
   });
+
+  it('reports error when resuming suspended context fails (permission denied)', async () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAudioController({ onError }));
+    const buffer = { duration: 1 } as AudioBuffer;
+
+    // First call initializes context
+    await act(async () => {
+      await result.current.playBuffer(buffer);
+    });
+
+    // Next resume attempt fails
+    mockAudioContextImpl.resume.mockRejectedValueOnce(new Error('resume denied'));
+
+    await act(async () => {
+      await expect(result.current.playBuffer(buffer)).rejects.toThrow('resume denied');
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'resume denied' })
+    );
+  });
+
+  it('handles device errors when creating buffer source', async () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAudioController({ onError }));
+    const buffer = { duration: 1 } as AudioBuffer;
+
+    mockAudioContextImpl.createBufferSource.mockImplementationOnce(() => {
+      throw new Error('Device lost');
+    });
+
+    await act(async () => {
+      await expect(result.current.playBuffer(buffer)).rejects.toThrow('Device lost');
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Device lost' })
+    );
+  });
+
+  it('ignores AbortError from fetch in playUrl', async () => {
+    const onError = vi.fn();
+    const abortError = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    mockFetch.mockRejectedValueOnce(abortError);
+
+    const { result } = renderHook(() => useAudioController({ onError }));
+
+    await act(async () => {
+      await expect(result.current.playUrl('http://example.com/audio')).resolves.toBeUndefined();
+    });
+
+    expect(onError).not.toHaveBeenCalled();
+  });
 });

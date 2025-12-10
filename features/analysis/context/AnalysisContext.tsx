@@ -6,6 +6,7 @@ import {
   fetchPlotAnalysis,
   fetchSettingAnalysis 
 } from '@/services/gemini/analysis';
+import { isApiConfigured } from '@/config/api';
 import { ManuscriptIndex } from '@/types/schema';
 
 /**
@@ -115,6 +116,13 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Individual analysis methods for incremental loading
   const analyzePacing = useCallback(async (text: string, setting?: { timePeriod: string; location: string }) => {
     const abortSignal = getAbortController().signal;
+    
+    if (!isApiConfigured()) {
+      updateStatus('pacing', 'error');
+      console.warn('[AnalysisContext] Pacing analysis aborted: API key missing.');
+      return;
+    }
+
     updateStatus('pacing', 'loading');
     try {
       const result = await fetchPacingAnalysis(text, setting, abortSignal);
@@ -128,6 +136,13 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const analyzeCharacters = useCallback(async (text: string, manuscriptIndex?: ManuscriptIndex) => {
     const abortSignal = getAbortController().signal;
+
+    if (!isApiConfigured()) {
+      updateStatus('characters', 'error');
+      console.warn('[AnalysisContext] Character analysis aborted: API key missing.');
+      return;
+    }
+
     updateStatus('characters', 'loading');
     try {
       const result = await fetchCharacterAnalysis(text, manuscriptIndex, abortSignal);
@@ -141,6 +156,14 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const analyzePlot = useCallback(async (text: string) => {
     const abortSignal = getAbortController().signal;
+
+    if (!isApiConfigured()) {
+      updateStatus('plot', 'error');
+      updateStatus('summary', 'error');
+      console.warn('[AnalysisContext] Plot analysis aborted: API key missing.');
+      return;
+    }
+
     updateStatus('plot', 'loading');
     try {
       const result = await fetchPlotAnalysis(text, abortSignal);
@@ -160,6 +183,13 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const analyzeSetting = useCallback(async (text: string, setting: { timePeriod: string; location: string }) => {
     const abortSignal = getAbortController().signal;
+
+    if (!isApiConfigured()) {
+      updateStatus('setting', 'error');
+      console.warn('[AnalysisContext] Setting analysis aborted: API key missing.');
+      return;
+    }
+
     updateStatus('setting', 'loading');
     try {
       const result = await fetchSettingAnalysis(text, setting, abortSignal);
@@ -189,6 +219,29 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setting: setting ? 'loading' : 'idle',
       summary: 'loading'
     });
+
+    if (!isApiConfigured()) {
+      setIsAnalyzing(false);
+      setAnalysisStatus({
+        pacing: 'error',
+        characters: 'error',
+        plot: 'error',
+        setting: setting ? 'error' : 'idle',
+        summary: 'error'
+      });
+      // We could add a specific error message state here if needed, 
+      // but for now relying on the UI warning banner concept.
+      console.warn('[AnalysisContext] API key not configured. Analysis aborted.');
+      return {
+        summary: 'Analysis could not be run because the API key is missing.',
+        strengths: [],
+        weaknesses: [],
+        pacing: { score: 0, analysis: '', flow: [], slowSections: [], fastSections: [] },
+        plotIssues: [],
+        characters: [],
+        generalSuggestions: [],
+      } as unknown as AnalysisResult; 
+    }
 
     try {
       const abortSignal = getAbortController().signal;

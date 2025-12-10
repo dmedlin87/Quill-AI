@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { CritiqueIntensity, DEFAULT_CRITIQUE_INTENSITY } from '@/types/critiqueSettings';
 import {
   ExperienceLevel,
@@ -50,6 +50,32 @@ type SettingsActions = Pick<
   | 'resetSuggestionWeights'
 >;
 
+// Custom storage wrapper to handle quota errors gracefully
+const safeLocalStorage: StateStorage = {
+  getItem: (key): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      console.error('LocalStorage read error:', error);
+      return null;
+    }
+  },
+  setItem: (key, value): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      console.error('LocalStorage write error:', error);
+    }
+  },
+  removeItem: (key): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error('LocalStorage remove error:', error);
+    }
+  },
+};
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
@@ -92,6 +118,25 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'quill-settings',
+      storage: createJSONStorage(() => safeLocalStorage),
+      version: 0, // Add versioning
+      migrate: (persistedState: any, version: number) => {
+        // Simple migration strategy: merge persisted state with initial state
+        // This ensures new fields in initialState are preserved if missing in persistedState
+        // and handles schema changes if we check version in the future.
+        if (version === 0) {
+           return {
+             ...initialState,
+             ...persistedState,
+             // Ensure nested objects are merged correctly if needed
+             suggestionWeights: {
+                ...initialState.suggestionWeights,
+                ...(persistedState.suggestionWeights || {}),
+             }
+           };
+        }
+        return persistedState;
+      },
     }
   )
 );
