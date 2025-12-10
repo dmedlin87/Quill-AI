@@ -7,6 +7,7 @@ import {
   DEFAULT_AUTONOMY,
   ExperienceLevel,
   AutonomyMode,
+  DEFAULT_SUGGESTION_WEIGHTS
 } from '@/types/experienceSettings';
 
 describe('useSettingsStore', () => {
@@ -18,6 +19,8 @@ describe('useSettingsStore', () => {
       autonomyMode: DEFAULT_AUTONOMY,
       nativeSpellcheckEnabled: true,
       developerModeEnabled: false,
+      budgetThreshold: 1.0,
+      suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
     });
   });
 
@@ -29,6 +32,8 @@ describe('useSettingsStore', () => {
     expect(state.autonomyMode).toBe(DEFAULT_AUTONOMY);
     expect(state.nativeSpellcheckEnabled).toBe(true);
     expect(state.developerModeEnabled).toBe(false);
+    expect(state.budgetThreshold).toBe(1.0);
+    expect(state.suggestionWeights).toEqual(DEFAULT_SUGGESTION_WEIGHTS);
   });
 
   it('updates critiqueIntensity via setCritiqueIntensity', () => {
@@ -69,5 +74,32 @@ describe('useSettingsStore', () => {
     setDeveloperModeEnabled(true);
 
     expect(useSettingsStore.getState().developerModeEnabled).toBe(true);
+  });
+
+  it('updates budgetThreshold via setBudgetThreshold', () => {
+    const { setBudgetThreshold } = useSettingsStore.getState();
+
+    setBudgetThreshold(2.5);
+
+    expect(useSettingsStore.getState().budgetThreshold).toBe(2.5);
+  });
+
+  it('updates suggestion weights and resets them', () => {
+    const { updateSuggestionWeight, resetSuggestionWeights } = useSettingsStore.getState();
+
+    updateSuggestionWeight('plot', 1.5);
+    expect(useSettingsStore.getState().suggestionWeights.plot).toBe(1.5);
+
+    resetSuggestionWeights();
+    expect(useSettingsStore.getState().suggestionWeights.plot).toBe(DEFAULT_SUGGESTION_WEIGHTS.plot);
+  });
+
+  it('preserves state reference if value is unchanged', () => {
+      const { setCritiqueIntensity } = useSettingsStore.getState();
+      const initialState = useSettingsStore.getState();
+
+      setCritiqueIntensity(initialState.critiqueIntensity);
+
+      expect(useSettingsStore.getState()).toBe(initialState);
   });
 });

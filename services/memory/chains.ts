@@ -14,8 +14,10 @@ import {
   BedsideNoteContent,
   BedsideNoteConflict,
 } from './types';
-import { createMemory, getMemory, updateMemory, getMemories } from './index';
+import { createMemory, updateMemory } from './memoryService';
+import { getMemory, getMemories } from './memoryQueries';
 import { embedBedsideNoteText } from './bedsideEmbeddings';
+import { serializeBedsideNote } from './bedsideNoteSerializer';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -261,7 +263,7 @@ export const evolveMemory = async (
     changeReason?: string;
     keepOriginal?: boolean;
     structuredContent?: Record<string, unknown>;
-    embedding?: number[];
+    embedding?: number[] | readonly number[];
   } = {}
 ): Promise<MemoryNote> => {
   const {
@@ -355,7 +357,7 @@ export const getOrCreateBedsideNote = async (
     return existing[0];
   }
 
-  const baseTags = new Set(BEDSIDE_NOTE_DEFAULT_TAGS);
+  const baseTags = new Set<string>(BEDSIDE_NOTE_DEFAULT_TAGS);
   scopedTags.forEach(tag => baseTags.add(tag));
 
   const text =
@@ -440,13 +442,21 @@ export const evolveBedsideNote = async (
     ];
   }
 
-  const embedding = await embedBedsideNoteText(newText);
+  // If we have conflicts or structured content updates, regenerate the text to ensure consistency
+  // This ensures the PROMPT sees the conflicts/warnings we just added.
+  let finalText = newText;
+  if ((structuredContent.conflicts?.length ?? 0) > 0) {
+    const { text } = serializeBedsideNote(structuredContent);
+    finalText = text;
+  }
 
-  let evolved = await evolveMemory(base.id, newText, {
+  const embedding = await embedBedsideNoteText(finalText);
+
+  let evolved = await evolveMemory(base.id, finalText, {
     changeType: 'update',
     changeReason: options.changeReason,
     keepOriginal: true,
-    structuredContent,
+    structuredContent: structuredContent as unknown as Record<string, unknown>,
     embedding,
   });
 
@@ -479,7 +489,8 @@ export const evolveBedsideNote = async (
           changeType: 'update',
           changeReason: 'roll_up',
           keepOriginal: true,
-          structuredContent: structuredContent as Record<string, unknown>,
+
+          structuredContent: structuredContent as unknown as Record<string, unknown>,
         });
       }
 
@@ -488,7 +499,7 @@ export const evolveBedsideNote = async (
         changeType: 'update',
         changeReason: 'roll_up',
         keepOriginal: true,
-        structuredContent: structuredContent as Record<string, unknown>,
+        structuredContent: structuredContent as unknown as Record<string, unknown>,
       });
     } else if (rollupText && options.arcId) {
       const projectBase = await getOrCreateBedsideNote(projectId);
@@ -496,7 +507,7 @@ export const evolveBedsideNote = async (
         changeType: 'update',
         changeReason: 'roll_up',
         keepOriginal: true,
-        structuredContent: structuredContent as Record<string, unknown>,
+        structuredContent: structuredContent as unknown as Record<string, unknown>,
       });
     }
   }
@@ -561,7 +572,7 @@ export const recordProjectRetrospective = async (
 
   let evolved = await evolveMemory(authorBedside.id, summary, {
     changeReason: 'project_retrospective',
-    structuredContent: structuredContent as Record<string, unknown>,
+    structuredContent: structuredContent as unknown as Record<string, unknown>,
     keepOriginal: true,
     embedding,
   });

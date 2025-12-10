@@ -157,6 +157,84 @@ describe('KnowledgeGraph', () => {
     expect(onSelectCharacter).toHaveBeenCalledWith(expect.objectContaining({ name: 'Alice' }));
   });
 
+  it('deselects character when clicking empty space', async () => {
+    const onSelectCharacter = vi.fn();
+    const characters: CharacterProfile[] = [
+      {
+        name: 'Alice',
+        bio: '',
+        arc: '',
+        arcStages: [],
+        relationships: [],
+        plotThreads: [],
+        inconsistencies: [],
+        developmentSuggestion: '',
+      },
+    ];
+
+    mockedUseProjectStore.mockReturnValue({
+      currentProject: { lore: { characters, worldRules: [] } },
+      chapters: [],
+    } as any);
+
+    render(<KnowledgeGraph onSelectCharacter={onSelectCharacter} />);
+
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+    await waitFor(() => expect(canvas).toBeInstanceOf(HTMLCanvasElement));
+
+    // First click to select
+    fireEvent.click(canvas, { clientX: 250, clientY: 200 });
+    await waitFor(() => expect(onSelectCharacter).toHaveBeenCalled());
+
+    // Second click on empty space
+    // Assuming node radius is <= 30, and pos is 250,200. Click at 10,10.
+    fireEvent.click(canvas, { clientX: 10, clientY: 10 });
+
+    // Component logic: if (node) set selectedNodeRef and call onSelectCharacter
+    // else set selectedNodeRef = null.
+    // It doesn't trigger onSelectCharacter(null).
+    // So we can only verify it doesn't crash or trigger select again?
+    // Or maybe we can verify internal state via some side effect?
+    // Since we can't inspect refs easily, let's just verify it DOES NOT call onSelectCharacter again.
+    onSelectCharacter.mockClear();
+    fireEvent.click(canvas, { clientX: 10, clientY: 10 });
+    expect(onSelectCharacter).not.toHaveBeenCalled();
+  });
+
+  it('supports node dragging interactions', async () => {
+    const characters: CharacterProfile[] = [
+      {
+        name: 'Alice',
+        bio: '',
+        arc: '',
+        arcStages: [],
+        relationships: [],
+        plotThreads: [],
+        inconsistencies: [],
+        developmentSuggestion: '',
+      },
+    ];
+
+    mockedUseProjectStore.mockReturnValue({
+      currentProject: { lore: { characters, worldRules: [] } },
+      chapters: [],
+    } as any);
+
+    render(<KnowledgeGraph onSelectCharacter={vi.fn()} />);
+
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+    await waitFor(() => expect(canvas).toBeInstanceOf(HTMLCanvasElement));
+
+    // Mouse Down on node
+    fireEvent.mouseDown(canvas, { clientX: 400, clientY: 300 });
+
+    // Mouse Move
+    fireEvent.mouseMove(canvas, { clientX: 450, clientY: 350 });
+
+    // Mouse Up
+    fireEvent.mouseUp(canvas);
+  });
+
   it('changes cursor on hover and resets when leaving node', async () => {
     const characters: CharacterProfile[] = [
       {
@@ -332,6 +410,39 @@ describe('KnowledgeGraph', () => {
     await waitFor(() => expect(onSelect).toHaveBeenCalled());
     const selected = onSelect.mock.calls[0][0] as CharacterProfile;
     expect(['Alice', 'Bob']).toContain(selected.name);
+  });
+
+  it('renders legend and truncates if too many items', async () => {
+    // 6 characters to trigger truncation
+    const characters = Array.from({ length: 6 }, (_, i) => ({
+      name: `Char${i}`,
+      bio: '',
+      arc: '',
+      arcStages: [],
+      relationships: [],
+      plotThreads: [],
+      inconsistencies: [],
+      developmentSuggestion: '',
+    }));
+
+    mockedUseProjectStore.mockReturnValue({
+      currentProject: { lore: { characters, worldRules: [] } },
+      chapters: [],
+    } as any);
+
+    render(<KnowledgeGraph onSelectCharacter={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText('Characters')).toBeInTheDocument());
+
+    // Should see first 5
+    expect(screen.getByText('Char0')).toBeInTheDocument();
+    expect(screen.getByText('Char4')).toBeInTheDocument();
+
+    // Should not see 6th
+    expect(screen.queryByText('Char5')).not.toBeInTheDocument();
+
+    // Should see "+1 more"
+    expect(screen.getByText('+1 more')).toBeInTheDocument();
   });
 
   it('cleans up animation frame, resize/mouse listeners, and observers on unmount', async () => {

@@ -4,8 +4,14 @@ import { ai } from '../../../services/gemini/client';
 import { eventBus } from '../../../services/appBrain/eventBus';
 import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
 import { searchBedsideHistory } from '../../../services/memory/bedsideHistorySearch';
-import { evolveBedsideNote, upsertVoiceProfile, getVoiceProfileForCharacter } from '../../../services/memory';
+import { evolveBedsideNote, upsertVoiceProfile, getVoiceProfileForCharacter } from '@/services/memory';
 import { generateVoiceProfile } from '../../../services/intelligence/voiceProfiler';
+
+const memoryMocks = vi.hoisted(() => ({
+  evolveBedsideNote: vi.fn().mockResolvedValue(undefined),
+  getVoiceProfileForCharacter: vi.fn(),
+  upsertVoiceProfile: vi.fn().mockResolvedValue(undefined),
+}));
 import { getImportantReminders } from '../../../services/memory/proactive';
 import { extractTemporalMarkers } from '../../../services/intelligence/timelineTracker';
 import { extractFacts } from '../../../services/memory/factExtractor';
@@ -51,8 +57,8 @@ vi.mock('../../../services/memory/bedsideHistorySearch', () => ({
 vi.mock('@/services/memory', () => {
   return {
     evolveBedsideNote: memoryMocks.evolveBedsideNote,
-    getVoiceProfileForCharacter: vi.fn(),
-    upsertVoiceProfile: vi.fn(),
+    getVoiceProfileForCharacter: memoryMocks.getVoiceProfileForCharacter,
+    upsertVoiceProfile: memoryMocks.upsertVoiceProfile,
   };
 });
 
@@ -154,9 +160,9 @@ describe('ProactiveThinker', () => {
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
 
     // Simulate events
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() }); // Min 3 events
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() }); // Min 3 events
 
     // Wait for debounce
     await vi.advanceTimersByTimeAsync(150);
@@ -171,7 +177,7 @@ describe('ProactiveThinker', () => {
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
 
     // Urgent event
-    callback({ type: 'ANALYSIS_COMPLETED', payload: {}, timestamp: Date.now() });
+    callback({ type: 'ANALYSIS_COMPLETED', payload: { section: 'summary', status: 'success' }, timestamp: Date.now() });
 
     // Wait for short urgent delay (simulated by advancing timers slightly less than debounce but enough for urgent)
     // Actually implementation uses 2000ms max for urgent or remaining cooldown.
@@ -191,10 +197,10 @@ describe('ProactiveThinker', () => {
       timestamp: Date.now()
     });
 
-    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
-      mockProjectId,
-      expect.stringContaining('Now in chapter: "Chapter 1"'),
-      expect.objectContaining({ changeReason: 'chapter_transition' })
+    expect(evolveBedsideNote).toHaveBeenCalledWith(
+        mockProjectId,
+        expect.stringContaining('Now in chapter: "Chapter 1"'),
+        expect.objectContaining({ changeReason: 'chapter_transition' })
     );
   });
 
@@ -204,12 +210,12 @@ describe('ProactiveThinker', () => {
 
     // Trigger significant edit logic
     // Needs > 500 delta accumulation
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 600, length: 600 }, timestamp: Date.now() });
 
-    expect(memoryMocks.evolveBedsideNote).toHaveBeenCalledWith(
-      mockProjectId,
-      expect.stringContaining('Significant edits detected'),
-      expect.objectContaining({ changeReason: 'significant_edit' })
+    expect(evolveBedsideNote).toHaveBeenCalledWith(
+        mockProjectId,
+        expect.stringContaining('Significant edits detected'),
+        expect.objectContaining({ changeReason: 'significant_edit' })
     );
   });
 
@@ -237,7 +243,7 @@ describe('ProactiveThinker', () => {
 
     // Call handleEvent
     // This will trigger detectVoiceConsistency asynchronously
-    callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 600 }, timestamp: Date.now() });
+    callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 600, chapterId: undefined }, timestamp: Date.now() });
 
     // Wait for async operations to complete
     // We poll until mockOnSuggestion is called with the expected type
@@ -282,7 +288,7 @@ describe('ProactiveThinker', () => {
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
     // Add pending events
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
 
     await thinker.forceThink();
 
@@ -296,7 +302,7 @@ describe('ProactiveThinker', () => {
 
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
 
     await thinker.forceThink();
 
@@ -335,7 +341,7 @@ describe('ProactiveThinker', () => {
           .mockReturnValueOnce([{ category: 'day', normalized: 'sunday', marker: 'Sunday', offset: 0, sentence: 'It was Sunday night.' }]); // Historical marker
 
       const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 600 }, timestamp: Date.now() });
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 600, chapterId: 'ch1' }, timestamp: Date.now() });
 
       expect(mockOnSuggestion).toHaveBeenCalledWith(expect.objectContaining({
           type: 'timeline_conflict',
@@ -377,7 +383,7 @@ describe('ProactiveThinker', () => {
 
     // Add an event so performThinking doesn't bail early
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+    callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100, chapterId: 'ch1' }, timestamp: Date.now() });
 
     // Explicitly mock empty LLM response to ensure we only get lore suggestions
     vi.mocked(ai.models.generateContent).mockResolvedValue({
@@ -406,7 +412,7 @@ describe('ProactiveThinker', () => {
           projectId: mockProjectId,
           chapterId: 'ch1',
           title: 'Chapter 1',
-          issues: [{ description: 'Pacing issue', severity: 'high' }],
+          issues: [{ description: 'Pacing issue', severity: 'error' }],
           watchedEntities: [{ name: 'Hero', priority: 'high', reason: 'development' }]
       },
       timestamp: Date.now()
@@ -441,7 +447,7 @@ describe('ProactiveThinker', () => {
 
     // Add an event so performThinking doesn't bail early
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
 
     await thinker.forceThink();
 
@@ -475,7 +481,7 @@ describe('ProactiveThinker', () => {
 
     // Add event
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
 
     await thinker.forceThink();
 
@@ -511,7 +517,7 @@ describe('ProactiveThinker', () => {
     ] as any);
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
 
     await thinker.forceThink();
 
@@ -537,7 +543,7 @@ describe('ProactiveThinker', () => {
     vi.mocked(searchBedsideHistory).mockResolvedValue([]);
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
 
     await thinker.forceThink();
 

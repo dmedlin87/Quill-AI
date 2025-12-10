@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   extractTimelineEvents,
+  extractTemporalMarkers,
   extractCausalChains,
   extractPlotPromises,
   buildTimeline,
@@ -50,6 +51,57 @@ const createScene = (
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Timeline Tracker', () => {
+  describe('extractTemporalMarkers', () => {
+    it('should extract day markers and normalize them', () => {
+      const text = 'On Monday we start. Then Tue we finish.';
+      const markers = extractTemporalMarkers(text);
+
+      expect(markers).toHaveLength(2);
+      expect(markers[0].normalized).toBe('monday');
+      expect(markers[0].category).toBe('day');
+      expect(markers[1].normalized).toBe('tuesday');
+    });
+
+    it('should extract time of day markers and normalize them', () => {
+      const text = 'At dawn we ride. In the evening we rest.';
+      const markers = extractTemporalMarkers(text);
+
+      expect(markers).toHaveLength(2);
+      expect(markers[0].normalized).toBe('dawn');
+      expect(markers[0].category).toBe('time_of_day');
+      expect(markers[1].normalized).toBe('evening');
+    });
+
+    it('should extract season markers and normalize them', () => {
+      const text = 'It was a cold Winter. The Autumn leaves fell.';
+      const markers = extractTemporalMarkers(text);
+
+      expect(markers).toHaveLength(2);
+      expect(markers[0].normalized).toBe('winter');
+      expect(markers[0].category).toBe('season');
+      expect(markers[1].normalized).toBe('fall'); // Autumn -> fall
+    });
+
+    it('should include sentence context', () => {
+      const text = 'This is a sentence with Monday in it.';
+      const markers = extractTemporalMarkers(text);
+
+      expect(markers[0].sentence).toBe('This is a sentence with Monday in it.');
+    });
+
+    it('should fallback to lowercase for unmapped time markers (e.g. daybreak)', () => {
+      const text = 'At daybreak we leave.';
+      const markers = extractTemporalMarkers(text);
+
+      expect(markers[0].normalized).toBe('at daybreak'); // or 'daybreak' depending on what matched. Regex matches "At daybreak". normalized takes lower.
+      // Actually regex is `\b(at\s+)?(dawn...)\b`. match[0] is "At daybreak".
+      // normalizeTimeOfDay input "At daybreak".
+      // None of the specific regexes in normalizeTimeOfDay match "daybreak" (only dawn/sunrise/first light).
+      // So it returns lower: "at daybreak".
+      expect(markers[0].normalized).toBe('at daybreak');
+    });
+  });
+
   describe('extractTimelineEvents', () => {
     describe('Temporal markers', () => {
       it('should extract "after" temporal markers', () => {
@@ -268,6 +320,17 @@ describe('Timeline Tracker', () => {
         const sceneEvents = events.filter(e => e.description.includes('Scene:'));
         expect(sceneEvents.length).toBe(1);
         expect(sceneEvents[0].temporalMarker).toBe('evening');
+      });
+
+      it('should handle scenes without location', () => {
+        const scenes = [
+          createScene('action', 0, 100, 'morning', null),
+        ];
+
+        const text = 'Scene content.';
+        const events = extractTimelineEvents(text, scenes, 'ch1');
+
+        expect(events[0].description).toContain('unknown location');
       });
     });
 
@@ -866,6 +929,33 @@ describe('Timeline Tracker', () => {
       expect(timeline.promises.length).toBeGreaterThan(0);
     });
 
+    it('should fallback to counter-based ID generation if crypto is missing', () => {
+      const originalCrypto = (globalThis as any).crypto;
+      // Use defineProperty to bypass read-only restriction
+      Object.defineProperty(globalThis, 'crypto', {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+
+      try {
+        const timeline = buildTimeline('Some text', [], 'ch1');
+        // If crypto is missing, it should use the counter-based ID starting with tl_
+        // But buildTimeline extracts events. 'Some text' has no events?
+        // Ah, extractTimelineEvents needs markers.
+        // Let's force an event.
+        const events = extractTimelineEvents('After that, event.', [], 'ch1');
+        expect(events[0]?.id).toContain('tl_');
+      } finally {
+        // Restore
+        Object.defineProperty(globalThis, 'crypto', {
+          value: originalCrypto,
+          writable: true,
+          configurable: true,
+        });
+      }
+    });
+
     it('should include processedAt timestamp', () => {
       const timeline = buildTimeline('Some text', [], 'ch1');
 
@@ -948,6 +1038,37 @@ describe('Timeline Tracker', () => {
       const merged = mergeTimelines([timeline1, timeline2]);
 
       expect(merged.promises.length).toBe(1);
+      expect(merged.promises[0].resolved).toBe(true);
+    });
+
+    it('should not overwrite resolved status with unresolved status when merging', () => {
+      const promise1: PlotPromise = {
+        id: 'p1',
+        type: 'goal',
+        description: 'Goal',
+        quote: 'goal',
+        offset: 0,
+        chapterId: 'ch1',
+        resolved: true,
+        resolutionOffset: 50,
+        resolutionChapterId: 'ch1'
+      };
+
+      const promise2: PlotPromise = {
+        id: 'p1',
+        type: 'goal',
+        description: 'Goal',
+        quote: 'goal',
+        offset: 0,
+        chapterId: 'ch1',
+        resolved: false
+      };
+
+      const timeline1: Timeline = { events: [], causalChains: [], promises: [promise1], processedAt: 0 };
+      const timeline2: Timeline = { events: [], causalChains: [], promises: [promise2], processedAt: 0 };
+
+      const merged = mergeTimelines([timeline1, timeline2]);
+
       expect(merged.promises[0].resolved).toBe(true);
     });
 

@@ -12,6 +12,7 @@ interface SectionConfig {
 }
 
 const SECTION_CONFIG: SectionConfig[] = [
+  { key: 'conflicts', title: 'CONFLICT ALERTS', priority: 0, maxItems: 3, defaultBudget: 150 },
   { key: 'currentFocus', title: 'Current Focus', priority: 1, maxItems: 1, defaultBudget: 80 },
   { key: 'warnings', title: 'Warnings & Risks', priority: 2, maxItems: 4, defaultBudget: 120 },
   { key: 'activeGoals', title: 'Active Goals', priority: 3, maxItems: 4, defaultBudget: 140 },
@@ -136,6 +137,16 @@ export function serializeBedsideNote(
     const limit = maxItems[section.key] ?? section.maxItems;
 
     switch (section.key) {
+      case 'conflicts': {
+        if (!content.conflicts || content.conflicts.length === 0) break;
+        const conflictLines = content.conflicts
+          .slice(0, limit)
+          .map(c => `- ${c.previous} ↔ ${c.current} (${Math.round(c.confidence * 100)}%)`);
+        if (conflictLines.length > 0) {
+          sections.push(enforceListBudget(section.title, conflictLines, budget));
+        }
+        break;
+      }
       case 'currentFocus': {
         if (!content.currentFocus) break;
         const headingTokens = estimateTokens(`${section.title}:\n- `);
