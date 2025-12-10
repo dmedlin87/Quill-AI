@@ -92,6 +92,17 @@ describe('ToolRunner', () => {
       });
     });
 
+    it('skips reflection when project ID is missing', async () => {
+        const mocks = getMocks();
+        mocks.getProjectId.mockReturnValue(null);
+        const runner = new ToolRunner(mocks);
+        mockExecute.mockResolvedValueOnce({ success: true, message: 'done' });
+
+        const responses = await runner.processToolCalls([{ id: 'c1', name: 'update_bedside_note', args: {} }]);
+        // No reflection appended
+        expect(responses[0].response.result).toBe('done');
+    });
+
     it('emits review message when result mentions user review', async () => {
       const runner = new ToolRunner(getMocks());
       mockExecute.mockResolvedValueOnce({
@@ -137,6 +148,23 @@ describe('ToolRunner', () => {
       vi.stubGlobal('crypto', originalCrypto as Crypto);
     });
 
+    it('uses fallback ID generation when crypto is undefined', async () => {
+        // Need to remove crypto from global scope for this test
+        const originalCrypto = globalThis.crypto;
+        // @ts-ignore
+        delete globalThis.crypto;
+
+        const runner = new ToolRunner(getMocks());
+        mockExecute.mockResolvedValueOnce({ success: true, message: 'done' });
+
+        const responses = await runner.processToolCalls([{ name: 'test', args: {} }]);
+
+        expect(responses[0].id).toMatch(/^\d+-\d+\.\d+$/);
+
+        // Restore crypto
+        globalThis.crypto = originalCrypto;
+    });
+
     it('does not append reflection for non-significant tools', async () => {
       const runner = new ToolRunner(getMocks());
       mockExecute.mockResolvedValueOnce({
@@ -170,6 +198,17 @@ describe('ToolRunner', () => {
         result: { success: false, message: expect.stringContaining('Error executing update_manuscript'), error: 'boom' },
       });
     });
+
+    it('handles unknown non-Error objects during execution', async () => {
+        const runner = new ToolRunner(getMocks());
+        mockExecute.mockRejectedValueOnce('string error'); // Not an Error object
+
+        const responses = await runner.processToolCalls([
+            { id: 'call-unk', name: 'fail_tool', args: {} }
+        ]);
+
+        expect(responses[0].response.result).toContain('Unknown error executing tool');
+    });
   });
 
   describe('maybeSuggestBedsideNoteRefresh', () => {
@@ -190,6 +229,18 @@ describe('ToolRunner', () => {
       expect(mockOnMessage).toHaveBeenCalledWith(expect.objectContaining({
         text: expect.stringContaining('Bedside note may need an update'),
       }));
+    });
+
+    it('handles empty note text correctly', async () => {
+        const runner = new ToolRunner(getMocks());
+        (runner as any).significantActionSeen = true;
+        vi.mocked(getOrCreateBedsideNote).mockResolvedValueOnce({ ...baseNote, text: '' });
+
+        await runner.maybeSuggestBedsideNoteRefresh('new stuff');
+
+        expect(mockOnMessage).toHaveBeenCalledWith(expect.objectContaining({
+            text: expect.stringContaining('No bedside note text yet'),
+        }));
     });
 
     it('does not suggest when conversation is contained in note', async () => {

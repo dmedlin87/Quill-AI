@@ -7,15 +7,28 @@
 
 import { Chapter, Branch, InlineComment, Lore, ManuscriptIndex } from '@/types/schema';
 import { AnalysisResult, CharacterProfile, ChatMessage, HighlightRange } from '@/types';
-import { 
-  ManuscriptHUD, 
-  EntityGraph, 
-  Timeline, 
-  StyleFingerprint, 
+import {
+  ManuscriptHUD,
+  EntityGraph,
+  Timeline,
+  StyleFingerprint,
   AttentionHeatmap,
-  ManuscriptIntelligence 
+  ManuscriptIntelligence
 } from '@/types/intelligence';
 import { Persona } from '@/types/personas';
+import type { ProactiveSuggestion } from '../memory/proactive';
+import { SuggestionCategory } from '@/types/experienceSettings';
+export type { ProactiveSuggestion } from '../memory/proactive';
+
+export type SuggestionType =
+  | 'plot'
+  | 'character'
+  | 'pacing'
+  | 'style'
+  | 'continuity'
+  | 'lore_discovery'
+  | 'timeline_conflict'
+  | 'voice_inconsistency';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CORE STATE
@@ -142,6 +155,18 @@ export interface WatchedEntitySummary {
   priority?: 'high' | 'medium' | 'low';
 }
 
+export interface MemoryContextSnapshot {
+  longTermMemoryIds?: string[];
+  longTermMemoryPreview?: string[];
+}
+
+export interface ThinkingContextSnapshot {
+  compressedContext?: string;
+  longTermMemory?: string;
+  formattedEvents?: string;
+  events?: AppEvent[];
+}
+
 export type AppEvent =
   | AppEventBase & { type: 'SELECTION_CHANGED'; payload: { text: string; start: number; end: number } }
   | AppEventBase & { type: 'CURSOR_MOVED'; payload: { position: number; scene: string | null } }
@@ -157,6 +182,8 @@ export type AppEvent =
       };
     }
   | AppEventBase & { type: 'TEXT_CHANGED'; payload: { length: number; delta: number } }
+  | AppEventBase & { type: 'IDLE_STATUS_CHANGED'; payload: { idle: boolean } }
+  | AppEventBase & { type: 'DREAMING_STATE_CHANGED'; payload: { active: boolean } }
   | AppEventBase & {
       type: 'ANALYSIS_COMPLETED';
       payload: { section: string; status?: 'success' | 'error'; detail?: string };
@@ -173,7 +200,31 @@ export type AppEvent =
   | AppEventBase & { type: 'PANEL_SWITCHED'; payload: { panel: string } }
   | AppEventBase & { type: 'LORE_UPDATED'; payload: { changeType: 'character' | 'rule'; id?: string } }
   | AppEventBase & { type: 'DOCUMENT_SAVED'; payload: { chapterId: string } }
-  | AppEventBase & { type: 'ZEN_MODE_TOGGLED'; payload: { enabled: boolean } };
+  | AppEventBase & { type: 'ZEN_MODE_TOGGLED'; payload: { enabled: boolean } }
+  | AppEventBase & { type: 'SIGNIFICANT_EDIT_DETECTED'; payload: { delta: number; chapterId?: string } }
+  | AppEventBase & {
+      type: 'PROACTIVE_THINKING_STARTED';
+      payload: { trigger: string; pendingEvents?: AppEvent[]; contextPreview?: string };
+    }
+  | AppEventBase & {
+      type: 'PROACTIVE_THINKING_COMPLETED';
+      payload: {
+        suggestionsCount: number;
+        thinkingTime: number;
+        suggestions?: ProactiveSuggestion[];
+        rawThinking?: string;
+        memoryContext?: MemoryContextSnapshot;
+        contextUsed?: ThinkingContextSnapshot;
+      };
+    }
+  | AppEventBase & {
+      type: 'PROACTIVE_SUGGESTION_ACTION';
+      payload: {
+        suggestionId: string;
+        action: 'applied' | 'dismissed' | 'muted';
+        suggestionCategory: SuggestionCategory;
+      };
+    };
 
 export type EventHandler = (event: AppEvent) => void;
 

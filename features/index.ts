@@ -30,3 +30,6 @@ export * from './layout';
 
 // Settings (user preferences, critique intensity)
 export * from './settings';
+
+// Debug (developer observability tools)
+export * from './debug';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { AppBrainProvider, useAppBrain } from '@/features/core/context/AppBrainContext';
 
@@ -151,6 +151,10 @@ describe('AppBrainContext', () => {
     mockSelection = null;
     mockCursor = 0;
     mockProjectStore.activeChapterId = 'ch1';
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('throws when useAppBrain is used outside provider', () => {

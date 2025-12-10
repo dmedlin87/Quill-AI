@@ -74,3 +74,36 @@ export const AUTONOMY_PRESETS: Record<AutonomyMode, AutonomyPreset> = {
 export const DEFAULT_EXPERIENCE: ExperienceLevel = 'intermediate';
 
 export const DEFAULT_AUTONOMY: AutonomyMode = 'copilot';
+
+export type SuggestionCategory =
+  | 'plot'
+  | 'character'
+  | 'pacing'
+  | 'style'
+  | 'continuity'
+  | 'lore_discovery'
+  | 'timeline_conflict'
+  | 'voice_inconsistency'
+  | 'watched_entity'
+  | 'active_goal'
+  | 'reminder'
+  | 'other';
+
+export interface SuggestionWeights {
+  [key: string]: number; // key is SuggestionCategory
+}
+
+export const DEFAULT_SUGGESTION_WEIGHTS: SuggestionWeights = {
+  plot: 1.0,
+  character: 1.0,
+  pacing: 1.0,
+  style: 1.0,
+  continuity: 1.0,
+  lore_discovery: 1.0,
+  timeline_conflict: 1.0,
+  voice_inconsistency: 1.0,
+  watched_entity: 1.0,
+  active_goal: 1.0,
+  reminder: 1.0,
+  other: 1.0,
+};

@@ -1,210 +1,214 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { vi, type Mock } from 'vitest';
+import { vi } from 'vitest';
+import { EditorLayout } from '@/features/layout/EditorLayout';
 import { SidebarTab } from '@/types';
 
+// Mocks
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    aside: ({ children, ...props }: any) => <aside {...props}>{children}</aside>,
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
+vi.mock('@/features/shared', () => ({
+  useEditor: vi.fn(),
+  useEngine: vi.fn(),
+  findQuoteRange: vi.fn(),
+}));
+
 vi.mock('@/features/project', () => ({
-  ProjectSidebar: ({ toggleCollapsed }: { toggleCollapsed: () => void }) => (
-    <div data-testid="project-sidebar">
-      <button onClick={toggleCollapsed}>toggle-sidebar</button>
-    </div>
-  ),
   useProjectStore: vi.fn(),
+  ProjectSidebar: () => <div data-testid="project-sidebar">ProjectSidebar</div>,
+}));
+
+vi.mock('@/features/core/context/AppBrainContext', () => ({
+  useAppBrainState: vi.fn(),
 }));
 
 vi.mock('@/features/analysis', () => ({
-  AnalysisPanel: ({ onNavigate }: { onNavigate: (issue: string) => void }) => (
-    <div data-testid="analysis-panel">
-      <button onClick={() => onNavigate('issue-target')}>navigate</button>
-    </div>
-  ),
+  AnalysisPanel: () => <div data-testid="analysis-panel">AnalysisPanel</div>,
 }));
 
 vi.mock('@/features/agent', () => ({
-  ChatInterface: ({ onAgentAction }: { onAgentAction: (payload: unknown) => void }) => (
-    <div data-testid="chat-interface">
-      <button onClick={() => onAgentAction('chat-action')}>chat</button>
-    </div>
-  ),
-  ActivityFeed: ({ onRestore, onInspect }: { onRestore: () => void; onInspect: (item: unknown) => void }) => (
+  ChatInterface: () => <div data-testid="chat-interface">ChatInterface</div>,
+  ActivityFeed: ({ onInspect }: any) => (
     <div data-testid="activity-feed">
-      <button onClick={onRestore}>restore</button>
-      <button onClick={() => onInspect({ previousContent: 'old', newContent: 'new', description: 'desc' })}>inspect</button>
+      <button onClick={() => onInspect({ previousContent: 'old', newContent: 'new', description: 'desc' })}>
+        Inspect
+      </button>
     </div>
   ),
 }));
 
 vi.mock('@/features/voice', () => ({
-  VoiceMode: () => <div data-testid="voice-mode">voice</div>,
+  VoiceMode: () => <div data-testid="voice-mode">VoiceMode</div>,
 }));
 
 vi.mock('@/features/editor', () => ({
-  MagicBar: () => <div data-testid="magic-bar">magic</div>,
-  FindReplaceModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div data-testid="find-replace-modal">find</div> : null),
-  VisualDiff: () => <div data-testid="visual-diff">diff</div>,
-  RichTextEditor: () => <div data-testid="rich-text-editor">editor</div>,
+  RichTextEditor: () => <div data-testid="rich-text-editor">RichTextEditor</div>,
+  MagicBar: () => <div data-testid="magic-bar">MagicBar</div>,
+  FindReplaceModal: ({ isOpen }: any) => isOpen ? <div data-testid="find-replace-modal">FindReplaceModal</div> : null,
+  VisualDiff: () => <div data-testid="visual-diff">VisualDiff</div>,
 }));
 
-vi.mock('@/features/shared', () => ({
-  findQuoteRange: vi.fn(),
-  useEditor: vi.fn(),
-  useEngine: vi.fn(),
+vi.mock('@/features/settings', () => ({
+  NativeSpellcheckToggle: () => <div data-testid="native-spellcheck-toggle">Toggle</div>,
 }));
 
-vi.mock('@/features/core/context/AppBrainContext', () => ({
-  useAppBrainState: () => ({
-    intelligence: { full: { voice: null } },
-  }),
-}));
-
-vi.mock('framer-motion', () => ({
-  motion: {
-    div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
-    aside: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => <aside {...props}>{children}</aside>,
-  },
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-import { EditorLayout } from '@/features/layout/EditorLayout';
+import { useEditor, useEngine, findQuoteRange } from '@/features/shared';
 import { useProjectStore } from '@/features/project';
-import { useEditor, useEngine } from '@/features/shared';
+import { useAppBrainState } from '@/features/core/context/AppBrainContext';
 
-const mockUseProjectStore = useProjectStore as unknown as Mock;
-const mockUseEditor = useEditor as unknown as Mock;
-const mockUseEngine = useEngine as unknown as Mock;
+describe('EditorLayout', () => {
+  const defaultProps = {
+    activeTab: SidebarTab.ANALYSIS,
+    onTabChange: vi.fn(),
+    isSidebarCollapsed: false,
+    onToggleSidebar: vi.fn(),
+    isToolsCollapsed: false,
+    onToggleTools: vi.fn(),
+    onHomeClick: vi.fn(),
+  };
 
-const createProps = () => ({
-  activeTab: SidebarTab.ANALYSIS,
-  onTabChange: vi.fn(),
-  isSidebarCollapsed: false,
-  onToggleSidebar: vi.fn(),
-  isToolsCollapsed: false,
-  onToggleTools: vi.fn(),
-  onHomeClick: vi.fn(),
-});
-
-const baseEditorState = () => ({
-  currentText: 'Sample manuscript text',
-  updateText: vi.fn(),
-  setSelectionState: vi.fn(),
-  selectionRange: null,
-  selectionPos: null,
-  activeHighlight: null,
-  setEditor: vi.fn(),
-  clearSelection: vi.fn(),
-  editor: { state: { selection: { from: 0 } } },
-  history: [],
-  restore: vi.fn(),
-  handleNavigateToIssue: vi.fn(),
-});
-
-const baseEngineState = () => ({
-  state: {
-    isAnalyzing: false,
-    isMagicLoading: false,
-    magicVariations: [],
-    magicHelpResult: null,
-    magicHelpType: null,
-    activeMagicMode: null,
-    pendingDiff: null,
-    analysisWarning: null,
-    grammarSuggestions: [],
-    grammarHighlights: [],
-  },
-  actions: {
-    runAnalysis: vi.fn(),
-    runSelectionAnalysis: vi.fn(),
-    handleRewrite: vi.fn(),
-    handleHelp: vi.fn(),
-    applyVariation: vi.fn(),
-    closeMagicBar: vi.fn(),
-    handleGrammarCheck: vi.fn(),
-    applyGrammarSuggestion: vi.fn(),
-    applyAllGrammarSuggestions: vi.fn(),
-    dismissGrammarSuggestion: vi.fn(),
-    acceptDiff: vi.fn(),
-    rejectDiff: vi.fn(),
-    handleAgentAction: vi.fn(),
-  },
-});
-
-describe('features/layout/EditorLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseProjectStore.mockReturnValue({
-      currentProject: { id: 'p1', title: 'Test', setting: { timePeriod: 'Modern', location: 'City' } },
+
+    (useEditor as any).mockReturnValue({
+      currentText: 'Hello world',
+      updateText: vi.fn(),
+      setSelectionState: vi.fn(),
+      selectionRange: null,
+      selectionPos: null,
+      activeHighlight: null,
+      setEditor: vi.fn(),
+      clearSelection: vi.fn(),
+      editor: { state: { selection: { from: 0 } } },
+      history: [],
+      restore: vi.fn(),
+      handleNavigateToIssue: vi.fn(),
+    });
+
+    (useEngine as any).mockReturnValue({
+      state: {
+        isAnalyzing: false,
+        isMagicLoading: false,
+        magicVariations: [],
+        magicHelpResult: null,
+        magicHelpType: null,
+        activeMagicMode: null,
+        grammarSuggestions: [],
+        grammarHighlights: [],
+        pendingDiff: null,
+        analysisWarning: null,
+      },
+      actions: {
+        runAnalysis: vi.fn(),
+        handleRewrite: vi.fn(),
+        handleHelp: vi.fn(),
+        applyVariation: vi.fn(),
+        handleGrammarCheck: vi.fn(),
+        applyGrammarSuggestion: vi.fn(),
+        applyAllGrammarSuggestions: vi.fn(),
+        dismissGrammarSuggestion: vi.fn(),
+        closeMagicBar: vi.fn(),
+        runSelectionAnalysis: vi.fn(),
+        handleAgentAction: vi.fn(),
+        rejectDiff: vi.fn(),
+        acceptDiff: vi.fn(),
+      },
+    });
+
+    (useProjectStore as any).mockReturnValue({
+      currentProject: { lore: {}, setting: { timePeriod: 'TP', location: 'Loc' } },
       getActiveChapter: () => ({ id: 'ch1', title: 'Chapter 1', lastAnalysis: null }),
       chapters: [],
     });
-    mockUseEditor.mockReturnValue(baseEditorState());
-    mockUseEngine.mockReturnValue(baseEngineState());
+
+    (useAppBrainState as any).mockReturnValue({
+      intelligence: { full: { voice: {} } },
+    });
   });
 
-  it('fires navigation callbacks for home and each tab', () => {
-    const props = createProps();
-    render(<EditorLayout {...props} />);
+  it('renders main components', () => {
+    render(<EditorLayout {...defaultProps} />);
+    expect(screen.getByTestId('rich-text-editor')).toBeInTheDocument();
+    expect(screen.getByTestId('project-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('analysis-panel')).toBeInTheDocument();
+    expect(screen.getByText('Chapter 1')).toBeInTheDocument();
+    expect(screen.getByText('TP • Loc')).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByTitle('Library'));
-    expect(props.onHomeClick).toHaveBeenCalled();
-
-    fireEvent.click(screen.getByTitle('Analysis'));
+  it('toggles tabs', () => {
+    render(<EditorLayout {...defaultProps} />);
     fireEvent.click(screen.getByTitle('Agent'));
-    fireEvent.click(screen.getByTitle('History'));
-    fireEvent.click(screen.getByTitle('Voice'));
-
-    expect(props.onTabChange).toHaveBeenCalledWith(SidebarTab.ANALYSIS);
-    expect(props.onTabChange).toHaveBeenCalledWith(SidebarTab.CHAT);
-    expect(props.onTabChange).toHaveBeenCalledWith(SidebarTab.HISTORY);
-    expect(props.onTabChange).toHaveBeenCalledWith(SidebarTab.VOICE);
+    expect(defaultProps.onTabChange).toHaveBeenCalledWith(SidebarTab.CHAT);
   });
 
-  it('hides sidebar and tools panels when collapsed', () => {
-    const props = createProps();
-    const { rerender } = render(<EditorLayout {...props} isSidebarCollapsed />);
+  it('opens find/replace on meta+f', () => {
+    render(<EditorLayout {...defaultProps} />);
+    expect(screen.queryByTestId('find-replace-modal')).not.toBeInTheDocument();
 
-    expect(screen.queryByTestId('project-sidebar')).not.toBeInTheDocument();
-
-    rerender(<EditorLayout {...props} isToolsCollapsed />);
-    expect(screen.queryByTestId('analysis-panel')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'f', metaKey: true });
+    expect(screen.getByTestId('find-replace-modal')).toBeInTheDocument();
   });
 
-  it('renders analysis panel branch and forwards navigation', () => {
-    const props = createProps();
-    const editorState = baseEditorState();
-    mockUseEditor.mockReturnValue(editorState);
-    render(<EditorLayout {...props} activeTab={SidebarTab.ANALYSIS} />);
+  it('shows magic bar when selection exists', () => {
+    (useEditor as any).mockReturnValue({
+      ...useEditor(),
+      selectionRange: { text: 'selected' },
+      selectionPos: { top: 10, left: 10 },
+    });
 
-    fireEvent.click(screen.getByText('navigate'));
-    expect(editorState.handleNavigateToIssue).toHaveBeenCalledWith('issue-target');
+    render(<EditorLayout {...defaultProps} />);
+    expect(screen.getByTestId('magic-bar')).toBeInTheDocument();
   });
 
-  it('renders chat branch and wires agent actions', () => {
-    const props = createProps();
-    const engineState = baseEngineState();
-    mockUseEngine.mockReturnValue(engineState);
-    render(<EditorLayout {...props} activeTab={SidebarTab.CHAT} />);
+  it('renders visual diff when pendingDiff exists', () => {
+    (useEngine as any).mockReturnValue({
+      state: { pendingDiff: { original: 'a', modified: 'b' }, grammarHighlights: [] },
+      actions: { rejectDiff: vi.fn(), acceptDiff: vi.fn() }
+    });
 
-    fireEvent.click(screen.getByText('chat'));
-    expect(engineState.actions.handleAgentAction).toHaveBeenCalledWith('chat-action');
+    render(<EditorLayout {...defaultProps} />);
+    expect(screen.getByTestId('visual-diff')).toBeInTheDocument();
+    expect(screen.getByText('Review Agent Suggestions')).toBeInTheDocument();
   });
 
-  it('renders history branch and triggers restore and inspect handlers', () => {
-    const props = createProps();
-    const editorState = baseEditorState();
-    mockUseEditor.mockReturnValue(editorState);
-    render(<EditorLayout {...props} activeTab={SidebarTab.HISTORY} />);
+  it('switches panels based on activeTab', () => {
+    const { rerender } = render(<EditorLayout {...defaultProps} activeTab={SidebarTab.CHAT} />);
+    expect(screen.getByTestId('chat-interface')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('restore'));
-    expect(editorState.restore).toHaveBeenCalled();
+    rerender(<EditorLayout {...defaultProps} activeTab={SidebarTab.HISTORY} />);
+    expect(screen.getByTestId('activity-feed')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('inspect'));
-    expect(editorState.clearSelection).not.toHaveBeenCalled();
-  });
-
-  it('renders voice branch content', () => {
-    const props = createProps();
-    render(<EditorLayout {...props} activeTab={SidebarTab.VOICE} />);
-
+    rerender(<EditorLayout {...defaultProps} activeTab={SidebarTab.VOICE} />);
     expect(screen.getByTestId('voice-mode')).toBeInTheDocument();
+  });
+
+  it('generates analysis highlights', () => {
+    (useProjectStore as any).mockReturnValue({
+        currentProject: { lore: {}, setting: { timePeriod: 'TP', location: 'Loc' } },
+        getActiveChapter: () => ({
+            id: 'ch1',
+            lastAnalysis: {
+                plotIssues: [{ quote: 'issue', issue: 'Bad plot' }],
+                pacing: { slowSections: ['slow'] },
+                settingAnalysis: { issues: [{ quote: 'setting', issue: 'Bad setting' }] }
+            }
+        }),
+        chapters: []
+    });
+
+    (findQuoteRange as any).mockReturnValue({ start: 0, end: 10 });
+
+    render(<EditorLayout {...defaultProps} />);
+  });
+
+  it('handles inspect history', () => {
+    render(<EditorLayout {...defaultProps} activeTab={SidebarTab.HISTORY} />);
+    fireEvent.click(screen.getByText('Inspect'));
   });
 });

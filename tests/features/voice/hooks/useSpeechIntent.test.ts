@@ -4,34 +4,21 @@ import { useSpeechIntent } from '@/features/voice/hooks/useSpeechIntent';
 
 // Mock SpeechRecognition instances
 let mockInstance: any = null;
-const createMockRecognizer = () => ({
-  start: vi.fn(),
-  stop: vi.fn(),
-  abort: vi.fn(),
-  onresult: null as any,
-  onerror: null as any,
-  onend: null as any,
-  lang: '',
-  continuous: false,
-  interimResults: false,
-});
 
+// We need to capture the instance so we can trigger events on it
 class MockSpeechRecognition {
-  start: any;
-  stop: any;
-  abort: any;
-  onresult: any;
-  onerror: any;
-  onend: any;
+  start = vi.fn();
+  stop = vi.fn();
+  abort = vi.fn();
+  onresult: ((event: any) => void) | null = null;
+  onerror: ((event: any) => void) | null = null;
+  onend: (() => void) | null = null;
   lang = '';
   continuous = false;
   interimResults = false;
   
   constructor() {
-    mockInstance = createMockRecognizer();
-    this.start = mockInstance.start;
-    this.stop = mockInstance.stop;
-    this.abort = mockInstance.abort;
+    mockInstance = this;
   }
 }
 
@@ -48,70 +35,115 @@ describe('useSpeechIntent', () => {
 
   it('reports supported when SpeechRecognition exists', () => {
     const { result } = renderHook(() => useSpeechIntent());
-    
     expect(result.current.supported).toBe(true);
   });
 
   it('starts listening on start()', () => {
     const { result } = renderHook(() => useSpeechIntent());
-    
     act(() => {
       result.current.start();
     });
-    
     expect(result.current.isListening).toBe(true);
-    expect(mockInstance?.start).toHaveBeenCalled();
+    expect(mockInstance.start).toHaveBeenCalled();
   });
 
   it('stops listening on stop()', () => {
     const { result } = renderHook(() => useSpeechIntent());
-    
     act(() => {
       result.current.start();
     });
-    
     act(() => {
       result.current.stop();
     });
-    
     expect(result.current.isListening).toBe(false);
-    expect(mockInstance?.stop).toHaveBeenCalled();
+    expect(mockInstance.stop).toHaveBeenCalled();
   });
 
   it('sets error when speech not supported and start called', () => {
     delete (window as any).SpeechRecognition;
-    
     const { result } = renderHook(() => useSpeechIntent());
-    
     act(() => {
       result.current.start();
     });
-    
     expect(result.current.error).toContain('not supported');
     expect(result.current.isListening).toBe(false);
   });
 
+  it('aggregates transcript results', () => {
+    const onTranscript = vi.fn();
+    const { result } = renderHook(() => useSpeechIntent({ onTranscript }));
+    
+    act(() => {
+      result.current.start();
+    });
+
+    const mockEvent = {
+      resultIndex: 0,
+      results: [
+        [{ transcript: 'Hello ' }],
+        [{ transcript: 'world', isFinal: true }]
+      ]
+    };
+    (mockEvent.results[1] as any).isFinal = true; // Add properties not in array
+
+    act(() => {
+      if (mockInstance.onresult) {
+        mockInstance.onresult(mockEvent);
+      }
+    });
+
+    expect(result.current.transcript).toBe('Hello world');
+    expect(onTranscript).toHaveBeenCalledWith('Hello world', true);
+  });
+
+  it('handles errors during recognition', () => {
+    const { result } = renderHook(() => useSpeechIntent());
+    act(() => {
+      result.current.start();
+    });
+
+    act(() => {
+        if (mockInstance.onerror) {
+            mockInstance.onerror({ error: 'network' });
+        }
+    });
+
+    expect(result.current.error).toBe('network');
+    expect(result.current.isListening).toBe(false);
+  });
+
+  it('resets listening state on end', () => {
+    const { result } = renderHook(() => useSpeechIntent());
+    act(() => {
+      result.current.start();
+    });
+
+    act(() => {
+        if (mockInstance.onend) {
+            mockInstance.onend();
+        }
+    });
+
+    expect(result.current.isListening).toBe(false);
+  });
+
+  it('aborts on unmount', () => {
+    const { result, unmount } = renderHook(() => useSpeechIntent());
+    act(() => {
+      result.current.start();
+    });
+
+    unmount();
+    expect(mockInstance.abort).toHaveBeenCalled();
+  });
+
   it('returns mode from options', () => {
     const { result } = renderHook(() => useSpeechIntent({ mode: 'text' }));
-    
     expect(result.current.mode).toBe('text');
   });
 
   it('defaults mode to voice', () => {
     const { result } = renderHook(() => useSpeechIntent());
-    
     expect(result.current.mode).toBe('voice');
-  });
-
-  it('initially has empty transcript', () => {
-    const { result } = renderHook(() => useSpeechIntent());
-    
-    expect(result.current.transcript).toBe('');
-  });
-
-  it('initially has no error', () => {
-    const { result } = renderHook(() => useSpeechIntent());
-    
-    expect(result.current.error).toBeNull();
   });
 });

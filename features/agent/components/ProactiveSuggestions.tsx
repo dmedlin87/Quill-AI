@@ -5,15 +5,21 @@
  * with watched entities, related memories, or active goals.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProactiveSuggestion } from '@/services/memory/proactive';
+import { eventBus } from '@/services/appBrain';
+import { SuggestionCategory } from '@/types/experienceSettings';
 
 interface ProactiveSuggestionsProps {
   suggestions: ProactiveSuggestion[];
   onDismiss: (id: string) => void;
   onDismissAll: () => void;
   onAction?: (suggestion: ProactiveSuggestion) => void;
+  /** Called when user applies a suggestion (positive feedback) */
+  onApply?: (suggestion: ProactiveSuggestion) => void;
+  /** Whether the proactive thinker is currently active */
+  isThinking?: boolean;
 }
 
 const suggestionVariants = {
@@ -27,11 +33,27 @@ const suggestionVariants = {
   exit: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.15 } }
 };
 
+function getSuggestionCategory(suggestion: ProactiveSuggestion): SuggestionCategory {
+  if (suggestion.type === 'related_memory') {
+    const tags = suggestion.tags || [];
+    if (tags.includes('plot')) return 'plot';
+    if (tags.includes('character')) return 'character';
+    if (tags.includes('pacing')) return 'pacing';
+    if (tags.includes('style')) return 'style';
+    if (tags.includes('continuity')) return 'continuity';
+    return 'other';
+  }
+  return suggestion.type as SuggestionCategory;
+}
+
 const typeIcons: Record<ProactiveSuggestion['type'], string> = {
   watched_entity: '👁️',
   related_memory: '💭',
   active_goal: '🎯',
   reminder: '⚡',
+  lore_discovery: '📖',
+  timeline_conflict: '⏳',
+  voice_inconsistency: '🎙️',
 };
 
 const priorityColors: Record<ProactiveSuggestion['priority'], string> = {
@@ -51,21 +73,45 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
   onDismiss,
   onDismissAll,
   onAction,
+  onApply,
+  isThinking = false,
 }) => {
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
   if (suggestions.length === 0) return null;
+
+  const handleFeedback = (suggestion: ProactiveSuggestion, action: 'applied' | 'dismissed' | 'muted') => {
+    eventBus.emit({
+      type: 'PROACTIVE_SUGGESTION_ACTION',
+      payload: {
+        suggestionId: suggestion.id,
+        action,
+        suggestionCategory: getSuggestionCategory(suggestion),
+      },
+    });
+
+    if (action === 'applied' && onApply) {
+      onApply(suggestion);
+    } else if (action === 'dismissed' || action === 'muted') {
+      onDismiss(suggestion.id);
+    }
+    setActiveMenuId(null);
+  };
 
   return (
     <div className="p-3 space-y-2">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-indigo-600">✨</span>
+          <span className="text-indigo-600">{isThinking ? '🧠' : '✨'}</span>
           <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-            Suggestions
+            {isThinking ? 'Thinking...' : 'Suggestions'}
           </span>
-          <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
-            {suggestions.length}
-          </span>
+          {suggestions.length > 0 && (
+            <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
+              {suggestions.length}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -87,10 +133,41 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
             animate="visible"
             exit="exit"
             layout
-            className={`relative p-3 rounded-lg border ${priorityColors[suggestion.priority]} shadow-sm`}
+            className={`relative p-3 rounded-lg border ${priorityColors[suggestion.priority]} shadow-sm ${
+              suggestion.type === 'lore_discovery'
+                ? 'ring-1 ring-indigo-100'
+                : suggestion.type === 'timeline_conflict'
+                  ? 'ring-1 ring-rose-100'
+                  : ''
+            }`}
           >
-            {/* Priority Indicator */}
-            <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${priorityDots[suggestion.priority]}`} />
+            {/* Options Menu (Top Right) */}
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+               <div className={`w-2 h-2 rounded-full ${priorityDots[suggestion.priority]}`} />
+               <button
+                 onClick={() => setActiveMenuId(activeMenuId === suggestion.id ? null : suggestion.id)}
+                 className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-black/5"
+               >
+                 ⋮
+               </button>
+
+               {activeMenuId === suggestion.id && (
+                 <div className="absolute right-0 top-6 bg-white shadow-lg rounded-lg border border-gray-100 py-1 w-32 z-10 text-xs">
+                   <button
+                     className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700"
+                     onClick={() => handleFeedback(suggestion, 'dismissed')}
+                   >
+                     Dismiss
+                   </button>
+                   <button
+                     className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700"
+                     onClick={() => handleFeedback(suggestion, 'muted')}
+                   >
+                     Don't show this again
+                   </button>
+                 </div>
+               )}
+            </div>
             
             {/* Content */}
             <div className="pr-6">
@@ -100,12 +177,68 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                 <span className="text-sm font-medium text-gray-800 leading-tight">
                   {suggestion.title}
                 </span>
+                {suggestion.type === 'lore_discovery' && (
+                  <span className="ml-1 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                    Lore
+                  </span>
+                )}
+                {suggestion.type === 'timeline_conflict' && (
+                  <span className="ml-1 inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                    Timeline
+                  </span>
+                )}
               </div>
-              
+
               {/* Description */}
               <p className="text-xs text-gray-600 ml-6 leading-relaxed">
                 {suggestion.description}
               </p>
+
+              {suggestion.type === 'voice_inconsistency' && (
+                <div className="mt-2 ml-6 rounded-md border border-indigo-100 bg-indigo-50/60 px-2 py-1.5 text-[11px] text-indigo-900">
+                  <div className="font-semibold flex items-center gap-1 text-indigo-700">
+                    <span>🗣️</span>
+                    <span>Voice consistency</span>
+                  </div>
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    <span>
+                      Speaker: <strong>{(suggestion.metadata as any)?.speaker ?? 'Unknown'}</strong>
+                    </span>
+                    <span>
+                      Historic tone: <strong>{(suggestion.metadata as any)?.historicImpression ?? '—'}</strong>
+                    </span>
+                    <span>
+                      Current tone: <strong>{(suggestion.metadata as any)?.currentImpression ?? '—'}</strong>
+                    </span>
+                  </div>
+                  {Array.isArray((suggestion.metadata as any)?.diffs) && (
+                    <ul className="mt-1 list-disc list-inside space-y-0.5 text-indigo-800">
+                      {(suggestion.metadata as any).diffs.slice(0, 3).map((diff: any, index: number) => (
+                        <li key={`${suggestion.id}-diff-${index}`}>
+                          {diff.label}: {(diff.current as number).toFixed(2)} vs {(diff.historic as number).toFixed(2)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {suggestion.type === 'timeline_conflict' && (
+                <div className="mt-2 ml-6 rounded-md border border-rose-100 bg-rose-50/60 px-2 py-1.5 text-[11px] text-rose-800">
+                  <div className="font-semibold flex items-center gap-1 text-rose-700">
+                    <span>⏱️</span>
+                    <span>Continuity check</span>
+                  </div>
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    <span>
+                      Previous: <strong>{(suggestion.metadata as any)?.previousMarker ?? '—'}</strong>
+                    </span>
+                    <span>
+                      Current: <strong>{(suggestion.metadata as any)?.currentMarker ?? '—'}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
               
               {/* Tags */}
               {suggestion.tags.length > 0 && (
@@ -123,6 +256,16 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
               
               {/* Actions */}
               <div className="flex items-center gap-3 mt-2 ml-6">
+                {onApply && (
+                  <button
+                    type="button"
+                    onClick={() => handleFeedback(suggestion, 'applied')}
+                    className="text-[10px] text-emerald-600 hover:text-emerald-800 font-medium transition-colors"
+                    aria-label={`Apply suggestion: ${suggestion.title}`}
+                  >
+                    {suggestion.type === 'lore_discovery' ? 'Create entry' : '✓ Apply'}
+                  </button>
+                )}
                 {onAction && suggestion.suggestedAction && (
                   <button
                     type="button"
@@ -130,12 +273,12 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                     className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
                     aria-label={`Take action on suggestion: ${suggestion.title}`}
                   >
-                    Take action →
+                    {suggestion.type === 'voice_inconsistency' ? 'Rephrase' : 'Details →'}
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => onDismiss(suggestion.id)}
+                  onClick={() => handleFeedback(suggestion, 'dismissed')}
                   className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
                   aria-label={`Dismiss suggestion: ${suggestion.title}`}
                 >

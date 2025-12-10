@@ -13,6 +13,7 @@ const rewriteTextMock = vi.fn();
 const getContextualHelpMock = vi.fn();
 const fetchGrammarSuggestionsMock = vi.fn();
 const trackUsageMock = vi.fn();
+const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 vi.mock('@/services/gemini/agent', () => ({
   rewriteText: (...args: any[]) => rewriteTextMock(...args),
@@ -62,6 +63,10 @@ describe('useMagicEditor', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterAll(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   const renderHarness = (selectionRange: SelectionRange | null = baseSelection) => {
@@ -144,6 +149,56 @@ describe('useMagicEditor', () => {
     expect(commitMock).not.toHaveBeenCalled();
   });
 
+  it('handles rewrite failure gracefully', async () => {
+    rewriteTextMock.mockRejectedValue(new Error('API Error'));
+    const ref = renderHarness();
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    await act(async () => {
+      await ref.current?.actions.handleRewrite('Rewrite');
+    });
+
+    expect(ref.current?.state.magicError).toBe('API Error');
+    expect(ref.current?.state.isMagicLoading).toBe(false);
+  });
+
+  it('handles help failure gracefully', async () => {
+    getContextualHelpMock.mockRejectedValue(new Error('Help API Error'));
+    const ref = renderHarness();
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    await act(async () => {
+      await ref.current?.actions.handleHelp('Explain');
+    });
+
+    expect(ref.current?.state.magicError).toBe('Help API Error');
+    expect(ref.current?.state.isMagicLoading).toBe(false);
+  });
+
+  it('aborts pending help operation when starting new one', async () => {
+    // Mock slow help response
+    getContextualHelpMock.mockImplementation(async (text, type, signal) => {
+       if (signal?.aborted) return { result: '', usage: { tokens: 0 }};
+       await new Promise(resolve => setTimeout(resolve, 100));
+       if (signal?.aborted) return { result: '', usage: { tokens: 0 }};
+       return { result: 'Help', usage: { tokens: 1 }};
+    });
+
+    const ref = renderHarness();
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    await act(async () => {
+      ref.current?.actions.handleHelp('Explain');
+    });
+
+    // Immediate second call should abort first
+    await act(async () => {
+      ref.current?.actions.handleHelp('Thesaurus');
+    });
+
+    expect(getContextualHelpMock).toHaveBeenCalledTimes(2);
+  });
+
   it('applies contextual replacements after help requests', async () => {
     getContextualHelpMock.mockResolvedValue({ result: 'Answer', usage: { tokens: 2 } });
     const ref = renderHarness();
@@ -163,6 +218,19 @@ describe('useMagicEditor', () => {
 
     expect(getContextualHelpMock).toHaveBeenCalled();
     expect(commitMock).toHaveBeenCalledWith('Replacement text', 'Magic Edit: Context Replacement', 'User');
+  });
+
+  it('tracks usage for help requests', async () => {
+    getContextualHelpMock.mockResolvedValue({ result: 'Info', usage: { tokens: 4 } });
+    const ref = renderHarness();
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    await act(async () => {
+      await ref.current?.actions.handleHelp('Explain');
+    });
+
+    expect(trackUsageMock).toHaveBeenCalledWith({ tokens: 4 }, expect.anything());
   });
 
   describe('grammar check functionality', () => {
@@ -272,6 +340,17 @@ describe('useMagicEditor', () => {
 
       expect(commitMock).toHaveBeenCalledWith('Fixed text', 'Applied grammar fixes', 'User');
       expect(clearSelectionMock).toHaveBeenCalled();
+    });
+
+    it('does nothing when applyAll is called with no suggestions', async () => {
+      const ref = renderHarness();
+      await waitFor(() => expect(ref.current).not.toBeNull());
+
+      await act(async () => {
+        ref.current?.actions.applyAllGrammarSuggestions();
+      });
+
+      expect(commitMock).not.toHaveBeenCalled();
     });
 
     it('dismisses a grammar suggestion without applying', async () => {
@@ -402,7 +481,7 @@ describe('useMagicEditor', () => {
       expect(commitMock).not.toHaveBeenCalled();
     });
 
-    it('clears selection when applyAll detects stale text', async () => {
+    it('clears selection and state when applyAll detects stale text', async () => {
       fetchGrammarSuggestionsMock.mockResolvedValue({
         suggestions: [
           {
@@ -433,7 +512,9 @@ describe('useMagicEditor', () => {
         await ref.current?.actions.applyAllGrammarSuggestions();
       });
 
-      expect(ref.current?.state.magicError).toBe('Text has changed since grammar check. Please re-run.');
+      expect(ref.current?.state.magicError).toBeNull();
+      expect(ref.current?.state.grammarSuggestions).toHaveLength(0);
+      expect(ref.current?.state.grammarHighlights).toHaveLength(0);
       expect(clearSelectionMock).toHaveBeenCalled();
     });
 
@@ -450,12 +531,6 @@ describe('useMagicEditor', () => {
       expect(ref.current?.actions).toHaveProperty('handleRewrite');
     });
 
-      await act(async () => {
-        await ref.current?.actions.handleGrammarCheck();
-      });
-
-      expect(ref.current?.state.grammarSuggestions).toHaveLength(0);
-      expect(ref.current?.state.grammarHighlights).toHaveLength(0);
     });
 
     it('handles grammar check error gracefully', async () => {
@@ -476,14 +551,46 @@ describe('useMagicEditor', () => {
       expect(ref.current?.state.isMagicLoading).toBe(false);
     });
 
-    it('ignores errors when grammar request is aborted', async () => {
-      let rejectPromise: ((value?: unknown) => void) | null = null;
-      fetchGrammarSuggestionsMock.mockImplementation(
-        () =>
-          new Promise((_, reject) => {
-            rejectPromise = reject;
-          }),
-      );
+    it('aborts an in-flight grammar check when a new one starts', async () => {
+      const signals: AbortSignal[] = [];
+      fetchGrammarSuggestionsMock.mockImplementation((_, signal: AbortSignal) => {
+        signals.push(signal);
+        return new Promise(resolve => {
+          signal.addEventListener('abort', () =>
+            resolve({ suggestions: [], usage: { tokens: 0 } }),
+            { once: true },
+          );
+        });
+      });
+
+      const ref = renderHarness();
+      await waitFor(() => expect(ref.current).not.toBeNull());
+
+      await act(async () => {
+        ref.current?.actions.handleGrammarCheck();
+      });
+
+      await act(async () => {
+        ref.current?.actions.handleGrammarCheck();
+      });
+
+      expect(signals[0]?.aborted).toBe(true);
+      expect(signals[1]?.aborted).toBe(false);
+    });
+
+    it('derives originalText when grammar suggestion omits it', async () => {
+      fetchGrammarSuggestionsMock.mockResolvedValue({
+        suggestions: [
+          {
+            id: 'g1',
+            start: 1,
+            end: 3,
+            message: 'Check text',
+            replacement: 'ZZ',
+            severity: 'style',
+          },
+        ],
+      });
 
       const ref = renderHarness();
       await waitFor(() => expect(ref.current).not.toBeNull());
@@ -492,13 +599,31 @@ describe('useMagicEditor', () => {
         await ref.current?.actions.handleGrammarCheck();
       });
 
-      // Abort the in-flight request
-      act(() => {
-        ref.current?.actions.closeMagicBar();
+      const suggestion = ref.current?.state.grammarSuggestions[0];
+      expect(suggestion?.originalText).toBe('ra');
+      expect(suggestion?.start).toBe(1);
+      expect(suggestion?.end).toBe(3);
+    });
+
+    it('ignores errors when grammar request is aborted', async () => {
+      fetchGrammarSuggestionsMock.mockImplementation((_, signal: AbortSignal) => {
+        return new Promise((_, reject) => {
+          const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+          signal.addEventListener('abort', onAbort, { once: true });
+        });
       });
 
+      const ref = renderHarness();
+      await waitFor(() => expect(ref.current).not.toBeNull());
+
       await act(async () => {
-        rejectPromise?.(new DOMException('Aborted', 'AbortError'));
+        // Do not await this promise; we'll abort it below.
+        ref.current?.actions.handleGrammarCheck();
+      });
+
+      // Abort the in-flight request
+      await act(async () => {
+        ref.current?.actions.closeMagicBar();
       });
 
       expect(ref.current?.state.magicError).toBeNull();

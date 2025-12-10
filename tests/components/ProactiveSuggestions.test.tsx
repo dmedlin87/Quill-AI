@@ -236,13 +236,13 @@ describe('ProactiveSuggestions', () => {
   });
 
   describe('Actions', () => {
-    it('renders Take action button when onAction and suggestedAction are provided', () => {
+    it('renders Details → button when onAction and suggestedAction are provided', () => {
       render(<ProactiveSuggestions {...defaultProps} />);
 
-      expect(screen.getByText('Take action →')).toBeInTheDocument();
+      expect(screen.getByText('Details →')).toBeInTheDocument();
     });
 
-    it('does not render Take action when suggestedAction is undefined', () => {
+    it('does not render Details → when suggestedAction is undefined', () => {
       render(
         <ProactiveSuggestions
           {...defaultProps}
@@ -250,10 +250,10 @@ describe('ProactiveSuggestions', () => {
         />
       );
 
-      expect(screen.queryByText('Take action →')).not.toBeInTheDocument();
+      expect(screen.queryByText('Details →')).not.toBeInTheDocument();
     });
 
-    it('does not render Take action when onAction is undefined', () => {
+    it('does not render Details → when onAction is undefined', () => {
       render(
         <ProactiveSuggestions
           {...defaultProps}
@@ -261,10 +261,10 @@ describe('ProactiveSuggestions', () => {
         />
       );
 
-      expect(screen.queryByText('Take action →')).not.toBeInTheDocument();
+      expect(screen.queryByText('Details →')).not.toBeInTheDocument();
     });
 
-    it('calls onAction with suggestion when Take action is clicked', () => {
+    it('calls onAction with suggestion when Details → is clicked', () => {
       const suggestion = createSuggestion();
       const onAction = vi.fn();
       render(
@@ -275,7 +275,7 @@ describe('ProactiveSuggestions', () => {
         />
       );
 
-      fireEvent.click(screen.getByText('Take action →'));
+      fireEvent.click(screen.getByText('Details →'));
 
       expect(onAction).toHaveBeenCalledWith(suggestion);
     });

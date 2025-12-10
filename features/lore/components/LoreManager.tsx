@@ -272,9 +272,27 @@ const CharacterCard: React.FC<CharacterCardProps> = ({ character, onEdit, onInte
 
 interface LoreManagerProps {
   onInterviewCharacter?: (character: CharacterProfile) => void;
+  draftCharacter?: CharacterProfile | null;
+  onDraftConsumed?: () => void;
 }
 
-export const LoreManager: React.FC<LoreManagerProps> = ({ onInterviewCharacter }) => {
+const buildCharacterDraft = (draft?: CharacterProfile | null): CharacterProfile => ({
+  name: draft?.name ?? '',
+  bio: draft?.bio ?? '',
+  arc: draft?.arc ?? '',
+  voiceTraits: draft?.voiceTraits ?? '',
+  arcStages: draft?.arcStages ?? [],
+  relationships: draft?.relationships ?? [],
+  plotThreads: draft?.plotThreads ?? [],
+  inconsistencies: draft?.inconsistencies ?? [],
+  developmentSuggestion: draft?.developmentSuggestion ?? '',
+});
+
+export const LoreManager: React.FC<LoreManagerProps> = ({
+  onInterviewCharacter,
+  draftCharacter,
+  onDraftConsumed,
+}) => {
   const { currentProject, updateProjectLore } = useProjectStore();
   const [activeTab, setActiveTab] = useState<'characters' | 'world'>('characters');
   const [editingCharacter, setEditingCharacter] = useState<CharacterProfile | null>(null);
@@ -290,6 +308,13 @@ export const LoreManager: React.FC<LoreManagerProps> = ({ onInterviewCharacter }
   }, [currentProject?.lore]);
 
   const characters = currentProject?.lore?.characters || [];
+
+  useEffect(() => {
+    if (!draftCharacter) return;
+    setIsCreatingNew(true);
+    setEditingCharacter(buildCharacterDraft(draftCharacter));
+    onDraftConsumed?.();
+  }, [draftCharacter, onDraftConsumed]);
 
   const saveLore = (updatedCharacters?: CharacterProfile[], updatedRules?: string[]) => {
     if (!currentProject) return;

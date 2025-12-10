@@ -29,6 +29,7 @@ import {
   createContextBuilder,
   createEmptyAppBrainState,
 } from '@/services/appBrain';
+import { feedbackTracker } from '@/services/appBrain/feedbackTracker';
 import { MainView, SidebarTab } from '@/types';
 import {
   NavigateToTextCommand,
@@ -107,6 +108,11 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const prevSelectionRef = useRef(editor.selectionRange);
   const prevCursorRef = useRef(editor.cursorPosition);
   const prevChapterRef = useRef(projectStore.activeChapterId);
+
+  useEffect(() => {
+    feedbackTracker.start();
+    return () => feedbackTracker.stop();
+  }, []);
 
   // Emit events on state changes
   useEffect(() => {

@@ -380,6 +380,21 @@ describe('IntelligenceWorkerPool', () => {
       expect(stats.busyWorkers).toBe(1);
       expect(stats.idleWorkers).toBe(1);
     });
+
+    it('calculates average processing time', async () => {
+      const pool = new IntelligenceWorkerPool(1);
+      await pool.initialize();
+
+      const callback = vi.fn();
+      pool.submitJob({ type: 'PROCESS_FULL', chapterId: 'ch-1', text: 'test', priority: 'normal' }, callback);
+
+      // Wait for completion
+      await new Promise((r) => setTimeout(r, 50));
+
+      const stats = pool.getStats();
+      expect(stats.totalJobsProcessed).toBe(1);
+      expect(stats.avgProcessingTime).toBeGreaterThan(0);
+    });
   });
 
   describe('terminate', () => {
@@ -567,6 +582,35 @@ describe('IntelligenceWorkerPool', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it('handles worker error when callback is missing (job exists but callback deleted)', () => {
+      const pool = new IntelligenceWorkerPool(1);
+      const job: WorkerJob = {
+        id: 'job-missing-cb',
+        type: 'PROCESS_FULL',
+        chapterId: 'ch',
+        text: 'text',
+        priority: 'normal',
+        addedAt: Date.now(),
+      };
+
+      // No callback registered for this job ID
+
+      const worker = {
+        id: 'worker_1',
+        currentJob: job,
+        busy: true,
+        completedJobs: 0,
+        totalProcessingTime: 0,
+        worker: { postMessage: vi.fn(), terminate: vi.fn() },
+      } as any;
+
+      // Should not throw
+      pool['handleWorkerError'](worker, { message: 'fail' } as ErrorEvent);
+
+      expect(worker.busy).toBe(false);
+      expect(worker.currentJob).toBeNull();
     });
 
     it('ignores worker errors when no job is active', () => {

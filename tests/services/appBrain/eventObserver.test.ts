@@ -6,6 +6,11 @@ vi.mock('@/services/memory', () => ({
   evolveBedsideNote: vi.fn(),
 }));
 
+vi.mock('@/services/appBrain/dreamingService', () => ({
+  startDreamingService: vi.fn(),
+  stopDreamingService: vi.fn(),
+}));
+
 describe('AppBrain event observer', () => {
   let stopObserver: (() => void) | null = null;
 

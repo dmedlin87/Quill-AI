@@ -106,6 +106,109 @@ describe('FindReplaceModal', () => {
     );
   });
 
+  it('toggles case sensitivity', () => {
+    const { editor } = createMockEditor();
+
+    render(
+      <FindReplaceModal
+        isOpen
+        onClose={vi.fn()}
+        currentText="Hero and hero"
+        onTextChange={vi.fn()}
+        editor={editor}
+      />
+    );
+
+    const input = screen.getByPlaceholderText('Find...');
+    fireEvent.change(input, { target: { value: 'Hero' } });
+
+    // Initially not case sensitive, should find 2 matches
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+
+    // Toggle case sensitivity
+    fireEvent.click(screen.getByTitle('Case Sensitive'));
+
+    // Should find 1 match
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+  });
+
+  it('handles regex errors gracefully', () => {
+    const { editor } = createMockEditor();
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <FindReplaceModal
+        isOpen
+        onClose={vi.fn()}
+        currentText="Some text"
+        onTextChange={vi.fn()}
+        editor={editor}
+      />
+    );
+
+    const input = screen.getByPlaceholderText('Find...');
+    // This is hard to trigger with the current implementation because it escapes special characters
+    // But let's check if the escaping works as expected for regex chars
+    fireEvent.change(input, { target: { value: '[(' } });
+
+    // Should interpret as literal characters, not regex, so valid search for '[('
+    // No console error should occur due to escaping
+    expect(spy).not.toHaveBeenCalled();
+
+    spy.mockRestore();
+  });
+
+  it('handles "Enter" key for next match and "Shift+Enter" for previous match', () => {
+    const { editor } = createMockEditor();
+
+    render(
+      <FindReplaceModal
+        isOpen
+        onClose={vi.fn()}
+        currentText="test test test"
+        onTextChange={vi.fn()}
+        editor={editor}
+      />
+    );
+
+    const input = screen.getByPlaceholderText('Find...');
+    fireEvent.change(input, { target: { value: 'test' } });
+
+    // Enter -> Next
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByText('2/3')).toBeInTheDocument(); // Initially 1/3 (index 0), next -> index 1 (2/3)
+
+    // Shift+Enter -> Prev
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+    expect(screen.getByText('1/3')).toBeInTheDocument(); // Back to 1/3 (index 0)
+
+    // Shift+Enter again -> Wrap to last
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+    expect(screen.getByText('3/3')).toBeInTheDocument(); // Index 2
+  });
+
+  it('handles "Enter" in replace input to trigger replace', () => {
+    const { editor, chainApi } = createMockEditor();
+
+    render(
+      <FindReplaceModal
+        isOpen
+        onClose={vi.fn()}
+        currentText="test content"
+        onTextChange={vi.fn()}
+        editor={editor}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Find...'), { target: { value: 'test' } });
+    const replaceInput = screen.getByPlaceholderText('Replace...');
+    fireEvent.change(replaceInput, { target: { value: 'fixed' } });
+
+    fireEvent.keyDown(replaceInput, { key: 'Enter' });
+
+    expect(chainApi.insertContent).toHaveBeenCalledWith('fixed');
+  });
+
   it('closes on Escape key', () => {
     const onClose = vi.fn();
     const { editor } = createMockEditor();
@@ -124,5 +227,47 @@ describe('FindReplaceModal', () => {
     fireEvent.keyDown(input, { key: 'Escape' });
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('does nothing when next/prev/replace called with no matches', () => {
+     const { editor, chainApi } = createMockEditor();
+
+    render(
+      <FindReplaceModal
+        isOpen
+        onClose={vi.fn()}
+        currentText="Some text"
+        onTextChange={vi.fn()}
+        editor={editor}
+      />
+    );
+
+    // Find something that doesn't exist
+    fireEvent.change(screen.getByPlaceholderText('Find...'), { target: { value: 'nonexistent' } });
+
+    fireEvent.click(screen.getByTitle('Next Match (Enter)')); // Next
+    fireEvent.click(screen.getByTitle('Previous Match (Shift+Enter)')); // Prev
+    fireEvent.click(screen.getByText('Replace')); // Replace
+
+    expect(editor.commands.setTextSelection).not.toHaveBeenCalled();
+    expect(chainApi.insertContent).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when Replace All called with empty find term', () => {
+     const { editor } = createMockEditor();
+
+    render(
+      <FindReplaceModal
+        isOpen
+        onClose={vi.fn()}
+        currentText="Some text"
+        onTextChange={vi.fn()}
+        editor={editor}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Replace All'));
+
+    expect(editor.commands.setContent).not.toHaveBeenCalled();
   });
 });

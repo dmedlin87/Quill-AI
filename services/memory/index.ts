@@ -5,6 +5,7 @@
 
 import { db } from '../db';
 import { BEDSIDE_NOTE_TAG } from './types';
+import { evolveBedsideNote, getOrCreateBedsideNote } from './chains';
 import type {
   MemoryNote,
   AgentGoal,
@@ -16,12 +17,14 @@ import type {
 export * from './memoryService';
 export * from './memoryQueries';
 export * from './memoryScoring';
+export * from './voiceProfiles';
 
 // Re-export types for convenience
 export * from './types';
 export * from './bedsideNoteMutations';
 export * from './bedsideHistorySearch';
 export * from './bedsideEmbeddings';
+export * from './dreaming';
 
 // Lightweight collection helper so Dexie-like mocks (arrays or { data: [] }) work
 // in tests without requiring full index support.
@@ -123,10 +126,9 @@ async function syncGoalLifecycleUpdate(
   projectId: string,
   planText: string
 ): Promise<void> {
-  const chains = await import('./chains');
   const [goals] = await Promise.all([
     getGoals(projectId),
-    chains.getOrCreateBedsideNote(projectId),
+    getOrCreateBedsideNote(projectId),
   ]);
 
   const activeCount = goals.filter(goal => goal.status === 'active').length;
@@ -136,7 +138,7 @@ async function syncGoalLifecycleUpdate(
       ? `${planText} Active goals: ${activeCount}/${totalCount}.`
       : `${planText} No remaining goals.`;
 
-  await chains.evolveBedsideNote(projectId, annotatedPlanText, {
+  await evolveBedsideNote(projectId, annotatedPlanText, {
     changeReason: 'goal_lifecycle',
   });
 }

@@ -43,6 +43,7 @@ import { VoiceFingerprint } from '@/types/intelligence';
 import { PersonaSelector } from './PersonaSelector';
 
 import { CritiqueIntensitySelector, ExperienceSelector, useSettingsStore } from '@/features/settings';
+import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
 
 
 
@@ -122,6 +123,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [currentPersona, setCurrentPersona] = useState<Persona>(initialPersona || DEFAULT_PERSONAS[0]);
 
   const [isDeepMode, setIsDeepMode] = useState(false);
+  const [showRelevanceSettings, setShowRelevanceSettings] = useState(false);
 
   const chatRef = useRef<QuillAgent | null>(null);
 
@@ -482,12 +484,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <ExperienceSelector compact />
             <div className="w-px h-4 bg-gray-300" />
             <CritiqueIntensitySelector compact />
+            <button
+              onClick={() => setShowRelevanceSettings(!showRelevanceSettings)}
+              className={`p-1 rounded hover:bg-gray-200 transition-colors ${showRelevanceSettings ? 'bg-gray-200 text-indigo-600' : 'text-gray-400'}`}
+              title="Configure Proactive Suggestions"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M3.5 2A1.5 1.5 0 002 3.5V5c0 1.149.266 2.233.737 3.233a1.5 1.5 0 00-2.487 1.288v1.378a3 3 0 00.998 2.228 1.5 1.5 0 001.754 2.373A3 3 0 005.5 18a4.5 4.5 0 008.835.417 1.5 1.5 0 001.852-2.31 3 3 0 00.912-2.128v-1.378a1.5 1.5 0 00-2.438-1.334A8.963 8.963 0 0018 5V3.5A1.5 1.5 0 0016.5 2h-13zM6 5a2 2 0 114 0 2 2 0 01-4 0zm1.5 9a1.5 1.5 0 103 0 1.5 1.5 0 00-3 0zm5.5-5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" clipRule="evenodd" />
+              </svg>
+            </button>
             <div className="flex gap-2 text-xs ml-1">
               {lore && <span title="Lore Bible Active" className="text-indigo-600 font-bold">📖</span>}
               {analysis && <span title="Deep Analysis Context Active" className="text-purple-600 font-bold">🧠</span>}
             </div>
           </div>
         </div>
+
+        {/* Settings Panel */}
+        <AnimatePresence>
+          {showRelevanceSettings && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden bg-white border border-gray-200 rounded-lg shadow-inner"
+            >
+              <RelevanceTuning />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Context Row */}
         <div className="flex items-center justify-between text-xs text-gray-500">
            <div className="flex items-center gap-2">

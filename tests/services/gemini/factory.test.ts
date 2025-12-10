@@ -72,6 +72,10 @@ vi.mock('@/services/gemini/serializers', () => {
   };
 });
 
+vi.mock('@/types/personas', () => ({
+    buildPersonaInstruction: (base: string, persona: unknown) => `${base}|persona:${(persona as any).name}`
+}));
+
 vi.mock('@/services/gemini/critiquePrompts', () => ({
   getIntensityModifier: vi.fn(() => 'intensity-mod'),
 }));
@@ -118,9 +122,25 @@ describe('createAgentSession', () => {
     expect(params.model).toBe('agent-model');
     expect(params.config.tools[0].functionDeclarations).toEqual([{ name: 'all-tool' }]);
     expect(params.history).toEqual(history);
-    expect(String(params.config.systemInstruction)).toContain(
-      'You are Quill AI Agent, an advanced AI editor embedded in a text editor.',
-    );
+    const instruction = String(params.config.systemInstruction);
+    expect(instruction).toContain('You are Quill AI Agent');
+    expect(instruction).toContain('|intensity-mod');
+  });
+
+  it('applies interview instructions when interviewTarget is present', async () => {
+      const interviewTarget = { name: 'Bob' };
+      await createAgentSession({ interviewTarget: interviewTarget as any });
+
+      const params = mockChatCreate.mock.calls[0][0];
+      expect(String(params.config.systemInstruction)).toContain('|interview:{"name":"Bob"}');
+  });
+
+  it('applies persona instructions when persona is present', async () => {
+      const persona = { name: 'Alice' };
+      await createAgentSession({ persona: persona as any });
+
+      const params = mockChatCreate.mock.calls[0][0];
+      expect(String(params.config.systemInstruction)).toContain('|persona:Alice');
   });
 
   it('uses voice-safe toolset and model for voice mode', async () => {

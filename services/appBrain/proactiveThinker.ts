@@ -14,8 +14,16 @@ import { eventBus } from './eventBus';
 import type { AppEvent, AppBrainState } from './types';
 import { buildCompressedContext } from './contextBuilder';
 import { formatConflictsForPrompt, getHighPriorityConflicts } from './intelligenceMemoryBridge';
-import { evolveBedsideNote } from '../memory';
+import { evolveBedsideNote, getVoiceProfileForCharacter, upsertVoiceProfile } from '../memory';
+import { extractFacts } from '../memory/factExtractor';
+import { filterNovelLoreEntities } from '../memory/relevance';
 import { getImportantReminders, type ProactiveSuggestion } from '../memory/proactive';
+import { searchBedsideHistory, type BedsideHistoryMatch } from '../memory/bedsideHistorySearch';
+import { extractTemporalMarkers, type TemporalMarker } from '../intelligence/timelineTracker';
+import { generateVoiceProfile } from '../intelligence/voiceProfiler';
+import type { DialogueLine, VoiceMetrics } from '../../types/intelligence';
+import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
+import { SuggestionCategory, SuggestionWeights } from '@/types/experienceSettings';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -60,6 +68,7 @@ export interface ThinkerState {
   editDeltaAccumulator: number;
   lastEditEvolveAt: number;
   lastBedsideEvolveAt: number;
+  lastTimelineCheckAt: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,12 +77,14 @@ export interface ThinkerState {
 
 const SIGNIFICANT_EDIT_THRESHOLD = 500;
 const SIGNIFICANT_EDIT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const TIMELINE_CONTEXT_WINDOW = 2000;
+const TIMELINE_CHECK_COOLDOWN_MS = 30_000;
 
 const DEFAULT_CONFIG: ThinkerConfig = {
   debounceMs: 10000, // 10 seconds between thinks
   maxBatchSize: 20,
   minEventsToThink: 3,
-  urgentEventTypes: ['ANALYSIS_COMPLETED', 'INTELLIGENCE_UPDATED'],
+  urgentEventTypes: ['ANALYSIS_COMPLETED', 'INTELLIGENCE_UPDATED', 'SIGNIFICANT_EDIT_DETECTED'],
   enabled: true,
   allowBedsideEvolve: true,
   bedsideCooldownMs: 60_000,
@@ -87,6 +98,8 @@ const PROACTIVE_THINKING_PROMPT = `You are a proactive writing assistant analyzi
 
 CURRENT CONTEXT:
 {{CONTEXT}}
+
+{{LONG_TERM_MEMORY}}
 
 RECENT ACTIVITY:
 {{EVENTS}}
@@ -156,6 +169,7 @@ export class ProactiveThinker {
       editDeltaAccumulator: 0,
       lastEditEvolveAt: 0,
       lastBedsideEvolveAt: 0,
+      lastTimelineCheckAt: 0,
     };
   }
 
@@ -228,6 +242,8 @@ export class ProactiveThinker {
   private handleEvent(event: AppEvent): void {
     this.maybeUpdateBedsideNotes(event);
     this.enqueueEvent(event);
+    void this.detectConflicts(event);
+    void this.detectVoiceConsistency(event);
     this.scheduleThinking(this.isUrgentEvent(event));
   }
 
@@ -307,6 +323,230 @@ export class ProactiveThinker {
     });
   }
 
+  private async detectConflicts(event: AppEvent): Promise<void> {
+    if (event.type !== 'SIGNIFICANT_EDIT_DETECTED' || !this.getState) return;
+
+    const now = Date.now();
+    if (now - this.state.lastTimelineCheckAt < TIMELINE_CHECK_COOLDOWN_MS) return;
+
+    const state = this.getState();
+    const timeline = state.intelligence.timeline;
+    const activeChapterId = state.manuscript.activeChapterId;
+
+    if (!timeline || !activeChapterId) return;
+
+    const currentText = state.manuscript.currentText || '';
+    if (!currentText) return;
+
+    const recentText = currentText.slice(-TIMELINE_CONTEXT_WINDOW);
+    const newMarkers = extractTemporalMarkers(recentText);
+
+    if (newMarkers.length === 0) return;
+
+    this.state.lastTimelineCheckAt = now;
+
+    const chapterEvents = timeline.events
+      .filter(timelineEvent => timelineEvent.chapterId === activeChapterId)
+      .sort((a, b) => a.offset - b.offset);
+
+    const historicalMarkers: TemporalMarker[] = [];
+    for (const timelineEvent of chapterEvents) {
+      const baseText = timelineEvent.temporalMarker || timelineEvent.description;
+      if (!baseText) continue;
+      historicalMarkers.push(...extractTemporalMarkers(baseText));
+    }
+
+    const latestByCategory = new Map<TemporalMarker['category'], TemporalMarker>();
+    for (const marker of historicalMarkers) {
+      latestByCategory.set(marker.category, marker);
+    }
+
+    for (const marker of newMarkers) {
+      const previous = latestByCategory.get(marker.category);
+      if (previous && previous.normalized !== marker.normalized) {
+        const suggestion: ProactiveSuggestion = {
+          id: `timeline-conflict-${Date.now()}`,
+          type: 'timeline_conflict',
+          priority: 'high',
+          title: 'Timeline conflict detected',
+          description: `Previous context referenced ${previous.normalized}, but the latest edit mentions ${marker.normalized}. Confirm chapter continuity.`,
+          source: { type: 'memory', id: 'timeline-tracker' },
+          tags: ['continuity', 'timeline', marker.category],
+          createdAt: Date.now(),
+          metadata: {
+            previousMarker: previous.marker,
+            previousContext: previous.sentence,
+            currentMarker: marker.marker,
+            currentContext: marker.sentence,
+            category: marker.category,
+          },
+        };
+
+        if (this.onSuggestion) {
+          this.onSuggestion(suggestion);
+        }
+
+        this.state.lastTimelineCheckAt = now;
+        break;
+      }
+
+      if (!previous) {
+        latestByCategory.set(marker.category, marker);
+      }
+    }
+  }
+
+  private extractDialogueBlocks(text: string): Array<{ quote: string; context: string }> {
+    const blocks: Array<{ quote: string; context: string }> = [];
+    const regex = /"([^"\n]{10,600}?)"/gms;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      const quote = match[1].trim();
+      if (!quote) continue;
+      const start = Math.max(0, match.index - 120);
+      const end = Math.min(text.length, (match.index + match[0].length) + 120);
+      const context = text.slice(start, end);
+      blocks.push({ quote, context });
+    }
+
+    return blocks;
+  }
+
+  private inferDialogueSpeaker(context: string, knownCharacters: string[]): string | null {
+    if (!knownCharacters.length) return null;
+    const normalizedContext = context.toLowerCase();
+
+    for (const character of knownCharacters) {
+      const normalized = character.toLowerCase();
+      const namePattern = new RegExp(`\\b${normalized.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+      if (namePattern.test(normalizedContext)) {
+        return character;
+      }
+    }
+
+    const attribution = /(?:said|asked|replied|whispered|shouted|muttered|exclaimed)\s+([A-Z][a-zA-Z]+)/i;
+    const match = attribution.exec(context);
+    if (match && match[1]) {
+      const candidate = match[1];
+      const exact = knownCharacters.find(name => name.toLowerCase() === candidate.toLowerCase());
+      return exact ?? candidate;
+    }
+
+    return null;
+  }
+
+  private collectKnownCharacters(state: AppBrainState): string[] {
+    const names = new Set<string>();
+
+    const graphNodes = state.intelligence.entities?.nodes ?? [];
+    for (const node of graphNodes) {
+      if (node.type === 'character' && node.name) {
+        names.add(node.name);
+      }
+    }
+
+    const loreCharacters = state.lore?.characters ?? [];
+    for (const character of loreCharacters) {
+      if (character.name) {
+        names.add(character.name);
+      }
+    }
+
+    return Array.from(names);
+  }
+
+  private calculateVoiceDeviation(newMetrics: VoiceMetrics, baseline: VoiceMetrics) {
+    const relativeDifference = (a: number, b: number): number => {
+      if (a === 0 && b === 0) return 0;
+      const avg = (Math.abs(a) + Math.abs(b)) / 2;
+      if (avg === 0) return Math.abs(a - b);
+      return Math.abs(a - b) / avg;
+    };
+
+    const metricLabels: Record<keyof VoiceMetrics, string> = {
+      avgSentenceLength: 'Sentence length',
+      sentenceVariance: 'Sentence variance',
+      contractionRatio: 'Contractions',
+      questionRatio: 'Questions',
+      exclamationRatio: 'Exclamations',
+      latinateRatio: 'Formality',
+      uniqueWordCount: 'Vocabulary breadth',
+    };
+
+    const diffs = (Object.keys(metricLabels) as Array<keyof VoiceMetrics>).map(metric => {
+      return {
+        metric,
+        label: metricLabels[metric],
+        current: newMetrics[metric],
+        historic: baseline[metric],
+        delta: relativeDifference(newMetrics[metric], baseline[metric]),
+      };
+    });
+
+    const sorted = diffs.sort((a, b) => b.delta - a.delta);
+    return { diffs: sorted, maxDelta: sorted[0]?.delta ?? 0 };
+  }
+
+  private async detectVoiceConsistency(event: AppEvent): Promise<void> {
+    if (event.type !== 'SIGNIFICANT_EDIT_DETECTED' || !this.getState || !this.projectId) return;
+
+    const state = this.getState();
+    const text = state.manuscript.currentText ?? '';
+    if (!text.includes('"')) return;
+
+    const sampleWindow = Math.min(Math.max((event.payload?.delta ?? SIGNIFICANT_EDIT_THRESHOLD) * 4, 800), 5000);
+    const recentText = text.slice(-sampleWindow);
+    const dialogueBlocks = this.extractDialogueBlocks(recentText);
+    if (dialogueBlocks.length === 0) return;
+
+    const knownCharacters = this.collectKnownCharacters(state);
+
+    for (const block of dialogueBlocks) {
+      const speaker = this.inferDialogueSpeaker(block.context, knownCharacters);
+      if (!speaker) continue;
+
+      const dialogueLines: DialogueLine[] = [{ speaker, quote: block.quote }];
+      const liveProfile = generateVoiceProfile(dialogueLines, { speakerName: speaker });
+      const baseline = await getVoiceProfileForCharacter(this.projectId, speaker);
+
+      await upsertVoiceProfile(this.projectId, speaker, dialogueLines);
+
+      if (!baseline) continue;
+
+      const deviation = this.calculateVoiceDeviation(liveProfile.metrics, baseline.metrics);
+      if (deviation.maxDelta < 0.35) continue;
+
+      const summaryDiffs = deviation.diffs.slice(0, 2).map(diff => {
+        return `${diff.label}: ${diff.current > diff.historic ? 'Higher' : 'Lower'} (now ${(diff.current).toFixed(2)} vs historic ${(diff.historic).toFixed(2)})`;
+      });
+
+      const suggestion: ProactiveSuggestion = {
+        id: `voice-${speaker}-${Date.now()}`,
+        type: 'voice_inconsistency',
+        priority: deviation.maxDelta > 0.55 ? 'high' : 'medium',
+        title: `Voice drift detected for ${speaker}`,
+        description:
+          summaryDiffs.join('; ') || 'Recent dialogue differs from the established voice profile.',
+        source: { type: 'entity', id: `character:${speaker.toLowerCase()}`, name: speaker },
+        suggestedAction: `rewrite_dialogue character="${speaker}" style="${baseline.impression}"`,
+        tags: ['voice', `character:${speaker.toLowerCase()}`],
+        createdAt: Date.now(),
+        metadata: {
+          speaker,
+          currentImpression: liveProfile.impression,
+          historicImpression: baseline.impression,
+          diffs: deviation.diffs,
+          quote: block.quote,
+        },
+      };
+
+      if (this.onSuggestion) {
+        this.onSuggestion(suggestion);
+      }
+    }
+  }
+
   private enqueueEvent(event: AppEvent): void {
     this.state.pendingEvents.push(event);
 
@@ -349,17 +589,33 @@ export class ProactiveThinker {
     this.state.isThinking = true;
     const startTime = Date.now();
     
+    const events = [...this.state.pendingEvents];
+
+    // Emit thinking started event
+    eventBus.emit({
+      type: 'PROACTIVE_THINKING_STARTED',
+      payload: {
+        trigger: events[0]?.type ?? 'manual',
+        pendingEvents: events,
+        contextPreview: events.map(event => event.type).join(', '),
+      },
+    });
+
     try {
       const state = this.getState();
-      const events = [...this.state.pendingEvents];
-      
+
       // Clear pending events
       this.state.pendingEvents = [];
-      
+
       // Build context
       const context = buildCompressedContext(state);
       const formattedEvents = this.formatEventsForPrompt(events);
-      
+
+      const loreSuggestions = await this.detectLoreSuggestions(state, events);
+
+      // Get long-term memory context from BedsideHistorySearch
+      const longTermMemory = await this.fetchLongTermMemoryContext(state);
+
       // Get conflicts from intelligence-memory bridge
       let conflictsSection = '';
       if (state.intelligence.hud) {
@@ -373,6 +629,7 @@ export class ProactiveThinker {
       // Build prompt
       const prompt = PROACTIVE_THINKING_PROMPT
         .replace('{{CONTEXT}}', context)
+        .replace('{{LONG_TERM_MEMORY}}', longTermMemory.text)
         .replace('{{EVENTS}}', formattedEvents)
         .replace('{{CONFLICTS}}', conflictsSection ? `\nDETECTED CONFLICTS:\n${conflictsSection}` : '');
       
@@ -388,24 +645,51 @@ export class ProactiveThinker {
       
       const text = response.text || '';
       const result = this.parseThinkingResult(text);
+      const combinedSuggestions = [...loreSuggestions, ...result.suggestions];
+
+      // Filter and prioritize based on adaptive weights
+      const weightedSuggestions = this.applyAdaptiveRelevance(combinedSuggestions);
 
       this.state.lastThinkTime = Date.now();
-      this.state.suggestionsGenerated += result.suggestions.length;
+      this.state.suggestionsGenerated += weightedSuggestions.length;
+
+      // Emit thinking completed event
+      eventBus.emit({
+        type: 'PROACTIVE_THINKING_COMPLETED',
+        payload: {
+          suggestionsCount: combinedSuggestions.length,
+          thinkingTime: Date.now() - startTime,
+          suggestions: combinedSuggestions,
+          rawThinking: result.rawThinking,
+          memoryContext: {
+            longTermMemoryIds: longTermMemory.matches.map(match => match.note.id),
+            longTermMemoryPreview: longTermMemory.matches.map(match =>
+              `${match.note.id}: ${match.note.text.slice(0, 160)}`
+            ),
+          },
+          contextUsed: {
+            compressedContext: context,
+            longTermMemory: longTermMemory.text,
+            formattedEvents,
+            events,
+          },
+        },
+      });
 
       if (this.onSuggestion) {
-        for (const suggestion of result.suggestions) {
+        for (const suggestion of weightedSuggestions) {
           this.onSuggestion(suggestion);
         }
       }
 
-      if (this.projectId && result.significant) {
+      if (this.projectId && (result.significant || loreSuggestions.length > 0)) {
         try {
           const reminders = await getImportantReminders(this.projectId);
           const lines: string[] = [];
 
-          if (result.suggestions.length > 0) {
+          if (weightedSuggestions.length > 0) {
             lines.push('Proactive opportunities to focus on next:');
-            for (const suggestion of result.suggestions.slice(0, 3)) {
+            for (const suggestion of weightedSuggestions.slice(0, 3)) {
               lines.push(`- ${suggestion.title}: ${suggestion.description}`);
             }
           }
@@ -430,6 +714,8 @@ export class ProactiveThinker {
 
       return {
         ...result,
+        suggestions: weightedSuggestions,
+        significant: result.significant || loreSuggestions.length > 0,
         thinkingTime: Date.now() - startTime,
       };
       
@@ -455,6 +741,55 @@ export class ProactiveThinker {
     }
     
     return lines.join('\n');
+  }
+
+  private async detectLoreSuggestions(
+    state: AppBrainState,
+    events: AppEvent[],
+  ): Promise<ProactiveSuggestion[]> {
+    const sawSignificantEdit = events.some(event => event.type === 'SIGNIFICANT_EDIT_DETECTED');
+    if (!sawSignificantEdit) return [];
+
+    const intelligence = state.intelligence.full;
+    if (!intelligence?.entities?.nodes?.length) return [];
+
+    const candidates = intelligence.entities.nodes.filter(node =>
+      ['character', 'location', 'object'].includes(node.type) && node.mentionCount >= 2,
+    );
+
+    const existingLoreNames = state.lore?.characters?.map(character => character.name) ?? [];
+    const novelEntities = filterNovelLoreEntities(candidates, existingLoreNames);
+    if (novelEntities.length === 0) return [];
+
+    const facts = extractFacts(intelligence);
+    const now = Date.now();
+
+    return novelEntities.map(entity => {
+      const fact = facts.find(
+        candidate => candidate.subject.toLowerCase() === entity.name.toLowerCase(),
+      );
+
+      const description = fact
+        ? `${fact.subject} ${fact.predicate} ${fact.object}`
+        : `Spotted multiple mentions around offset ${entity.firstMention ?? 0}.`;
+
+      return {
+        id: `lore-${entity.name}-${now}`,
+        type: 'lore_discovery',
+        priority: 'medium',
+        title: `New ${entity.type === 'object' ? 'item' : entity.type} detected: ${entity.name}`,
+        description,
+        source: { type: 'entity', id: entity.name, name: entity.name },
+        tags: ['lore', entity.type],
+        createdAt: now,
+        metadata: {
+          entityName: entity.name,
+          entityType: entity.type,
+          evidence: description,
+          firstMention: entity.firstMention,
+        },
+      };
+    });
   }
 
   private parseThinkingResult(text: string): Omit<ThinkingResult, 'thinkingTime'> {
@@ -503,6 +838,69 @@ export class ProactiveThinker {
     this.debounceTimer = null;
   }
 
+  /**
+   * Fetch long-term memory context from BedsideHistorySearch.
+   * Provides thematic insights, character arcs, and historical context to the thinker.
+   */
+  private async fetchLongTermMemoryContext(
+    state: AppBrainState,
+  ): Promise<{ text: string; matches: BedsideHistoryMatch[] }> {
+    if (!this.projectId) return { text: '', matches: [] };
+
+    try {
+      // Build a query based on current context (active entities, scene type)
+      const queryParts: string[] = ['themes', 'character arcs', 'plot developments'];
+      
+      // Add active entity names to the query
+      if (state.intelligence.hud?.context.activeEntities) {
+        const entityNames = state.intelligence.hud.context.activeEntities
+          .slice(0, 3)
+          .map(e => e.name);
+        queryParts.push(...entityNames);
+      }
+      
+      // Add current scene type if available
+      if (state.intelligence.hud?.situational.currentScene?.type) {
+        queryParts.push(state.intelligence.hud.situational.currentScene.type);
+      }
+
+      const query = queryParts.join(' ');
+      const matches = await searchBedsideHistory(this.projectId, query, { limit: 5 });
+
+      if (matches.length === 0) {
+        return { text: '', matches };
+      }
+
+      const lines: string[] = ['LONG-TERM MEMORY (Bedside Notes):'];
+      for (const match of matches) {
+        const relevance = Math.round(match.similarity * 100);
+        const age = this.formatAge(match.note.createdAt);
+        lines.push(`- [${relevance}% relevant, ${age}]: ${match.note.text.slice(0, 150)}${match.note.text.length > 150 ? '...' : ''}`);
+      }
+
+      return { text: lines.join('\n'), matches };
+    } catch (error) {
+      console.warn('[ProactiveThinker] Failed to fetch long-term memory:', error);
+      return { text: '', matches: [] };
+    }
+  }
+
+  /**
+   * Format timestamp as human-readable age (e.g., "2 days ago", "1 hour ago")
+   */
+  private formatAge(timestamp: number): string {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'just now';
+  }
+
   private canEvolveBedside(): boolean {
     if (!this.config.allowBedsideEvolve) return false;
     const now = Date.now();
@@ -521,6 +919,55 @@ export class ProactiveThinker {
     } catch (error) {
       console.warn('[ProactiveThinker] Bedside evolve failed:', error);
     }
+  }
+
+  private applyAdaptiveRelevance(suggestions: ProactiveSuggestion[]): ProactiveSuggestion[] {
+    const weights = useSettingsStore.getState().suggestionWeights;
+    const weightedSuggestions: ProactiveSuggestion[] = [];
+
+    for (const suggestion of suggestions) {
+      const category = this.getSuggestionCategory(suggestion);
+      const weight = weights[category] ?? 1.0;
+
+      // Hard mute
+      if (weight <= 0.05) continue;
+
+      // Adjust priority if weight is significantly low or high
+      if (weight < 0.5 && suggestion.priority === 'high') {
+        suggestion.priority = 'medium';
+      }
+
+      if (weight < 0.3) {
+        suggestion.priority = 'low';
+      } else if (weight > 1.5 && suggestion.priority === 'low') {
+        suggestion.priority = 'medium';
+      }
+
+      if (weight > 1.8) {
+        suggestion.priority = 'high';
+      }
+
+      weightedSuggestions.push(suggestion);
+    }
+
+    // Sort by priority after adjustment
+    const priorityScore = { high: 3, medium: 2, low: 1 };
+    weightedSuggestions.sort((a, b) => priorityScore[b.priority] - priorityScore[a.priority]);
+
+    return weightedSuggestions;
+  }
+
+  private getSuggestionCategory(suggestion: ProactiveSuggestion): SuggestionCategory {
+    if (suggestion.type === 'related_memory') {
+      const tags = suggestion.tags || [];
+      if (tags.includes('plot')) return 'plot';
+      if (tags.includes('character')) return 'character';
+      if (tags.includes('pacing')) return 'pacing';
+      if (tags.includes('style')) return 'style';
+      if (tags.includes('continuity')) return 'continuity';
+      return 'other';
+    }
+    return suggestion.type as SuggestionCategory;
   }
 }
 

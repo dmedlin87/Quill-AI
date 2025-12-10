@@ -5,7 +5,7 @@
  * Enables agent to react to user actions and vice versa.
  */
 
-import { AppEvent, EventHandler } from './types';
+import { AppEvent, EventHandler, MemoryContextSnapshot, ProactiveSuggestion, ThinkingContextSnapshot } from './types';
 
 const MAX_HISTORY = 100;
 const MAX_CHANGE_LOG = 500;
@@ -237,6 +237,24 @@ class EventBusImpl {
         return `Panel switched to ${event.payload.panel}`;
       case 'ZEN_MODE_TOGGLED':
         return `Zen mode ${event.payload.enabled ? 'enabled' : 'disabled'}`;
+      case 'SIGNIFICANT_EDIT_DETECTED':
+        return `Significant edit detected (${event.payload.delta} chars)`;
+      case 'PROACTIVE_THINKING_STARTED': {
+        const pendingCount = event.payload.pendingEvents?.length;
+        const contextHint = event.payload.contextPreview
+          ? ` context: ${event.payload.contextPreview.slice(0, 40)}...`
+          : '';
+        return `AI thinking started (trigger: ${event.payload.trigger}` +
+          `${pendingCount ? `, events: ${pendingCount}` : ''}` +
+          `${contextHint ? `,${contextHint}` : ''})`;
+      }
+      case 'PROACTIVE_THINKING_COMPLETED': {
+        const suggestionText =
+          event.payload.suggestionsCount > 0
+            ? `${event.payload.suggestionsCount} suggestions`
+            : 'no suggestions';
+        return `AI thinking complete (${suggestionText} in ${event.payload.thinkingTime}ms)`;
+      }
       default:
         return `Unknown event`;
     }
@@ -292,6 +310,14 @@ export const emitTextChanged = (length: number, delta: number) => {
   eventBus.emit({ type: 'TEXT_CHANGED', payload: { length, delta } });
 };
 
+export const emitIdleStatusChanged = (idle: boolean) => {
+  eventBus.emit({ type: 'IDLE_STATUS_CHANGED', payload: { idle } });
+};
+
+export const emitDreamingStateChanged = (active: boolean) => {
+  eventBus.emit({ type: 'DREAMING_STATE_CHANGED', payload: { active } });
+};
+
 export const emitEditMade = (author: 'user' | 'agent', description: string) => {
   eventBus.emit({ type: 'EDIT_MADE', payload: { author, description } });
 };
@@ -318,4 +344,27 @@ export const emitPanelSwitched = (panel: string) => {
 
 export const emitZenModeToggled = (enabled: boolean) => {
   eventBus.emit({ type: 'ZEN_MODE_TOGGLED', payload: { enabled } });
+};
+
+export const emitSignificantEditDetected = (delta: number, chapterId?: string) => {
+  eventBus.emit({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta, chapterId } });
+};
+
+export const emitProactiveThinkingStarted = (
+  payload: { trigger: string; pendingEvents?: AppEvent[]; contextPreview?: string },
+) => {
+  eventBus.emit({ type: 'PROACTIVE_THINKING_STARTED', payload });
+};
+
+export const emitProactiveThinkingCompleted = (
+  payload: {
+    suggestionsCount: number;
+    thinkingTime: number;
+    suggestions?: ProactiveSuggestion[];
+    rawThinking?: string;
+    memoryContext?: MemoryContextSnapshot;
+    contextUsed?: ThinkingContextSnapshot;
+  },
+) => {
+  eventBus.emit({ type: 'PROACTIVE_THINKING_COMPLETED', payload });
 };

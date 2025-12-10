@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { ErrorBoundary } from '@/features/shared/components/ErrorBoundary';
 
 // Mock reportError
@@ -20,6 +20,8 @@ const ThrowError: React.FC<{ shouldThrow?: boolean }> = ({ shouldThrow = true })
 const originalError = console.error;
 beforeAll(() => {
   console.error = vi.fn();
+  // Prevent unhandled error noise in jsdom
+  window.addEventListener('error', (e) => e.preventDefault());
 });
 afterAll(() => {
   console.error = originalError;

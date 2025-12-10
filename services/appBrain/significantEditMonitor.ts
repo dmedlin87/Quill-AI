@@ -1,6 +1,8 @@
-import type { AppEvent } from './types';
+import type { AppEvent, AppBrainState } from './types';
 import { evolveBedsideNote } from '../memory';
 import { eventBus } from './eventBus';
+import { getProactiveThinker } from './proactiveThinker';
+import { runNarrativeAlignmentCheck } from './narrativeAlignment';
 
 interface SignificantEditOptions {
   threshold?: number;
@@ -45,6 +47,20 @@ class SignificantEditMonitor {
     this.unsubscribe = eventBus.subscribe('TEXT_CHANGED', (event) => {
       this.handleTextChanged(event);
     });
+
+    // Also track chapter changes to provide context for significant edits
+    const chapterUnsub = eventBus.subscribe('CHAPTER_CHANGED', (event) => {
+       if (event.type === 'CHAPTER_CHANGED' && event.payload.chapterId) {
+         this.setActiveChapter(event.payload.chapterId);
+       }
+    });
+    
+    // Chain original unsubscribe
+    const originalUnsub = this.unsubscribe;
+    this.unsubscribe = () => {
+      originalUnsub();
+      chapterUnsub();
+    };
   }
 
   stop() {
@@ -91,14 +107,33 @@ class SignificantEditMonitor {
 
     const now = Date.now();
     const withinCooldown = now - this.lastTriggerTime < this.cooldownMs;
+    const accumulatedDelta = this.cumulativeDelta;
 
-    if (this.cumulativeDelta >= this.threshold && !withinCooldown) {
+    if (accumulatedDelta >= this.threshold && !withinCooldown) {
+      // Emit event for the proactive loop
+      eventBus.emit({
+        type: 'SIGNIFICANT_EDIT_DETECTED',
+        payload: {
+          delta: accumulatedDelta,
+          chapterId: this.activeChapterId ?? undefined,
+        },
+      });
+
+      // Trigger proactive thinking immediately
+      this.triggerProactiveThinking();
+
       try {
-        await evolveBedsideNote(
-          this.projectId,
-          'Significant edits detected — analysis may be stale. Run analysis to refresh.',
-          { changeReason: 'significant_edit' },
-        );
+        if (this.activeChapterId) {
+          // Phase 7: Run full drift detection
+          await runNarrativeAlignmentCheck(this.projectId, this.activeChapterId);
+        } else {
+          // Fallback legacy behavior
+          await evolveBedsideNote(
+            this.projectId,
+            'Significant edits detected — analysis may be stale. Run analysis to refresh.',
+            { changeReason: 'significant_edit' },
+          );
+        }
         this.lastTriggerTime = now;
       } catch (error) {
         console.warn('[SignificantEditMonitor] Failed to evolve bedside note', error);
@@ -106,6 +141,31 @@ class SignificantEditMonitor {
     }
 
     this.cumulativeDelta = 0;
+  }
+
+  /**
+   * Trigger the ProactiveThinker to analyze the significant edit.
+   * This runs asynchronously without blocking.
+   */
+  private triggerProactiveThinking(): void {
+    try {
+      const thinker = getProactiveThinker();
+      // Force an immediate think cycle for significant edits
+      thinker.forceThink().catch(error => {
+        console.warn('[SignificantEditMonitor] Proactive thinking failed:', error);
+      });
+    } catch (error) {
+      console.warn('[SignificantEditMonitor] Failed to trigger proactive thinking:', error);
+    }
+  }
+
+  private activeChapterId: string | null = null;
+
+  /**
+   * Update the active chapter ID for context in events.
+   */
+  setActiveChapter(chapterId: string | null): void {
+    this.activeChapterId = chapterId;
   }
 }
 

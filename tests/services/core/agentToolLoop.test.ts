@@ -101,6 +101,52 @@ describe('runAgentToolLoop', () => {
 
     expect(final).toBe(first);
     expect(processToolCalls).toHaveBeenCalledTimes(1);
+    // onThinkingRoundStart should not be called if aborted immediately after processing
+    // wait, logic is: process -> check abort -> onThinkingRoundStart.
+    // So onThinkingRoundStart is NOT called.
+  });
+
+  it('stops if aborted after model response but before next loop iteration', async () => {
+      // This case is actually redundant because the loop condition checks abortSignal at the start of loop.
+      // But we have a check at the end of loop too:
+      /*
+        result = await chat.sendMessage(...)
+        if (abortSignal?.aborted) return result;
+      */
+      // To hit this, we need an abort happening DURING chat.sendMessage.
+
+      const first: AgentToolLoopModelResult = {
+          text: '',
+          functionCalls: [{ id: '1', name: 't1', args: {} } as FunctionCall]
+      };
+
+      // The mock chat response will trigger abort
+      const second: AgentToolLoopModelResult = {
+          text: 'interrupted',
+          functionCalls: [{ id: '2', name: 't2', args: {} } as FunctionCall]
+      };
+
+      const controller = new AbortController();
+      const chat = {
+          sendMessage: vi.fn(async () => {
+              controller.abort();
+              return second;
+          })
+      } as unknown as Chat;
+
+      const processToolCalls = vi.fn(async (calls) => calls.map(c => ({ id: c.id!, name: c.name, response: { result: 'ok' } })));
+
+      const final = await runAgentToolLoop({
+          chat,
+          initialResult: first,
+          abortSignal: controller.signal,
+          processToolCalls
+      });
+
+      expect(final).toBe(second);
+      // It should return `second` because we aborted right after receiving it.
+      // And the loop should NOT continue to process t2.
+      expect(processToolCalls).toHaveBeenCalledTimes(1);
   });
 
   it('returns initial result when there are no functionCalls', async () => {
@@ -167,5 +213,30 @@ describe('runAgentToolLoop', () => {
     expect(processToolCalls).toHaveBeenCalledTimes(2);
     expect(seenToolNames).toEqual(['first_tool', 'second_tool']);
     expect(onThinkingRoundStart).toHaveBeenCalledTimes(2);
+  });
+
+  it('aborts after MAX_TOOL_ROUND_TRIPS', async () => {
+      const toolCallResult: AgentToolLoopModelResult = {
+          text: '',
+          functionCalls: [{ id: 'loop', name: 'loop', args: {} } as FunctionCall]
+      };
+
+      // Create a chat that always returns tool calls
+      const chat = {
+          sendMessage: vi.fn(async () => toolCallResult)
+      } as unknown as Chat;
+
+      const processToolCalls = vi.fn(async (calls) => calls.map(c => ({ id: c.id!, name: c.name, response: { result: 'ok' } })));
+
+      const final = await runAgentToolLoop({
+          chat,
+          initialResult: toolCallResult,
+          abortSignal: null,
+          processToolCalls
+      });
+
+      expect(final.text).toContain('Aborted tool execution after 5 rounds');
+      expect(final.functionCalls).toEqual([]);
+      expect(processToolCalls).toHaveBeenCalledTimes(5);
   });
 });

@@ -46,6 +46,7 @@ export interface DialogueLine {
 }
 
 export interface StructuralStats {
+  [x: string]: any;
   totalWords: number;
   totalSentences: number;
   totalParagraphs: number;

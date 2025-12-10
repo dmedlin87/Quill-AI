@@ -1,6 +1,7 @@
 import { evolveBedsideNote } from '@/services/memory';
 import { eventBus } from './eventBus';
 import { getSignificantEditMonitor, startSignificantEditMonitor } from './significantEditMonitor';
+import { startDreamingService, stopDreamingService } from './dreamingService';
 import type { AppEvent, ChapterIssueSummary, WatchedEntitySummary } from './types';
 
 const formatIssue = (issue: ChapterIssueSummary): string | null => {
@@ -45,6 +46,7 @@ const handleChapterChanged = async (event: Extract<AppEvent, { type: 'CHAPTER_CH
 export const startAppBrainEventObserver = (): (() => void) => {
   const unsubscribeChapter = eventBus.subscribe('CHAPTER_CHANGED', (event: Extract<AppEvent, { type: 'CHAPTER_CHANGED' }>) => {
     startSignificantEditMonitor(event.payload.projectId);
+    startDreamingService();
     void handleChapterChanged(event);
   });
 
@@ -56,5 +58,6 @@ export const startAppBrainEventObserver = (): (() => void) => {
   return () => {
     unsubscribeChapter();
     unsubscribeTextChanged();
+    stopDreamingService();
   };
 };

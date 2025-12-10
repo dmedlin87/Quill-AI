@@ -10,7 +10,7 @@ describe('findQuoteRange', () => {
   });
 
   it('handles normalized whitespace and partial fallbacks', () => {
-    expect(findQuoteRange(sampleText, 'Second line with extra spaces')).toEqual({ start: 13, end: 42 });
+    expect(findQuoteRange(sampleText, 'Second line with extra spaces')).toEqual({ start: 13, end: 44 });
     expect(findQuoteRange(sampleText, 'First line.  Second')).toEqual({ start: 0, end: 19 });
   });
 
@@ -27,7 +27,7 @@ describe('findQuoteRange', () => {
 
   it('handles normalized whitespace mapping back to original indices', () => {
     const text = 'A  B\tC';
-    expect(findQuoteRange(text, 'A B C')).toEqual({ start: 0, end: 5 });
+    expect(findQuoteRange(text, 'A B C')).toEqual({ start: 0, end: 6 });
   });
 
   it('returns null when no match can be found', () => {
@@ -90,7 +90,7 @@ describe('enrichAnalysisWithPositions', () => {
         },
       ],
       generalSuggestions: [],
-    } as const;
+    };
 
     const enriched = enrichAnalysisWithPositions(analysis, 'short text');
 
