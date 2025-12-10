@@ -75,7 +75,7 @@ const normalizeEntityName = (name: string): string => {
   return name.trim().replace(/[.,!?;:'"]/g, '');
 };
 
-const isValidEntityName = (name: string): boolean => {
+export const isValidEntityName = (name: string): boolean => {
   const normalized = normalizeEntityName(name.toLowerCase());
   if (FALSE_POSITIVES.has(normalized)) return false;
   if (normalized.length < 2) return false;
@@ -91,7 +91,7 @@ const isProperNoun = (word: string): boolean => {
 // Helper to compute a canonical key for an entity name, used for consolidation.
 // This prefers grouping by surname when the bare surname appears in the text,
 // while avoiding over-merging different characters who simply share a surname.
-const getCanonicalEntityKey = (
+export const getCanonicalEntityKey = (
   rawName: string,
   surnameMap: Map<string, { hasBare: boolean }>,
 ): string => {

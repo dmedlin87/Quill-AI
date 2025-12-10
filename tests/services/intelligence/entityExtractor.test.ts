@@ -10,6 +10,8 @@ import {
   extractEntities,
   getEntitiesInRange,
   getRelatedEntities,
+  getCanonicalEntityKey,
+  isValidEntityName,
   mergeEntityGraphs,
 } from '@/services/intelligence/entityExtractor';
 import { ClassifiedParagraph, DialogueLine } from '@/types/intelligence';
@@ -298,6 +300,45 @@ describe('entityExtractor', () => {
   // ─────────────────────────────────────────────────────────────────────────
   // UTILITY FUNCTIONS
   // ─────────────────────────────────────────────────────────────────────────
+
+  describe('getCanonicalEntityKey', () => {
+    it('uses bare surname when present in surname map', () => {
+      const surnameMap = new Map<string, { hasBare: boolean }>([
+        ['smith', { hasBare: true }],
+      ]);
+
+      const key = getCanonicalEntityKey('John Smith', surnameMap);
+
+      expect(key).toBe('smith');
+    });
+
+    it('preserves full name when surname is never used alone', () => {
+      const surnameMap = new Map<string, { hasBare: boolean }>([
+        ['smith', { hasBare: false }],
+      ]);
+
+      const key = getCanonicalEntityKey('John Smith', surnameMap);
+
+      expect(key).toBe('john smith');
+    });
+  });
+
+  describe('dialogue attribution patterns', () => {
+    it('filters invalid names while capturing valid dialogue speakers', () => {
+      const text = `"Go," said The. "Indeed," said Holmes. Chapter said "No," and Sir Lancelot said "Yes."`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+      const names = result.nodes.map(n => n.name.toLowerCase());
+
+      expect(names).toContain('holmes');
+      expect(names.some(n => n.includes('lancelot'))).toBe(true);
+      expect(names).not.toContain('the');
+      expect(names).not.toContain('chapter');
+      expect(isValidEntityName('chapter')).toBe(false);
+      expect(isValidEntityName('the')).toBe(false);
+    });
+  });
 
   describe('getEntitiesInRange', () => {
     it('returns entities mentioned in the given range', () => {
