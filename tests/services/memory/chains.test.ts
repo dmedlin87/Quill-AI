@@ -758,6 +758,33 @@ describe('memory chains - getMemoryChain', () => {
     expect(result).toHaveLength(1);
     expect(result[0].memoryId).toBe('mem-in-chain');
   });
+
+  it('treats memories missing chain_version tags as version 1 for broken metadata', async () => {
+    const chainMemories = [
+      {
+        id: 'm-no-version',
+        text: 'First version without explicit version tag',
+        topicTags: ['chain:broken', 'other:tag'],
+        createdAt: 1000,
+      },
+      {
+        id: 'm-with-version',
+        text: 'Second version with explicit version tag',
+        topicTags: ['chain:broken', 'chain_version:2'],
+        createdAt: 2000,
+      },
+    ];
+
+    dbMocks.memoriesFilter.mockReturnValue({
+      toArray: vi.fn().mockResolvedValueOnce(chainMemories),
+    });
+
+    const result = await getMemoryChain('chain_broken');
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ memoryId: 'm-no-version', version: 1 });
+    expect(result[1]).toMatchObject({ memoryId: 'm-with-version', version: 2 });
+  });
 });
 
 describe('memory chains - getLatestInChain', () => {
@@ -911,6 +938,44 @@ describe('memory chains - getChainEvolution', () => {
     expect(result.timeline[0].summary).toContain('Initial:');
     expect(result.timeline[1].summary).toContain('supersede:');
     expect(result.currentText).toBe('Updated memory');
+  });
+
+  it('handles circular supersede metadata without infinite loops', async () => {
+    const cyclicChainMemories = [
+      {
+        id: 'c1',
+        text: 'Cycle v1',
+        topicTags: ['chain:cycle', 'chain_version:1'],
+        createdAt: 1000,
+      },
+      {
+        id: 'c2',
+        text: 'Cycle v2',
+        topicTags: ['chain:cycle', 'chain_version:2', 'supersedes:c3'],
+        createdAt: 2000,
+      },
+      {
+        id: 'c3',
+        text: 'Cycle v3',
+        topicTags: ['chain:cycle', 'chain_version:3', 'supersedes:c1'],
+        createdAt: 3000,
+      },
+    ];
+
+    memoryMocks.getMemory.mockResolvedValueOnce({
+      id: 'c1',
+      topicTags: ['chain:cycle', 'chain_version:1'],
+    } as MemoryNote);
+
+    dbMocks.memoriesFilter.mockReturnValue({
+      toArray: vi.fn().mockResolvedValueOnce(cyclicChainMemories),
+    });
+
+    const result = await getChainEvolution('c1');
+
+    expect(result.versions).toBe(3);
+    expect(result.timeline.map(entry => entry.version)).toEqual([1, 2, 3]);
+    expect(result.currentText).toBe('Cycle v3');
   });
 });
 

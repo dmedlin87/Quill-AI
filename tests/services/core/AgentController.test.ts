@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DefaultAgentController } from '@/services/core/AgentController';
+import type { AgentToolLoopModelResult } from '@/services/core/agentToolLoop';
+import * as agentToolLoopModule from '@/services/core/agentToolLoop';
 
 const {
   mockCreateChatSessionFromContext,
@@ -102,6 +104,14 @@ describe('DefaultAgentController', () => {
     });
 
     return { controller, events, toolExecutor };
+  };
+
+  const createDeferred = <T,>() => {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    const promise = new Promise<T>(res => {
+      resolve = res;
+    });
+    return { promise, resolve };
   };
 
   beforeEach(() => {
@@ -550,13 +560,24 @@ describe('DefaultAgentController', () => {
     await controller.sendMessage({ text: '   ', editorContext });
     expect(mockSendMessage).not.toHaveBeenCalled();
 
-    // Simulate busy state
-    // We can't easily force state to 'thinking' from outside without running a command that hangs.
-    // But we can invoke a method that sets state and check if subsequent calls return early.
-    // However, since we mock everything async, it's hard to interleave.
-    // Let's rely on checking the code path via coverage or trust the logic.
-    // Wait, we can manually set the state if we cast to any, or use a test helper if exposed.
-    // But `updateState` is private.
+    mockSendMessage.mockReset();
+    mockSendMessage.mockResolvedValueOnce({ text: '' });
+    let resolveUserMessage!: (value: AgentToolLoopModelResult) => void;
+    const userMessagePromise = new Promise<AgentToolLoopModelResult>(resolve => {
+      resolveUserMessage = resolve;
+    });
+    mockSendMessage.mockReturnValueOnce(userMessagePromise);
+
+    const { controller: busyController } = makeController();
+    const firstSend = busyController.sendMessage({ text: 'First', editorContext });
+    await Promise.resolve();
+    expect(mockSendMessage).toHaveBeenCalledTimes(2);
+
+    await busyController.sendMessage({ text: 'Second', editorContext });
+    expect(mockSendMessage).toHaveBeenCalledTimes(2);
+
+    resolveUserMessage({ text: 'First reply', functionCalls: [] });
+    await firstSend;
   });
 
   it('handles initialization failure gracefully', async () => {
@@ -688,5 +709,71 @@ describe('DefaultAgentController', () => {
       const { controller } = makeController();
       expect(controller.getCurrentPersona()).toEqual(persona);
       expect(controller.getState()).toEqual({ status: 'idle' });
+  });
+
+  it('reports initialization failure when chat session is unavailable', async () => {
+    mockCreateChatSessionFromContext.mockResolvedValueOnce({
+      chat: null,
+      memoryContext: '',
+    });
+
+    const events = {
+      onStateChange: vi.fn(),
+      onMessage: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    const { controller } = makeController({ events });
+
+    await controller.sendMessage({ text: 'Need chat', editorContext });
+
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(events.onMessage).not.toHaveBeenCalled();
+    expect(events.onError).not.toHaveBeenCalled();
+
+    const lastState = (events.onStateChange as any).mock.calls.at(-1)?.[0];
+    expect(lastState).toEqual({
+      status: 'error',
+      lastError: 'Agent session is not initialized.',
+    });
+  });
+
+  it('stops processing final response when request is aborted mid-loop', async () => {
+    mockSendMessage.mockResolvedValueOnce({ text: '' });
+    mockSendMessage.mockResolvedValueOnce({ text: 'Interim', functionCalls: [] });
+
+    const deferred = createDeferred<AgentToolLoopModelResult>();
+    const runAgentToolLoopSpy = vi
+      .spyOn(agentToolLoopModule, 'runAgentToolLoop')
+      .mockImplementation(async ({ initialResult }) => {
+        await deferred.promise;
+        return initialResult;
+      });
+
+    const events = {
+      onStateChange: vi.fn(),
+      onMessage: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    const { controller } = makeController({ events });
+
+    const sendPromise = controller.sendMessage({ text: 'Abort mid way', editorContext });
+    await Promise.resolve();
+
+    controller.abortCurrentRequest();
+    deferred.resolve({ text: 'Should not emit', functionCalls: [] });
+
+    await sendPromise;
+
+    const messageTexts = (events.onMessage as any).mock.calls.map((call: any[]) => call[0].text);
+    expect(messageTexts).toEqual(['Abort mid way']);
+
+    const lastState = (events.onStateChange as any).mock.calls.at(-1)?.[0];
+    expect(lastState.status).toBe('idle');
+    expect(lastState.lastError).toBeUndefined();
+
+    expect(runAgentToolLoopSpy).toHaveBeenCalledTimes(1);
+    runAgentToolLoopSpy.mockRestore();
   });
 });
