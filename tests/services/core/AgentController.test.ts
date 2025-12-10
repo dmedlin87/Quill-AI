@@ -570,6 +570,9 @@ describe('DefaultAgentController', () => {
 
     const { controller: busyController } = makeController();
     const firstSend = busyController.sendMessage({ text: 'First', editorContext });
+    // Allow multiple microtask ticks for the fire-and-forget init sendMessage to complete
+    await Promise.resolve();
+    await Promise.resolve();
     await Promise.resolve();
     expect(mockSendMessage).toHaveBeenCalledTimes(2);
 
