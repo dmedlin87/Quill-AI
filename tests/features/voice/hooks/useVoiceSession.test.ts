@@ -13,9 +13,14 @@ const mockAudioWorkletNodeImpl = {
   disconnect: vi.fn(),
 };
 
+let audioContextCreateCount = 0;
+let workletCreateCount = 0;
+
 class MockAudioWorkletNode {
     port = mockAudioWorkletNodeImpl.port;
-    constructor() {}
+    constructor() {
+      workletCreateCount += 1;
+    }
     connect() { return mockAudioWorkletNodeImpl.connect(); }
     disconnect() { return mockAudioWorkletNodeImpl.disconnect(); }
 }
@@ -49,7 +54,9 @@ class MockAudioContext {
     destination = {};
     currentTime = 0;
 
-    constructor() {}
+    constructor() {
+      audioContextCreateCount += 1;
+    }
     close() { return mockAudioContextImpl.close(); }
     createMediaStreamSource(s: any) { return mockAudioContextImpl.createMediaStreamSource(s); }
     createAnalyser() { return mockAudioContextImpl.createAnalyser(); }
@@ -74,6 +81,9 @@ describe('useVoiceSession', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    audioContextCreateCount = 0;
+    workletCreateCount = 0;
+
     // Reset mocks
     mockAudioContextImpl.audioWorklet.addModule.mockResolvedValue(undefined);
     mockAudioContextImpl.close.mockResolvedValue(undefined);
@@ -90,8 +100,11 @@ describe('useVoiceSession', () => {
     (global.navigator as any).mediaDevices = mediaDevicesMock;
 
     // Mock requestAnimationFrame
+    let animationFrameId = 1;
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-        return setTimeout(() => cb(0), 16) as any;
+        const id = animationFrameId++;
+        setTimeout(() => cb(id), 0);
+        return id as any;
     });
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
         clearTimeout(id);
@@ -157,7 +170,10 @@ describe('useVoiceSession', () => {
     expect(result.current.isConnected).toBe(false);
     expect(mockLiveSessionClient.disconnect).toHaveBeenCalled();
     expect(mockAudioWorkletNodeImpl.port.close).toHaveBeenCalled();
-    expect(mockAudioContextImpl.close).toHaveBeenCalled();
+    expect(mockAudioContextImpl.close).toHaveBeenCalledTimes(2);
+    expect(window.cancelAnimationFrame).toHaveBeenCalled();
+    expect(result.current.inputAnalyserRef.current).toBeNull();
+    expect(result.current.outputAnalyserRef.current).toBeNull();
   });
 
   it('processes audio from worklet', async () => {
@@ -204,5 +220,27 @@ describe('useVoiceSession', () => {
     });
 
     expect(mockLiveSessionClient.disconnect).toHaveBeenCalled();
+    expect(mockAudioContextImpl.close).toHaveBeenCalledTimes(2);
+    expect(window.cancelAnimationFrame).toHaveBeenCalled();
+    expect(audioContextCreateCount).toBe(4);
+    expect(workletCreateCount).toBe(2);
+  });
+
+  it('throws an error when Web Audio API is not available', async () => {
+    delete (window as any).AudioContext;
+    delete (window as any).webkitAudioContext;
+
+    const { result } = renderHook(() => useVoiceSession());
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('Web Audio API not supported in this environment.');
+    });
+
+    expect(result.current.isConnected).toBe(false);
+    expect(mockAudioContextImpl.createAnalyser).not.toHaveBeenCalled();
   });
 });
