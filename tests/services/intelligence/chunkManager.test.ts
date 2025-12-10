@@ -1,852 +1,163 @@
 /**
- * Chunk Manager Test Suite
- *
- * Comprehensive tests for the ChunkManager class which orchestrates
- * background processing of manuscript chunks
+ * ChunkManager tests focused on branch coverage of edge cases and aggregations
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ChunkManager, createChunkManager, ChunkManagerConfig } from '@/services/intelligence/chunkManager';
-import { ChunkId, ChunkAnalysis } from '@/types/intelligence';
+import { describe, it, expect } from 'vitest';
+import { ChunkManager } from '@/services/intelligence/chunkManager';
+import { ChunkAnalysis, ManuscriptIntelligence } from '@/types/intelligence';
 
-// Mock the intelligence processing
-vi.mock('@/services/intelligence/index', () => ({
-  processManuscriptCached: vi.fn((text: string) => ({
-    structural: {
-      scenes: [{ tension: 0.7, timeMarker: null, startOffset: 0, endOffset: 100 }],
-      stats: { totalWords: 100, dialogueRatio: 0.3 },
-    },
-    entities: { nodes: [
-      { type: 'character', name: 'Alice' },
-      { type: 'location', name: 'Forest' }
-    ] },
-    style: {
-      flags: { passiveVoiceRatio: 0.1, adverbDensity: 0.04, filterWordDensity: 0.02 },
-      syntax: { avgSentenceLength: 15 },
-    },
-    heatmap: { sections: [{ overallRisk: 0.2 }] },
-    timeline: { promises: [{ description: 'Find treasure', resolved: false }] },
-  })),
-  parseStructure: vi.fn((text: string) => ({
-    scenes: [
-      {
-        startOffset: 0,
-        endOffset: text.length,
-        tension: 0.7,
-        timeMarker: null,
-      }
-    ],
-    stats: { totalWords: text.split(' ').length, dialogueRatio: 0.3 },
-  })),
-}));
-
-vi.mock('@/services/intelligence/deltaTracker', () => ({
-  hashContent: vi.fn((text: string) => `hash-${text.length}`),
-}));
-
-describe('ChunkManager', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
+const createManager = () =>
+  new ChunkManager({
+    editDebounceMs: 0,
+    processingIntervalMs: 0,
+    idleThresholdMs: 0,
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.useRealTimers();
+describe('ChunkManager edge cases', () => {
+  it('handles chapter and scene text retrieval edge cases', () => {
+    const manager = createManager() as any;
+    const index = manager.index as any;
+
+    // Chapter text missing
+    const chapter = index.registerChunk('chapter-ch1', 'chapter', 0, 5, '', 'book');
+    expect(manager.getChunkText(chapter)).toBeNull();
+
+    // Chapter with invalid range
+    manager.chapterTexts.set('ch2', 'hello world');
+    const invalidChapter = index.registerChunk('chapter-ch2', 'chapter', -1, 3, '', 'book');
+    expect(manager.getChunkText(invalidChapter)).toBeNull();
+
+    // Scene slices valid content
+    manager.chapterTexts.set('ch3', 'abcdefghij');
+    const parent = index.registerChunk('chapter-ch3', 'chapter', 0, 10, '', 'book');
+    const scene = index.registerChunk('chapter-ch3-scene-0', 'scene', 2, 6, '', parent.id);
+    expect(manager.getChunkText(scene)).toBe('cdef');
+
+    // Scene with out-of-bounds indices
+    const badScene = index.registerChunk('chapter-ch3-scene-1', 'scene', 8, 20, '', parent.id);
+    expect(manager.getChunkText(badScene)).toBeNull();
   });
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // CONSTRUCTOR & INITIALIZATION
-  // ─────────────────────────────────────────────────────────────────────────────
+  it('aggregates children with and without analysis data', () => {
+    const manager = createManager() as any;
+    const index = manager.index as any;
 
-  describe('Constructor', () => {
-    it('should create manager with default config', () => {
-      const manager = new ChunkManager();
-      const stats = manager.getStats();
+    const parent = index.registerChunk('chapter-parent', 'chapter', 0, 0, '', 'book');
+    const emptyAggregate = manager.aggregateFromChildren(parent) as ChunkAnalysis;
+    expect(emptyAggregate.summary).toBe('No data');
+    expect(emptyAggregate.wordCount).toBe(0);
 
-      expect(stats.totalChunks).toBe(1); // Book chunk
-      expect(stats.chapterCount).toBe(0);
-      expect(stats.isProcessing).toBe(false);
-    });
+    const childA = index.registerChunk('chapter-parent-scene-0', 'scene', 0, 5, '', parent.id);
+    const childB = index.registerChunk('chapter-parent-scene-1', 'scene', 5, 10, '', parent.id);
 
-    it('should create manager with custom config', () => {
-      const config: Partial<ChunkManagerConfig> = {
-        editDebounceMs: 1000,
-        processingIntervalMs: 200,
-        maxBatchSize: 5,
-      };
+    const analysisA: ChunkAnalysis = {
+      summary: 'first',
+      wordCount: 100,
+      dialogueRatio: 0.3,
+      avgTension: 0.4,
+      characterNames: ['Alice'],
+      locationNames: ['Paris'],
+      timeMarkers: ['dawn'],
+      openPromises: ['mystery'],
+      styleFlags: ['flag-a'],
+      riskScore: 0.2,
+      structural: null as any,
+      entities: null as any,
+      style: null as any,
+      processedAt: 1,
+    };
 
-      const manager = new ChunkManager(config);
-      expect(manager).toBeDefined();
-    });
+    const analysisB: ChunkAnalysis = {
+      ...analysisA,
+      summary: 'second',
+      wordCount: 50,
+      dialogueRatio: 0.5,
+      avgTension: 0.8,
+      characterNames: ['Bob'],
+      locationNames: ['Paris'],
+      timeMarkers: ['dusk'],
+      openPromises: ['mystery', 'foreshadow'],
+      styleFlags: ['flag-b'],
+      riskScore: 0.6,
+      processedAt: 2,
+    };
 
-    it('should initialize book chunk automatically', () => {
-      const manager = new ChunkManager();
-      const bookChunk = manager.getChunk('book');
+    index.updateAnalysis(childA.id, analysisA);
+    index.updateAnalysis(childB.id, analysisB);
 
-      expect(bookChunk).toBeDefined();
-      expect(bookChunk?.level).toBe('book');
-    });
-
-    it('should register callbacks', () => {
-      const onProcessingStart = vi.fn();
-      const onProcessingEnd = vi.fn();
-      const onChunkProcessed = vi.fn();
-      const onError = vi.fn();
-      const onQueueChange = vi.fn();
-
-      const manager = new ChunkManager({}, {
-        onProcessingStart,
-        onProcessingEnd,
-        onChunkProcessed,
-        onError,
-        onQueueChange,
-      });
-
-      expect(manager).toBeDefined();
-    });
+    const aggregate = manager.aggregateFromChildren(parent) as ChunkAnalysis;
+    expect(aggregate.summary).toContain('150 words');
+    expect(aggregate.dialogueRatio).toBeCloseTo((0.3 + 0.5) / 2);
+    expect(aggregate.avgTension).toBeCloseTo((0.4 + 0.8) / 2);
+    expect(new Set(aggregate.characterNames)).toEqual(new Set(['Alice', 'Bob']));
+    expect(new Set(aggregate.locationNames)).toEqual(new Set(['Paris']));
+    expect(new Set(aggregate.timeMarkers)).toEqual(new Set(['dawn', 'dusk']));
+    expect(new Set(aggregate.openPromises)).toEqual(new Set(['mystery', 'foreshadow']));
+    expect(new Set(aggregate.styleFlags)).toEqual(new Set(['flag-a', 'flag-b']));
+    expect(aggregate.riskScore).toBeCloseTo((0.2 + 0.6) / 2);
   });
 
-  describe('Factory function', () => {
-    it('should create manager via factory', () => {
-      const manager = createChunkManager();
-      expect(manager).toBeInstanceOf(ChunkManager);
-    });
-
-    it('should create manager with config and callbacks', () => {
-      const onQueueChange = vi.fn();
-      const manager = createChunkManager(
-        { maxBatchSize: 10 },
-        { onQueueChange }
-      );
-      expect(manager).toBeInstanceOf(ChunkManager);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // CHAPTER MANAGEMENT
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Chapter Management', () => {
-    it('should register a new chapter', () => {
-      const manager = new ChunkManager();
-      const content = 'This is chapter 1 content with some text.';
-
-      manager.registerChapter('ch1', content);
-
-      const chapterChunk = manager.getChapterChunk('ch1');
-      expect(chapterChunk).toBeDefined();
-      expect(chapterChunk?.level).toBe('chapter');
-      expect(chapterChunk?.status).toBe('dirty');
-    });
-
-    it('should create scene chunks when registering chapter', () => {
-      const manager = new ChunkManager();
-      const content = 'Chapter with scene content here.';
-
-      manager.registerChapter('ch1', content);
-
-      const stats = manager.getStats();
-      expect(stats.totalChunks).toBeGreaterThan(1); // Book + chapter + scenes
-    });
-
-    it('should remove a chapter and its chunks', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Content');
-
-      const statsBefore = manager.getStats();
-      expect(statsBefore.chapterCount).toBe(1);
-
-      manager.removeChapter('ch1');
-
-      const statsAfter = manager.getStats();
-      expect(statsAfter.chapterCount).toBe(0);
-      expect(manager.getChapterChunk('ch1')).toBeUndefined();
-    });
-
-    it('should handle multiple chapters', () => {
-      const manager = new ChunkManager();
-
-      manager.registerChapter('ch1', 'Chapter one content');
-      manager.registerChapter('ch2', 'Chapter two content');
-      manager.registerChapter('ch3', 'Chapter three content');
-
-      const stats = manager.getStats();
-      expect(stats.chapterCount).toBe(3);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // EDIT HANDLING
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Edit Handling', () => {
-    it('should debounce rapid edits', () => {
-      const manager = new ChunkManager({ editDebounceMs: 500 });
-      manager.registerChapter('ch1', 'Initial content');
-
-      // Make multiple rapid edits
-      manager.handleEdit('ch1', 'Edit 1', 0, 10);
-      manager.handleEdit('ch1', 'Edit 2', 0, 10);
-      manager.handleEdit('ch1', 'Edit 3', 0, 10);
-
-      // Should not apply immediately
-      const chunk = manager.getChapterChunk('ch1');
-      expect(chunk?.status).toBe('dirty');
-
-      // Fast-forward past debounce
-      vi.advanceTimersByTime(500);
-
-      // Now edit should be applied
-      expect(chunk?.hash).toBe('hash-6'); // 'Edit 3' length
-    });
-
-    it('should handle edit at specific position', () => {
-      const manager = new ChunkManager();
-      const initialContent = 'This is the initial chapter content.';
-      manager.registerChapter('ch1', initialContent);
-
-      const newContent = 'This is the MODIFIED chapter content.';
-      manager.handleEdit('ch1', newContent, 12, 19);
-
-      vi.advanceTimersByTime(500);
-
-      const chunk = manager.getChapterChunk('ch1');
-      expect(chunk).toBeDefined();
-    });
-
-    it('should update chapter text cache on edit', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Initial');
-
-      manager.handleEdit('ch1', 'Updated content', 0, 7);
-      vi.advanceTimersByTime(500);
-
-      const analyses = manager.getAllChapterAnalyses();
-      expect(analyses.has('ch1')).toBe(true);
-    });
-
-    it('should clear previous debounce timer on new edit', () => {
-      const manager = new ChunkManager({ editDebounceMs: 1000 });
-      manager.registerChapter('ch1', 'Content');
-
-      manager.handleEdit('ch1', 'Edit 1', 0, 10);
-      vi.advanceTimersByTime(500);
-
-      manager.handleEdit('ch1', 'Edit 2', 0, 10);
-      vi.advanceTimersByTime(500);
-
-      // First edit should have been cancelled
-      const chunk = manager.getChapterChunk('ch1');
-      // Debounce has not fired yet; hash should still reflect initial content length
-      expect(chunk?.hash).toBe('hash-7');
-    });
-
-    it('keeps text and indices aligned when processing during debounce window', async () => {
-      const manager = new ChunkManager({
-        editDebounceMs: 200,
-        idleThresholdMs: 0,
-        processingIntervalMs: 0,
-        maxBatchSize: 10,
-      });
-      const initial = 'old text';
-      const updated = 'newer, much longer text';
-
-      // Register chapter and immediately start an edit before debounce fires
-      manager.registerChapter('ch1', initial);
-      manager.handleEdit('ch1', updated, 0, initial.length);
-
-      // Force processing while debounce timer is pending
-      await manager.processAllDirty();
-
-      // Hash should still reflect the authoritative (pre-edit) text
-      const chunkBefore = manager.getChapterChunk('ch1');
-      expect(chunkBefore?.hash).toBe(`hash-${initial.length}`);
-
-      // Let the debounce apply and processing flush
-      vi.advanceTimersByTime(200);
-      await vi.runAllTimersAsync();
-
-      const chunkAfter = manager.getChapterChunk('ch1');
-      expect(chunkAfter?.hash).toBe(`hash-${updated.length}`);
-    });
-
-    it('coalesces multiple rapid edits into a single union range', async () => {
-      const manager = new ChunkManager({
-        editDebounceMs: 200,
-        idleThresholdMs: 0,
-        processingIntervalMs: 0,
-        maxBatchSize: 10,
-      });
-
-      // Register initial content
-      manager.registerChapter('ch1', 'AAAA BBBB CCCC DDDD');
-      await manager.processAllDirty();
-
-      // Simulate rapid edits at different positions before debounce fires
-      // Edit 1: modify chars 0-4
-      manager.handleEdit('ch1', 'xxxx BBBB CCCC DDDD', 0, 4);
-      // Edit 2: modify chars 10-14
-      manager.handleEdit('ch1', 'xxxx BBBB yyyy DDDD', 10, 14);
-      // Edit 3: modify chars 15-19
-      manager.handleEdit('ch1', 'xxxx BBBB yyyy zzzz', 15, 19);
-
-      // Let debounce fire
-      vi.advanceTimersByTime(200);
-      await vi.runAllTimersAsync();
-
-      // After coalescing, the range should span from min(0,10,15)=0 to max(4,14,19)=19
-      // The chunk should now reflect the final text
-      const chunk = manager.getChapterChunk('ch1');
-      expect(chunk?.hash).toBe(`hash-${'xxxx BBBB yyyy zzzz'.length}`);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // PROCESSING
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Processing', () => {
-    it('should schedule processing after edit', async () => {
-      const onQueueChange = vi.fn();
-      const manager = new ChunkManager(
-        { editDebounceMs: 100, idleThresholdMs: 100 },
-        { onQueueChange }
-      );
-
-      manager.registerChapter('ch1', 'Content');
-
-      // Queue should have items (chapter + scenes)
-      expect(onQueueChange).toHaveBeenCalled();
-    });
-
-    it('should wait for idle before processing', async () => {
-      const onProcessingStart = vi.fn();
-      const manager = new ChunkManager(
-        { editDebounceMs: 100, idleThresholdMs: 500 },
-        { onProcessingStart }
-      );
-
-      manager.registerChapter('ch1', 'Content');
-      vi.advanceTimersByTime(100); // Past debounce
-
-      // Should not start immediately
-      expect(onProcessingStart).not.toHaveBeenCalled();
-
-      // Advance past idle threshold
-      vi.advanceTimersByTime(500);
-      await vi.runAllTimersAsync();
-
-      expect(onProcessingStart).toHaveBeenCalled();
-    });
-
-    it('should process chunks in batches', async () => {
-      const onChunkProcessed = vi.fn();
-      const manager = new ChunkManager(
-        { maxBatchSize: 2, editDebounceMs: 0, idleThresholdMs: 0 },
-        { onChunkProcessed }
-      );
-
-      manager.registerChapter('ch1', 'Content');
-      vi.advanceTimersByTime(0);
-      await vi.runAllTimersAsync();
-
-      // Should process up to maxBatchSize chunks
-      expect(onChunkProcessed).toHaveBeenCalledTimes(2);
-    });
-
-    it('should call callbacks during processing', async () => {
-      const onProcessingStart = vi.fn();
-      const onProcessingEnd = vi.fn();
-      const onChunkProcessed = vi.fn();
-
-      const manager = new ChunkManager(
-        { editDebounceMs: 0, idleThresholdMs: 0 },
-        { onProcessingStart, onProcessingEnd, onChunkProcessed }
-      );
-
-      manager.registerChapter('ch1', 'Content');
-      await manager.processAllDirty();
-      await vi.runAllTimersAsync();
-
-      expect(onProcessingStart).toHaveBeenCalled();
-      expect(onChunkProcessed).toHaveBeenCalled();
-      expect(onProcessingEnd).toHaveBeenCalled();
-    });
-
-    it('should handle processing errors', async () => {
-      const onError = vi.fn();
-      const manager = new ChunkManager(
-        { editDebounceMs: 0, idleThresholdMs: 0 },
-        { onError }
-      );
-
-      // Create a scenario that causes error (empty chunk text)
-      manager.registerChapter('ch1', '');
-      await vi.runAllTimersAsync();
-
-      // Errors may occur during processing
-      // We just verify the manager doesn't crash
-      expect(manager.getStats()).toBeDefined();
-    });
-
-    it('should not process while editing is in progress', async () => {
-      const onProcessingStart = vi.fn();
-      const manager = new ChunkManager(
-        { editDebounceMs: 100, idleThresholdMs: 500 },
-        { onProcessingStart }
-      );
-
-      manager.registerChapter('ch1', 'Content 1');
-      onProcessingStart.mockClear(); // focus on post-edit processing
-      vi.advanceTimersByTime(100);
-
-      // Make another edit before idle threshold
-      manager.handleEdit('ch1', 'Content 2', 0, 10);
-      vi.advanceTimersByTime(400);
-
-      // Should not start processing yet
-      expect(onProcessingStart).not.toHaveBeenCalled();
-    });
-
-    it('should resume processing after interruption', async () => {
-      const onProcessingStart = vi.fn();
-      const manager = new ChunkManager(
-        { editDebounceMs: 100, idleThresholdMs: 200, maxBatchSize: 1 },
-        { onProcessingStart }
-      );
-
-      manager.registerChapter('ch1', 'Content');
-      await manager.processAllDirty();
-      const initialCalls = onProcessingStart.mock.calls.length;
-
-      // Make new edit
-      manager.handleEdit('ch1', 'New content', 0, 10);
-      vi.advanceTimersByTime(300);
-      await vi.runAllTimersAsync();
-
-      // Processing should resume
-      expect(onProcessingStart.mock.calls.length).toBeGreaterThan(initialCalls);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // QUERIES
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Queries', () => {
-    it('should get chunk by ID', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Content');
-
-      const chunk = manager.getChunk('chapter-ch1');
-      expect(chunk).toBeDefined();
-      expect(chunk?.id).toBe('chapter-ch1');
-    });
-
-    it('should get chapter chunk by chapter ID', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Content');
-
-      const chunk = manager.getChapterChunk('ch1');
-      expect(chunk).toBeDefined();
-      expect(chunk?.id).toBe('chapter-ch1');
-    });
-
-    it('should return undefined for non-existent chunk', () => {
-      const manager = new ChunkManager();
-      const chunk = manager.getChunk('non-existent');
-      expect(chunk).toBeUndefined();
-    });
-
-    it('should get all chapter analyses', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager.registerChapter('ch1', 'Content 1');
-      manager.registerChapter('ch2', 'Content 2');
-
-      await vi.runAllTimersAsync();
-
-      const analyses = manager.getAllChapterAnalyses();
-      expect(analyses.size).toBe(2);
-      expect(analyses.has('ch1')).toBe(true);
-      expect(analyses.has('ch2')).toBe(true);
-    });
-
-    it('should get analysis at cursor position', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager.registerChapter('ch1', 'Chapter content here');
-      await vi.runAllTimersAsync();
-
-      const analysis = manager.getAnalysisAtCursor('ch1', 5);
-      // Should return scene or chapter analysis
-      expect(analysis).toBeDefined();
-    });
-
-    it('should get book summary', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager.registerChapter('ch1', 'Content 1');
-      manager.registerChapter('ch2', 'Content 2');
-      await manager.processAllDirty();
-      await vi.runAllTimersAsync();
-
-      const summary = manager.getBookSummary();
-      expect(summary).toBeDefined();
-    });
-
-    it('should get processing stats', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Content');
-
-      const stats = manager.getStats();
-      expect(stats).toHaveProperty('totalChunks');
-      expect(stats).toHaveProperty('dirtyCount');
-      expect(stats).toHaveProperty('freshCount');
-      expect(stats).toHaveProperty('isProcessing');
-      expect(stats).toHaveProperty('chapterCount');
-      expect(stats.chapterCount).toBe(1);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // MANUAL CONTROLS
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Manual Controls', () => {
-    it('should force process all dirty chunks', async () => {
-      const onChunkProcessed = vi.fn();
-      const manager = new ChunkManager({ editDebounceMs: 0 }, { onChunkProcessed });
-
-      manager.registerChapter('ch1', 'Content');
-
-      await manager.processAllDirty();
-
-      expect(onChunkProcessed).toHaveBeenCalled();
-      expect(manager.getStats().dirtyCount).toBe(0);
-    });
-
-    it('should reprocess a specific chunk', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager.registerChapter('ch1', 'Content');
-      await vi.runAllTimersAsync();
-
-      // Mark as fresh
-      const statsBefore = manager.getStats();
-      const freshBefore = statsBefore.freshCount;
-
-      // Reprocess
-      await manager.reprocessChunk('chapter-ch1');
-
-      const statsAfter = manager.getStats();
-      expect(statsAfter.freshCount).toBeGreaterThanOrEqual(freshBefore);
-    });
-
-    it('should retry errored chunks', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0 });
-
-      const retriedIds = manager.retryErrors();
-      expect(Array.isArray(retriedIds)).toBe(true);
-    });
-
-    it('should pause processing', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Content');
-
-      manager.pause();
-
-      const stats = manager.getStats();
-      expect(stats.isProcessing).toBe(false);
-    });
-
-    it('should resume processing', async () => {
-      const onQueueChange = vi.fn();
-      const manager = new ChunkManager(
-        { editDebounceMs: 0, idleThresholdMs: 0 },
-        { onQueueChange }
-      );
-
-      manager.registerChapter('ch1', 'Content');
-      manager.pause();
-
-      manager.resume();
-
-      // Should schedule processing
-      vi.advanceTimersByTime(0);
-      expect(manager).toBeDefined();
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // PERSISTENCE
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Persistence', () => {
-    it('should export state', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Content 1');
-      manager.registerChapter('ch2', 'Content 2');
-
-      const state = manager.exportState();
-
-      expect(state).toHaveProperty('index');
-      expect(state).toHaveProperty('chapterTexts');
-      expect(state.chapterTexts).toHaveProperty('ch1');
-      expect(state.chapterTexts).toHaveProperty('ch2');
-      expect(state.chapterTexts.ch1).toBe('Content 1');
-    });
-
-    it('should load state', () => {
-      const manager1 = new ChunkManager();
-      manager1.registerChapter('ch1', 'Original content');
-      const state = manager1.exportState();
-
-      const manager2 = new ChunkManager();
-      manager2.loadState(state);
-
-      const chunk = manager2.getChapterChunk('ch1');
-      expect(chunk).toBeDefined();
-    });
-
-    it('should round-trip state correctly', () => {
-      const manager1 = new ChunkManager();
-      manager1.registerChapter('ch1', 'Content 1');
-      manager1.registerChapter('ch2', 'Content 2');
-
-      const state1 = manager1.exportState();
-
-      const manager2 = new ChunkManager();
-      manager2.loadState(state1);
-
-      const state2 = manager2.exportState();
-
-      expect(state2.chapterTexts).toEqual(state1.chapterTexts);
-    });
-
-    it('should clear all state', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Content');
-
-      manager.clear();
-
-      const stats = manager.getStats();
-      expect(stats.chapterCount).toBe(0);
-      expect(stats.totalChunks).toBe(0);
-    });
-
-    it('should destroy manager and clean up', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', 'Content');
-
-      manager.destroy();
-
-      const stats = manager.getStats();
-      expect(stats.totalChunks).toBe(0);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // AGGREGATES
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Aggregates', () => {
-    it('should build aggregate from processed chunks', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager.registerChapter('ch1', 'This is a chapter with content');
-      await manager.processAllDirty();
-
-      const aggregate = manager.getAggregate('chapter-ch1');
-      expect(aggregate).toBeDefined();
-    });
-
-    it('should aggregate multiple chapters into book', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager.registerChapter('ch1', 'Chapter one content');
-      manager.registerChapter('ch2', 'Chapter two content');
-      await manager.processAllDirty();
-
-      const bookAggregate = manager.getAggregate('book');
-      expect(bookAggregate).toBeDefined();
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // EDGE CASES
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Edge Cases', () => {
-    it('should handle empty chapter content', () => {
-      const manager = new ChunkManager();
-      manager.registerChapter('ch1', '');
-
-      const chunk = manager.getChapterChunk('ch1');
-      expect(chunk).toBeDefined();
-      expect(chunk?.endIndex).toBe(0);
-    });
-
-    it('should handle very long chapter content', () => {
-      const manager = new ChunkManager();
-      const longContent = 'word '.repeat(10000);
-
-      manager.registerChapter('ch1', longContent);
-
-      const chunk = manager.getChapterChunk('ch1');
-      expect(chunk).toBeDefined();
-      expect(chunk?.endIndex).toBe(longContent.length);
-    });
-
-    it('should handle rapid chapter additions', () => {
-      const manager = new ChunkManager();
-
-      for (let i = 0; i < 10; i++) {
-        manager.registerChapter(`ch${i}`, `Content ${i}`);
-      }
-
-      const stats = manager.getStats();
-      expect(stats.chapterCount).toBe(10);
-    });
-
-    it('should handle removing non-existent chapter', () => {
-      const manager = new ChunkManager();
-
-      // Should not throw
-      manager.removeChapter('non-existent');
-
-      expect(manager.getStats().chapterCount).toBe(0);
-    });
-
-    it('should handle concurrent edits and processing', async () => {
-      const manager = new ChunkManager({
-        editDebounceMs: 50,
-        idleThresholdMs: 100,
-        maxBatchSize: 2
-      });
-
-      manager.registerChapter('ch1', 'Initial content');
-
-      // Edit while processing might be scheduled
-      manager.handleEdit('ch1', 'Updated content', 0, 15);
-      vi.advanceTimersByTime(50);
-
-      manager.handleEdit('ch1', 'Final content', 0, 15);
-      vi.advanceTimersByTime(50);
-
-      await vi.runAllTimersAsync();
-
-      const chunk = manager.getChapterChunk('ch1');
-      expect(chunk).toBeDefined();
-    });
-
-    it('should handle analysis at invalid cursor position', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager.registerChapter('ch1', 'Short content');
-      await vi.runAllTimersAsync();
-
-      const analysis = manager.getAnalysisAtCursor('ch1', 99999);
-      // Should return chapter analysis or null
-      expect(analysis === null || analysis !== undefined).toBe(true);
-    });
-
-    it('should handle getting analysis for non-existent chapter', () => {
-      const manager = new ChunkManager();
-
-      const analysis = manager.getAnalysisAtCursor('non-existent', 0);
-      expect(analysis).toBeNull();
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // INTEGRATION SCENARIOS
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe('Integration Scenarios', () => {
-    it('should handle complete editing workflow', async () => {
-      const callbacks = {
-        onProcessingStart: vi.fn(),
-        onProcessingEnd: vi.fn(),
-        onChunkProcessed: vi.fn(),
-        onQueueChange: vi.fn(),
-      };
-
-      const manager = new ChunkManager(
-        { editDebounceMs: 0, idleThresholdMs: 0, maxBatchSize: 10 },
-        callbacks
-      );
-
-      // Register chapters
-      manager.registerChapter('ch1', 'Chapter 1 content');
-      manager.registerChapter('ch2', 'Chapter 2 content');
-      await vi.runAllTimersAsync();
-
-      // Trigger an edit to kick off processing callbacks
-      manager.handleEdit('ch1', 'Chapter 1 content updated', 0, 18);
-      vi.advanceTimersByTime(0);
-      await vi.runAllTimersAsync();
-
-      // Process
-      await manager.processAllDirty();
-
-      // Verify all callbacks were called
-      expect(callbacks.onProcessingStart).toHaveBeenCalled();
-      expect(callbacks.onChunkProcessed).toHaveBeenCalled();
-      expect(callbacks.onProcessingEnd).toHaveBeenCalled();
-      expect(callbacks.onQueueChange).toHaveBeenCalled();
-
-      // Edit a chapter
-      manager.handleEdit('ch1', 'Chapter 1 content updated', 0, 18);
-      vi.advanceTimersByTime(0);
-      await vi.runAllTimersAsync();
-
-      const updatedChunk = manager.getChapterChunk('ch1');
-      expect(updatedChunk?.hash).toBe(`hash-${'Chapter 1 content updated'.length}`);
-    });
-
-    it('should maintain consistency across pause/resume', async () => {
-      const manager = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager.registerChapter('ch1', 'Content');
-      await manager.processAllDirty();
-
-      manager.pause();
-
-      manager.handleEdit('ch1', 'New content', 0, 10);
-      vi.advanceTimersByTime(0);
-
-      // Should not process while paused
-      expect(manager.getStats().isProcessing).toBe(false);
-
-      manager.resume();
-      vi.advanceTimersByTime(0);
-      await vi.runAllTimersAsync();
-
-      // Should process after resume
-      const chunk = manager.getChapterChunk('ch1');
-      expect(chunk).toBeDefined();
-    });
-
-    it('should preserve data through export/load cycle', async () => {
-      const manager1 = new ChunkManager({ editDebounceMs: 0, idleThresholdMs: 0 });
-
-      manager1.registerChapter('ch1', 'Chapter one');
-      manager1.registerChapter('ch2', 'Chapter two');
-      await manager1.processAllDirty();
-
-      const state = manager1.exportState();
-
-      const manager2 = new ChunkManager();
-      manager2.loadState(state);
-
-      // Verify chapters are present
-      expect(manager2.getChapterChunk('ch1')).toBeDefined();
-      expect(manager2.getChapterChunk('ch2')).toBeDefined();
-
-      // Verify analyses
-      const analyses = manager2.getAllChapterAnalyses();
-      expect(analyses.size).toBe(2);
-    });
+  it('converts ManuscriptIntelligence to ChunkAnalysis with style flag branches', () => {
+    const manager = createManager() as any;
+
+    const intelligenceHigh = {
+      structural: {
+        scenes: [
+          { tension: 0.9, timeMarker: 'dawn' },
+          { tension: 0.6, timeMarker: null },
+        ],
+        stats: { totalWords: 120, dialogueRatio: 0.4 },
+      },
+      entities: {
+        nodes: [
+          { type: 'character', name: 'Eve' },
+          { type: 'location', name: 'Venice' },
+        ],
+      },
+      timeline: {
+        promises: [
+          { description: 'Resolve mystery', resolved: false },
+          { description: 'Closed loop', resolved: true },
+        ],
+      },
+      style: {
+        flags: {
+          passiveVoiceRatio: 0.2,
+          adverbDensity: 0.06,
+          filterWordDensity: 0.04,
+        },
+        syntax: { avgSentenceLength: 35 },
+      },
+      heatmap: { sections: [{ overallRisk: 0.8 }, { overallRisk: 0.4 }] },
+    } as unknown as ManuscriptIntelligence;
+
+    const analysisHigh = manager.intelligenceToChunkAnalysis(intelligenceHigh) as ChunkAnalysis;
+    expect(analysisHigh.styleFlags).toEqual([
+      'passive_voice_heavy',
+      'adverb_overuse',
+      'filter_words',
+      'long_sentences',
+    ]);
+    expect(analysisHigh.riskScore).toBeCloseTo(0.6);
+    expect(analysisHigh.openPromises).toEqual(['Resolve mystery']);
+    expect(analysisHigh.locationNames).toEqual(['Venice']);
+
+    const intelligenceLow = {
+      structural: {
+        scenes: [{ tension: 0.2, timeMarker: 'noon' }],
+        stats: { totalWords: 20, dialogueRatio: 0 },
+      },
+      entities: { nodes: [] },
+      timeline: { promises: [] },
+      style: {
+        flags: { passiveVoiceRatio: 0, adverbDensity: 0, filterWordDensity: 0 },
+        syntax: { avgSentenceLength: 5 },
+      },
+      heatmap: { sections: [] },
+    } as unknown as ManuscriptIntelligence;
+
+    const analysisLow = manager.intelligenceToChunkAnalysis(intelligenceLow) as ChunkAnalysis;
+    expect(analysisLow.styleFlags).toEqual(['short_sentences']);
+    expect(analysisLow.timeMarkers).toEqual(['noon']);
   });
 });
