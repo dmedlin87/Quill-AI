@@ -1,56 +1,22 @@
 import React from 'react';
-import { renderHook, act, cleanup } from '@testing-library/react';
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   calculateSafePosition,
-  useViewportCollision,
-  useMeasuredCollision,
+  observeElementDimensions,
 } from '@/features/shared/hooks/useViewportCollision';
-
-declare global {
-  interface Window {
-    ResizeObserver: typeof ResizeObserver;
-  }
-}
 
 const originalWidth = window.innerWidth;
 const originalHeight = window.innerHeight;
-const originalResizeObserver = window.ResizeObserver;
-
-// Mock ResizeObserver globally - use synchronous callback during observe
-class MockResizeObserver {
-  callback: ResizeObserverCallback;
-  target: Element | null = null;
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback;
-  }
-  observe(target: Element) {
-    this.target = target;
-    // Trigger callback synchronously with mocked rect data
-    this.callback(
-      [{ target, contentRect: { width: 500, height: 250 } } as ResizeObserverEntry],
-      this as unknown as ResizeObserver
-    );
-  }
-  unobserve() {
-    this.target = null;
-  }
-  disconnect() {
-    this.target = null;
-  }
-}
 
 beforeEach(() => {
   Object.defineProperty(window, 'innerWidth', { writable: true, value: 800 });
   Object.defineProperty(window, 'innerHeight', { writable: true, value: 600 });
-  (window as any).ResizeObserver = MockResizeObserver;
 });
 
 afterEach(() => {
-  cleanup();
   Object.defineProperty(window, 'innerWidth', { writable: true, value: originalWidth });
   Object.defineProperty(window, 'innerHeight', { writable: true, value: originalHeight });
-  (window as any).ResizeObserver = originalResizeObserver;
+  delete (window as any).ResizeObserver;
 });
 
 describe('calculateSafePosition', () => {
@@ -68,39 +34,91 @@ describe('calculateSafePosition', () => {
     expect(flipped.adjustments.vertical).toBe('up');
     expect(flipped.top).toBeLessThan(700);
   });
-});
 
-// TODO: Hook tests hang in jsdom due to event listener interactions.
-// The hooks work correctly in the app; pure function tests provide coverage.
-// Consider migrating to Playwright component testing for full hook coverage.
-describe.skip('useViewportCollision', () => {
-  it('recalculates when viewport changes', () => {
-    const { result, unmount } = renderHook(() => useViewportCollision({ top: 10, left: 10 }));
-    expect(result.current?.adjusted).toBe(true);
-    act(() => {
-      Object.defineProperty(window, 'innerWidth', { writable: true, value: 300 });
-      window.dispatchEvent(new Event('resize'));
-    });
-    expect(result.current?.left).toBeGreaterThan(100);
-    unmount();
+  it('shifts left when overflowing the right edge and flips above when preferring below', () => {
+    const collision = calculateSafePosition(
+      { top: 580, left: 780 },
+      {
+        elementWidth: 300,
+        elementHeight: 150,
+        preferVertical: 'below',
+        padding: 12,
+      }
+    );
+
+    expect(collision.adjusted).toBe(true);
+    expect(collision.adjustments.horizontal).toBe('left');
+    expect(collision.adjustments.vertical).toBe('up');
   });
 });
 
-describe.skip('useMeasuredCollision', () => {
-  it('uses measured dimensions for collision detection', () => {
+describe('observeElementDimensions', () => {
+  type ObserverInstance = {
+    observe: (target: Element) => void;
+    disconnect: () => void;
+  };
+
+  class MockResizeObserver {
+    callback: ResizeObserverCallback;
+    observe = vi.fn((target: Element) => {
+      this.callback(
+        [{ target, contentRect: { width: 500, height: 250 } } as ResizeObserverEntry],
+        this as unknown as ResizeObserver
+      );
+    });
+    disconnect = vi.fn();
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+  }
+
+  let lastInstance: ObserverInstance | null = null;
+  let constructorSpy: ReturnType<typeof vi.fn> | null = null;
+
+  beforeEach(() => {
+    lastInstance = null;
+    constructorSpy = vi.fn(function (this: MockResizeObserver, callback: ResizeObserverCallback) {
+      const instance = new MockResizeObserver(callback);
+      lastInstance = instance;
+      return instance;
+    });
+    (window as any).ResizeObserver = constructorSpy;
+  });
+
+  afterEach(() => {
+    lastInstance = null;
+    constructorSpy = null;
+    delete (window as any).ResizeObserver;
+  });
+
+  it('measures the element immediately and returns a cleanup function', () => {
+    const measureCallback = vi.fn();
     const element = {
-      getBoundingClientRect: vi.fn(() => ({ width: 500, height: 250 })),
+      getBoundingClientRect: vi.fn(() => ({ width: 400, height: 200 })),
     } as unknown as HTMLElement;
     const ref = { current: element } as React.RefObject<HTMLElement>;
-    Object.defineProperty(window, 'innerWidth', { writable: true, value: 400 });
-    Object.defineProperty(window, 'innerHeight', { writable: true, value: 320 });
-    const { result } = renderHook(() =>
-      useMeasuredCollision({ top: 40, left: 40 }, ref, { padding: 10, preferVertical: 'below' })
-    );
-    expect(result.current).not.toBeNull();
-    expect(element.getBoundingClientRect).toHaveBeenCalled();
-    expect(result.current?.adjusted).toBe(true);
-    expect(result.current?.adjustments.vertical).toBe('up');
+
+    const cleanup = observeElementDimensions(ref, measureCallback);
+
+    expect(measureCallback).toHaveBeenCalledWith({ width: 400, height: 200 });
+    expect(constructorSpy).toHaveBeenCalled();
+    expect(lastInstance).not.toBeNull();
+    expect(lastInstance?.observe).toHaveBeenCalledWith(element);
+
+    cleanup?.();
+
+    expect(lastInstance?.disconnect).toHaveBeenCalled();
+  });
+
+  it('does nothing when the ref is missing', () => {
+    const measureCallback = vi.fn();
+    const ref = { current: null } as React.RefObject<HTMLElement>;
+
+    const cleanup = observeElementDimensions(ref, measureCallback);
+
+    expect(cleanup).toBeUndefined();
+    expect(constructorSpy).not.toHaveBeenCalled();
+    expect(measureCallback).not.toHaveBeenCalled();
   });
 });
-

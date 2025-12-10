@@ -7,6 +7,10 @@ const trackUsageMock = vi.fn();
 const updateChapterAnalysisMock = vi.fn();
 const updateProjectLoreMock = vi.fn();
 const commitMock = vi.fn();
+const isMemoryToolMock = vi.fn();
+const executeMemoryToolMock = vi.fn();
+const emitAnalysisCompletedMock = vi.fn();
+const eventBusSubscribeMock = vi.fn();
 
 vi.mock('@/services/gemini/analysis', () => ({
   analyzeDraft: (...args: unknown[]) => analyzeDraftMock(...args)
@@ -15,6 +19,23 @@ vi.mock('@/services/gemini/analysis', () => ({
 vi.mock('@/features/shared/context/UsageContext', () => ({
   useUsage: () => ({ trackUsage: trackUsageMock })
 }));
+
+vi.mock('@/services/gemini/memoryToolHandlers', () => ({
+  isMemoryTool: (...args: unknown[]) => isMemoryToolMock(...args),
+  executeMemoryTool: (...args: unknown[]) => executeMemoryToolMock(...args),
+}));
+
+vi.mock('@/services/appBrain', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appBrain')>('@/services/appBrain');
+  return {
+    ...actual,
+    emitAnalysisCompleted: (...args: unknown[]) => emitAnalysisCompletedMock(...args),
+    eventBus: {
+      ...actual.eventBus,
+      subscribe: (...args: unknown[]) => eventBusSubscribeMock(...args),
+    },
+  };
+});
 
 const magicActionsMock = {
   handleRewrite: vi.fn(),
@@ -56,20 +77,29 @@ describe('useQuillAIEngine', () => {
     analyzeDraftMock.mockResolvedValue(baseResult);
     updateChapterAnalysisMock.mockResolvedValue(undefined);
     updateProjectLoreMock.mockResolvedValue(undefined);
+    isMemoryToolMock.mockReturnValue(false);
+    executeMemoryToolMock.mockResolvedValue(undefined);
+    eventBusSubscribeMock.mockReturnValue(vi.fn());
   });
 
   const getCurrentText = () => 'chapter text';
 
-  const buildHook = (selectionRange: any = null) => renderHook(() => useQuillAIEngine({
-    getCurrentText,
-    currentProject: project,
-    activeChapterId: 'chapter-1',
-    updateChapterAnalysis: updateChapterAnalysisMock,
-    updateProjectLore: updateProjectLoreMock,
-    commit: commitMock,
-    selectionRange,
-    clearSelection: vi.fn(),
-  }));
+  const buildHook = (options: {
+    selectionRange?: any;
+    getCurrentText?: () => string;
+    currentProject?: typeof project | null;
+    activeChapterId?: string | null;
+  } = {}) =>
+    renderHook(() => useQuillAIEngine({
+      getCurrentText: options.getCurrentText ?? getCurrentText,
+      currentProject: options.currentProject !== undefined ? options.currentProject : project,
+      activeChapterId: options.activeChapterId !== undefined ? options.activeChapterId : 'chapter-1',
+      updateChapterAnalysis: updateChapterAnalysisMock,
+      updateProjectLore: updateProjectLoreMock,
+      commit: commitMock,
+      selectionRange: options.selectionRange ?? null,
+      clearSelection: vi.fn(),
+    }));
 
   it('runs analysis and updates project data', async () => {
     const { result } = buildHook();
@@ -276,7 +306,7 @@ describe('useQuillAIEngine', () => {
   it('offers selection-only analysis when provided a selection', async () => {
     analyzeDraftMock.mockResolvedValue(baseResult);
     const selectionRange = { start: 0, end: 5, text: 'slice' };
-    const { result } = buildHook(selectionRange);
+    const { result } = buildHook({ selectionRange });
 
     await act(async () => {
       await result.current.actions.runSelectionAnalysis();
@@ -293,4 +323,120 @@ describe('useQuillAIEngine', () => {
       expect.objectContaining({ warning: expect.objectContaining({ message: expect.stringContaining('selected text') }) })
     );
   });
+
+  it('warns when selection text is empty', async () => {
+    const { result } = buildHook({ selectionRange: { start: 0, end: 0, text: '   ' } });
+
+    await act(async () => {
+      await result.current.actions.runSelectionAnalysis();
+    });
+
+    expect(analyzeDraftMock).not.toHaveBeenCalled();
+    expect(result.current.state.analysisWarning?.message).toBe('Select some text to analyze a smaller section.');
+  });
+
+  it('prepends selection warnings when analysis already reported one', async () => {
+    const selectionRange = { start: 0, end: 5, text: 'slice' };
+    analyzeDraftMock.mockResolvedValueOnce({
+      ...baseResult,
+      warning: { message: 'Truncated input', removedChars: 10, removedPercent: 5, originalLength: 200 },
+    });
+    const { result } = buildHook({ selectionRange });
+
+    await act(async () => {
+      await result.current.actions.runSelectionAnalysis();
+    });
+
+    expect(result.current.state.analysisWarning?.message).toContain('Selection-only analysis: Truncated input');
+  });
+
+  it('handles analysis failures by surfacing errors', async () => {
+    analyzeDraftMock.mockRejectedValueOnce(new Error('analysis failed'));
+    const { result } = buildHook();
+
+    await act(async () => {
+      await result.current.actions.runAnalysis();
+    });
+
+    expect(result.current.state.analysisError).toBe('analysis failed');
+    expect(result.current.state.analysisWarning).toBeNull();
+    expect(emitAnalysisCompletedMock).toHaveBeenCalledWith('chapter-1', 'error', 'analysis failed');
+  });
+
+  it('allows canceling in-flight analysis requests', async () => {
+    let resolveAnalysis!: (value: typeof baseResult) => void;
+    const pendingAnalysis = new Promise<typeof baseResult>((resolve) => {
+      resolveAnalysis = resolve;
+    });
+    analyzeDraftMock.mockImplementation(() => pendingAnalysis);
+
+    const { result } = buildHook();
+
+    let runPromise: Promise<void>;
+    act(() => {
+      runPromise = result.current.actions.runAnalysis();
+    });
+
+    expect(result.current.state.isAnalyzing).toBe(true);
+
+    act(() => {
+      result.current.actions.cancelAnalysis();
+    });
+
+    expect(result.current.state.isAnalyzing).toBe(false);
+
+    await act(async () => {
+      resolveAnalysis(baseResult);
+      await runPromise!;
+    });
+
+    expect(updateChapterAnalysisMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects ambiguous manuscript replacements', async () => {
+    const { result } = buildHook({ getCurrentText: () => 'repeat repeat' });
+
+    await act(async () => {
+      await expect(
+        result.current.actions.handleAgentAction('update_manuscript', {
+          search_text: 'repeat',
+          replacement_text: 'story',
+        })
+      ).rejects.toThrow('Found 2 matches for that text. Please provide more context.');
+    });
+
+    expect(result.current.state.pendingDiff).toBeNull();
+  });
+
+  it('routes memory tools to the memory handler', async () => {
+    isMemoryToolMock.mockReturnValue(true);
+    executeMemoryToolMock.mockResolvedValue('handled');
+    const { result } = buildHook();
+
+    let response: string | undefined;
+    await act(async () => {
+      response = await result.current.actions.handleAgentAction('memory_action', { payload: 42 });
+    });
+
+    expect(response).toBe('handled');
+    expect(executeMemoryToolMock).toHaveBeenCalledWith(
+      'memory_action',
+      { payload: 42 },
+      { projectId: 'project-1' }
+    );
+  });
+
+  it('rejects memory tools without an active project', async () => {
+    isMemoryToolMock.mockReturnValue(true);
+    const { result } = buildHook({ currentProject: null });
+
+    let response: string | undefined;
+    await act(async () => {
+      response = await result.current.actions.handleAgentAction('memory_action', {});
+    });
+
+    expect(response).toContain('No project loaded');
+    expect(executeMemoryToolMock).not.toHaveBeenCalled();
+  });
+
 });

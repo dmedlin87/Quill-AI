@@ -108,15 +108,27 @@ export function checkNarrativeDrift(
 }
 
 function findEntitiesInText(text: string, intelligence: ManuscriptIntelligence): string[] {
-  // Simple check against known entity names in the intelligence graph
+  // Simple check against known entity names or aliases in the intelligence graph
   const found: string[] = [];
   const lowerText = text.toLowerCase();
   
   for (const node of intelligence.entities.nodes) {
     if (node.type !== 'character') continue;
-    if (lowerText.includes(node.name.toLowerCase())) {
+
+    const normalizedName = node.name.toLowerCase();
+    if (lowerText.includes(normalizedName)) {
       found.push(node.name);
+      continue;
+    }
+
+    for (const alias of node.aliases ?? []) {
+      const normalizedAlias = alias.toLowerCase();
+      if (lowerText.includes(normalizedAlias)) {
+        found.push(alias);
+        break;
+      }
     }
   }
+
   return found;
 }

@@ -88,6 +88,47 @@ describe('useThrottledValue', () => {
     expect(clearTimeoutSpy).toHaveBeenCalled();
   });
 
+  it('updates immediately when interval has already elapsed', () => {
+    const { result, rerender } = renderHook(
+      ({ value }) => useThrottledValue(value, 100),
+      { initialProps: { value: 'first' } },
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    act(() => {
+      rerender({ value: 'second' });
+    });
+
+    expect(result.current).toBe('second');
+  });
+
+  it('clears pending timeout before scheduling a new tick', () => {
+    const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+
+    const { rerender } = renderHook(
+      ({ value }) => useThrottledValue(value, 100),
+      { initialProps: { value: 'first' } },
+    );
+
+    act(() => {
+      rerender({ value: 'second' });
+    });
+
+    act(() => {
+      rerender({ value: 'third' });
+    });
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    clearTimeoutSpy.mockRestore();
+  });
+
   it('respects custom interval', () => {
     const { result, rerender } = renderHook(
       ({ value }) => useThrottledValue(value, 500),

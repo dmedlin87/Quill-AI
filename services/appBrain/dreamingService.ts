@@ -1,5 +1,6 @@
 import { eventBus, emitDreamingStateChanged, emitIdleStatusChanged } from './eventBus';
 import { runDreamingCycle } from '../memory/dreaming';
+import { dreamingServiceLogger } from './logger';
 
 const IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -80,7 +81,7 @@ class DreamingService {
       await runDreamingCycle(this.projectId, this.abortController.signal);
     } catch (error) {
       if ((error as Error)?.name !== 'AbortError') {
-        console.warn('[DreamingService] Dreaming cycle failed', error);
+        dreamingServiceLogger.warn('Dreaming cycle failed', { error: error as Error });
       }
     } finally {
       this.isActive = false;

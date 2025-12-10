@@ -5,7 +5,7 @@ import { BedsideNotePanel } from '@/features/memory/components/BedsideNotePanel'
 import { BedsideNoteHistory } from '@/features/memory/components/BedsideNoteHistory';
 import { applyBedsideNoteMutation } from '@/services/memory/bedsideNoteMutations';
 import { getMemoryChain, getOrCreateBedsideNote, ChainedMemory } from '@/services/memory/chains';
-import { MemoryNote } from '@/services/memory/types';
+import { BedsideNoteContent, MemoryNote } from '@/services/memory/types';
 
 vi.mock('@/services/memory/bedsideNoteMutations', () => ({
   applyBedsideNoteMutation: vi.fn(),
@@ -115,6 +115,101 @@ describe('BedsideNotePanel', () => {
     expect(screen.getByText('Add new hook')).toBeInTheDocument();
   });
 
+  it('saves focus edits and refreshes history', async () => {
+    const updatedNote: MemoryNote = {
+      ...baseNote,
+      id: 'bed-4',
+      structuredContent: { ...baseNote.structuredContent, currentFocus: 'New focus point' },
+    };
+
+    mockedGetMemoryChain
+      .mockResolvedValueOnce(baseHistory)
+      .mockResolvedValueOnce([...baseHistory, { ...baseHistory[1], memoryId: 'bed-4', version: 4 }]);
+
+    mockedApplyMutation.mockResolvedValue(updatedNote);
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    const focusTextarea = screen.getByPlaceholderText('What should we focus on next?');
+    fireEvent.change(focusTextarea, { target: { value: '  New focus point  ' } });
+    fireEvent.click(screen.getByText('Save focus'));
+
+    await waitFor(() =>
+      expect(mockedApplyMutation).toHaveBeenCalledWith('proj-1', {
+        section: 'currentFocus',
+        action: 'set',
+        content: '  New focus point  ',
+      }),
+    );
+    expect(mockedGetMemoryChain).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows error when saving focus fails', async () => {
+    mockedApplyMutation.mockRejectedValueOnce(new Error('focus save failed'));
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText('Save focus'));
+
+    await waitFor(() => expect(screen.getByText('focus save failed')).toBeInTheDocument());
+  });
+
+  it('skips adding list items when input is whitespace-only', async () => {
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+    await waitFor(() => expect(mockedGetMemoryChain).toHaveBeenCalled());
+
+    const warningsInput = screen.getByPlaceholderText('Add to warnings & risks');
+    fireEvent.change(warningsInput, { target: { value: '     ' } });
+    fireEvent.click(screen.getAllByText('Add')[0]);
+
+    await waitFor(() => expect(mockedApplyMutation).not.toHaveBeenCalled());
+  });
+
+  it('clears the list input after successfully adding an item', async () => {
+    const updatedNote: MemoryNote = {
+      ...baseNote,
+      id: 'bed-4',
+      structuredContent: { ...baseNote.structuredContent, nextSteps: ['Outline pitch'] },
+    };
+
+    mockedGetMemoryChain
+      .mockResolvedValueOnce(baseHistory)
+      .mockResolvedValueOnce([...baseHistory, { ...baseHistory[1], memoryId: 'bed-4', version: 4 }]);
+
+    mockedApplyMutation.mockResolvedValue(updatedNote);
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    const nextStepsInput = screen.getByPlaceholderText('Add to next steps');
+    fireEvent.change(nextStepsInput, { target: { value: 'Write a recap' } });
+    fireEvent.click(screen.getAllByText('Add')[1]);
+
+    await waitFor(() =>
+      expect(mockedApplyMutation).toHaveBeenCalledWith('proj-1', {
+        section: 'nextSteps',
+        action: 'append',
+        content: 'Write a recap',
+      }),
+    );
+    expect(nextStepsInput).toHaveValue('');
+    expect(mockedGetMemoryChain).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows error when adding a list item fails', async () => {
+    mockedApplyMutation.mockRejectedValueOnce(new Error('Add failed'));
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+    await waitFor(() => expect(mockedGetMemoryChain).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByPlaceholderText('Add to warnings & risks'), { target: { value: 'Do something' } });
+    fireEvent.click(screen.getAllByText('Add')[0]);
+
+    await waitFor(() => expect(screen.getByText('Add failed')).toBeInTheDocument());
+  });
+
   it('filters history by change reason and supports pinning', async () => {
     render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
     await waitFor(() => expect(mockedGetMemoryChain).toHaveBeenCalled());
@@ -134,6 +229,25 @@ describe('BedsideNotePanel', () => {
     await waitFor(() => expect(mockedGetMemoryChain).toHaveBeenCalled());
     expect(screen.getByText('Conflicts detected')).toBeInTheDocument();
     expect(screen.getByText('Stalled goals')).toBeInTheDocument();
+  });
+
+  it('shows no alerts when there are no notifications to surface', async () => {
+    const safeNote: MemoryNote = {
+      ...baseNote,
+      structuredContent: { currentFocus: 'Solo focus' } as BedsideNoteContent,
+    };
+    const safeHistory: ChainedMemory[] = [
+      { ...baseHistory[0], changeReason: 'analysis_update' },
+      { ...baseHistory[1], changeReason: 'minor_update' },
+    ];
+
+    mockedGetOrCreate.mockResolvedValueOnce(safeNote);
+    mockedGetMemoryChain.mockResolvedValueOnce(safeHistory);
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+    await waitFor(() => expect(mockedGetMemoryChain).toHaveBeenCalled());
+
+    expect(screen.getByText('No alerts')).toBeInTheDocument();
   });
 
   it('renders current focus section header', async () => {
@@ -167,6 +281,17 @@ describe('BedsideNotePanel', () => {
     }));
   });
 
+  it('shows error when removing an item fails', async () => {
+    mockedApplyMutation.mockRejectedValueOnce(new Error('Remove failed'));
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText('Remove'));
+
+    await waitFor(() => expect(screen.getByText('Remove failed')).toBeInTheDocument());
+  });
+
   it('renders active goals section header', async () => {
     render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
 
@@ -174,6 +299,22 @@ describe('BedsideNotePanel', () => {
 
     // Active Goals section header should be visible
     expect(screen.getByText('Active Goals')).toBeInTheDocument();
+  });
+
+  it('displays empty messaging for list sections and goals when no data exists', async () => {
+    const emptyStructuredNote: MemoryNote = {
+      ...baseNote,
+      id: 'bed-empty',
+      structuredContent: { currentFocus: 'Only focus' } as BedsideNoteContent,
+    };
+
+    mockedGetOrCreate.mockResolvedValueOnce(emptyStructuredNote);
+
+    render(<BedsideNotePanel projectId="proj-1" goals={[]} />);
+    await waitFor(() => expect(mockedGetOrCreate).toHaveBeenCalled());
+
+    expect(screen.getAllByText('No entries yet.')).toHaveLength(4);
+    expect(screen.getByText('No active goals captured yet.')).toBeInTheDocument();
   });
 
   it('shows conflicts notification when conflicts exist', async () => {

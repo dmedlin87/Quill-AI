@@ -22,8 +22,53 @@ import { searchBedsideHistory, type BedsideHistoryMatch } from '../memory/bedsid
 import { extractTemporalMarkers, type TemporalMarker } from '../intelligence/timelineTracker';
 import { generateVoiceProfile } from '../intelligence/voiceProfiler';
 import type { DialogueLine, VoiceMetrics } from '../../types/intelligence';
-import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
 import { SuggestionCategory, SuggestionWeights } from '@/types/experienceSettings';
+import { proactiveThinkerLogger } from './logger';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS ADAPTER (decouples from React/zustand)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Settings adapter interface for decoupling from UI state management.
+ * Allows injection of settings retrieval logic without direct store dependency.
+ */
+export interface ProactiveThinkerSettingsAdapter {
+  /** Get suggestion weights for adaptive relevance filtering */
+  getSuggestionWeights: () => SuggestionWeights;
+}
+
+/** Default settings adapter - returns neutral weights */
+const DEFAULT_SETTINGS_ADAPTER: ProactiveThinkerSettingsAdapter = {
+  getSuggestionWeights: () => ({
+    plot: 1.0,
+    character: 1.0,
+    pacing: 1.0,
+    style: 1.0,
+    continuity: 1.0,
+    lore_discovery: 1.0,
+    timeline_conflict: 1.0,
+    voice_inconsistency: 1.0,
+    other: 1.0,
+  }),
+};
+
+let settingsAdapter: ProactiveThinkerSettingsAdapter = DEFAULT_SETTINGS_ADAPTER;
+
+/**
+ * Set a custom settings adapter for the proactive thinker.
+ * Call this during app initialization to inject the real settings store.
+ */
+export function setProactiveThinkerSettingsAdapter(adapter: ProactiveThinkerSettingsAdapter): void {
+  settingsAdapter = adapter;
+}
+
+/**
+ * Reset to default settings adapter (for testing).
+ */
+export function resetProactiveThinkerSettingsAdapter(): void {
+  settingsAdapter = DEFAULT_SETTINGS_ADAPTER;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -196,7 +241,7 @@ export class ProactiveThinker {
       this.handleEvent(event);
     });
     
-    console.log('[ProactiveThinker] Started');
+    proactiveThinkerLogger.info('Started', { projectId });
   }
 
   /**
@@ -214,7 +259,7 @@ export class ProactiveThinker {
     }
     
     this.state.pendingEvents = [];
-    console.log('[ProactiveThinker] Stopped');
+    proactiveThinkerLogger.info('Stopped');
   }
 
   /**
@@ -287,7 +332,7 @@ export class ProactiveThinker {
       chapterId: event.payload.chapterId,
       extraTags: [`chapter:${event.payload.chapterId}`],
     }).catch(error =>
-      console.warn('[ProactiveThinker] Chapter transition bedside update failed:', error)
+      proactiveThinkerLogger.warn('Chapter transition bedside update failed', { error: error as Error })
     );
   }
 
@@ -708,7 +753,7 @@ export class ProactiveThinker {
             });
           }
         } catch (e) {
-          console.warn('[ProactiveThinker] Failed to evolve bedside note:', e);
+          proactiveThinkerLogger.warn('Failed to evolve bedside note', { error: e as Error });
         }
       }
 
@@ -720,7 +765,7 @@ export class ProactiveThinker {
       };
       
     } catch (error) {
-      console.error('[ProactiveThinker] Thinking failed:', error);
+      proactiveThinkerLogger.error('Thinking failed', { error: error as Error });
       return {
         suggestions: [],
         thinkingTime: Date.now() - startTime,
@@ -810,7 +855,7 @@ export class ProactiveThinker {
     try {
       return JSON.parse(text) as RawThinkingResponse;
     } catch (error) {
-      console.warn('[ProactiveThinker] Failed to parse thinking result:', error);
+      proactiveThinkerLogger.warn('Failed to parse thinking result', { error: error as Error });
       return null;
     }
   }
@@ -880,7 +925,7 @@ export class ProactiveThinker {
 
       return { text: lines.join('\n'), matches };
     } catch (error) {
-      console.warn('[ProactiveThinker] Failed to fetch long-term memory:', error);
+      proactiveThinkerLogger.warn('Failed to fetch long-term memory', { error: error as Error });
       return { text: '', matches: [] };
     }
   }
@@ -917,12 +962,12 @@ export class ProactiveThinker {
     try {
       await evolveBedsideNote(this.projectId, planText, options);
     } catch (error) {
-      console.warn('[ProactiveThinker] Bedside evolve failed:', error);
+      proactiveThinkerLogger.warn('Bedside evolve failed', { error: error as Error });
     }
   }
 
   private applyAdaptiveRelevance(suggestions: ProactiveSuggestion[]): ProactiveSuggestion[] {
-    const weights = useSettingsStore.getState().suggestionWeights;
+    const weights = settingsAdapter.getSuggestionWeights();
     const weightedSuggestions: ProactiveSuggestion[] = [];
 
     for (const suggestion of suggestions) {

@@ -3,6 +3,7 @@ import { evolveBedsideNote } from '../memory';
 import { eventBus } from './eventBus';
 import { getProactiveThinker } from './proactiveThinker';
 import { runNarrativeAlignmentCheck } from './narrativeAlignment';
+import { significantEditLogger } from './logger';
 
 interface SignificantEditOptions {
   threshold?: number;
@@ -136,7 +137,7 @@ class SignificantEditMonitor {
         }
         this.lastTriggerTime = now;
       } catch (error) {
-        console.warn('[SignificantEditMonitor] Failed to evolve bedside note', error);
+        significantEditLogger.warn('Failed to evolve bedside note', { error: error as Error });
       }
     }
 
@@ -152,10 +153,10 @@ class SignificantEditMonitor {
       const thinker = getProactiveThinker();
       // Force an immediate think cycle for significant edits
       thinker.forceThink().catch(error => {
-        console.warn('[SignificantEditMonitor] Proactive thinking failed:', error);
+        significantEditLogger.warn('Proactive thinking failed', { error: error as Error });
       });
     } catch (error) {
-      console.warn('[SignificantEditMonitor] Failed to trigger proactive thinking:', error);
+      significantEditLogger.warn('Failed to trigger proactive thinking', { error: error as Error });
     }
   }
 

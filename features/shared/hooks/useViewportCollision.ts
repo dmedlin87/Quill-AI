@@ -150,6 +150,32 @@ export function useViewportCollision(
   return safePosition;
 }
 
+export function observeElementDimensions(
+  elementRef: RefObject<HTMLElement | null>,
+  onMeasure: (dimensions: { width: number; height: number }) => void
+): (() => void) | undefined {
+  if (!elementRef.current) {
+    return undefined;
+  }
+
+  const measureElement = () => {
+    const current = elementRef.current;
+    if (current) {
+      const rect = current.getBoundingClientRect();
+      onMeasure({ width: rect.width, height: rect.height });
+    }
+  };
+
+  measureElement();
+
+  const observer = new ResizeObserver(measureElement);
+  observer.observe(elementRef.current);
+
+  return () => {
+    observer.disconnect();
+  };
+}
+
 /**
  * Hook that measures an element and provides collision-safe positioning.
  * Use when element dimensions are dynamic.
@@ -161,25 +187,10 @@ export function useMeasuredCollision(
 ): SafePosition | null {
   const [dimensions, setDimensions] = useState({ width: 400, height: 200 });
 
-  // Measure element when it mounts or changes
   useEffect(() => {
-    if (!elementRef.current) return;
-
-    const measureElement = () => {
-      if (elementRef.current) {
-        const rect = elementRef.current.getBoundingClientRect();
-        setDimensions({ width: rect.width, height: rect.height });
-      }
-    };
-
-    // Initial measurement
-    measureElement();
-
-    // Re-measure on resize
-    const observer = new ResizeObserver(measureElement);
-    observer.observe(elementRef.current);
-
-    return () => observer.disconnect();
+    return observeElementDimensions(elementRef, ({ width, height }) => {
+      setDimensions({ width, height });
+    });
   }, [elementRef]);
 
   return useViewportCollision(targetPosition, {

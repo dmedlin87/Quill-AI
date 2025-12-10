@@ -2,16 +2,239 @@
  * ChunkManager tests focused on branch coverage of edge cases and aggregations
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChunkManager } from '@/services/intelligence/chunkManager';
+import type { ChunkManagerConfig } from '@/services/intelligence/chunkManager';
 import { ChunkAnalysis, ManuscriptIntelligence } from '@/types/intelligence';
+import { createChunkId } from '@/services/intelligence/chunkIndex';
 
-const createManager = () =>
+const parseStructureMock = vi.fn();
+const processManuscriptCachedMock = vi.fn();
+
+vi.mock('@/services/intelligence/index', async () => {
+  const actual = await vi.importActual('@/services/intelligence/index');
+  return {
+    ...actual,
+    parseStructure: (...args: any[]) => parseStructureMock(...args),
+    processManuscriptCached: (...args: any[]) => processManuscriptCachedMock(...args),
+  };
+});
+
+const createStructureStub = (text: string) => {
+  const trimmed = text.trim();
+  const words = trimmed ? trimmed.split(/\s+/).length : 0;
+  const scenes = trimmed.length > 0 ? [{
+    id: 'scene-0',
+    startOffset: 0,
+    endOffset: text.length,
+    type: 'dialogue',
+    pov: 'POV',
+    location: 'Location',
+    timeMarker: 'now',
+    tension: 0.5,
+    dialogueRatio: 0.4,
+  }] : [];
+
+  return {
+    scenes,
+    paragraphs: [],
+    dialogueMap: [],
+    stats: {
+      totalWords: words,
+      totalSentences: Math.max(1, words),
+      totalParagraphs: scenes.length,
+      avgSentenceLength: scenes.length > 0 ? Math.max(1, words) : 0,
+      sentenceLengthVariance: 0,
+      dialogueRatio: 0.4,
+      sceneCount: scenes.length,
+      povShifts: 0,
+      avgSceneLength: scenes.length > 0 ? text.length : 0,
+    },
+    processedAt: 1,
+  };
+};
+
+const createEntitiesStub = (characters: string[], locations: string[]) => ({
+  nodes: [
+    ...characters.map(name => ({
+      id: `char-${name}`,
+      name,
+      type: 'character',
+      aliases: [],
+      firstMention: 0,
+      mentionCount: 1,
+      mentions: [{ offset: 0, chapterId: 'chapter-stub' }],
+      attributes: {},
+    })),
+    ...locations.map(name => ({
+      id: `loc-${name}`,
+      name,
+      type: 'location',
+      aliases: [],
+      firstMention: 0,
+      mentionCount: 1,
+      mentions: [{ offset: 0, chapterId: 'chapter-stub' }],
+      attributes: {},
+    })),
+  ],
+  edges: [],
+  processedAt: 1,
+});
+
+const createTimelineStub = (promises: string[] = ['promise']) => ({
+  events: [],
+  causalChains: [],
+  promises: promises.map(desc => ({
+    id: `promise-${desc}`,
+    type: 'goal',
+    description: desc,
+    quote: '',
+    offset: 0,
+    chapterId: 'chapter-stub',
+    resolved: false,
+  })),
+  processedAt: 1,
+});
+
+const createStyleStub = (options: {
+  passiveVoiceRatio?: number;
+  adverbDensity?: number;
+  filterWordDensity?: number;
+  avgSentenceLength?: number;
+ } = {}) => ({
+  vocabulary: {
+    uniqueWords: 0,
+    totalWords: 0,
+    avgWordLength: 0,
+    lexicalDiversity: 0,
+    topWords: [],
+    overusedWords: [],
+    rareWords: [],
+  },
+  syntax: {
+    avgSentenceLength: options.avgSentenceLength ?? 10,
+    sentenceLengthVariance: 0,
+    minSentenceLength: 0,
+    maxSentenceLength: 0,
+    paragraphLengthAvg: 0,
+    dialogueToNarrativeRatio: 0,
+    questionRatio: 0,
+    exclamationRatio: 0,
+  },
+  rhythm: {
+    syllablePattern: [],
+    punctuationDensity: 0,
+    avgClauseCount: 0,
+  },
+  flags: {
+    passiveVoiceRatio: options.passiveVoiceRatio ?? 0,
+    passiveVoiceInstances: [],
+    adverbDensity: options.adverbDensity ?? 0,
+    adverbInstances: [],
+    filterWordDensity: options.filterWordDensity ?? 0,
+    filterWordInstances: [],
+    clicheCount: 0,
+    clicheInstances: [],
+    repeatedPhrases: [],
+  },
+  processedAt: 1,
+});
+
+const createHeatmapStub = (risk = 0.2) => ({
+  sections: [{
+    offset: 0,
+    length: 1,
+    scores: {
+      plotRisk: 0,
+      pacingRisk: 0,
+      characterRisk: 0,
+      settingRisk: 0,
+      styleRisk: 0,
+    },
+    overallRisk: risk,
+    flags: [],
+    suggestions: [],
+  }],
+  hotspots: [],
+  processedAt: 1,
+});
+
+const createDeltaStub = () => ({
+  changedRanges: [],
+  invalidatedSections: [],
+  affectedEntities: [],
+  newPromises: [],
+  resolvedPromises: [],
+  contentHash: '',
+  processedAt: 1,
+});
+
+const createHudStub = () => ({
+  situational: {
+    currentScene: null,
+    currentParagraph: null,
+    narrativePosition: { sceneIndex: 0, totalScenes: 0, percentComplete: 0 },
+    tensionLevel: 'medium',
+    pacing: 'moderate',
+  },
+  context: {
+    activeEntities: [],
+    activeRelationships: [],
+    openPromises: [],
+    recentEvents: [],
+  },
+  styleAlerts: [],
+  prioritizedIssues: [],
+  recentChanges: [],
+  stats: { wordCount: 0, readingTime: 0, dialoguePercent: 0, avgSentenceLength: 0 },
+  lastFullProcess: 1,
+  processingTier: 'stale',
+});
+
+const createIntelligenceStub = (
+  text: string,
+  options?: {
+    risk?: number;
+    characters?: string[];
+    locations?: string[];
+    promises?: string[];
+    style?: {
+      passiveVoiceRatio?: number;
+      adverbDensity?: number;
+      filterWordDensity?: number;
+      avgSentenceLength?: number;
+    };
+  }
+): ManuscriptIntelligence => ({
+  chapterId: 'chapter-stub',
+  structural: createStructureStub(text),
+  entities: createEntitiesStub(options?.characters ?? ['Hero'], options?.locations ?? ['Mars']),
+  timeline: createTimelineStub(options?.promises),
+  style: createStyleStub(options?.style),
+  voice: { profiles: {}, consistencyAlerts: [] },
+  heatmap: createHeatmapStub(options?.risk ?? 0.2),
+  delta: createDeltaStub(),
+  hud: createHudStub(),
+}) as ManuscriptIntelligence;
+
+const createManager = (config: Partial<ChunkManagerConfig> = {}) =>
   new ChunkManager({
     editDebounceMs: 0,
     processingIntervalMs: 0,
     idleThresholdMs: 0,
+    ...config,
   });
+
+beforeEach(() => {
+  parseStructureMock.mockReset();
+  parseStructureMock.mockImplementation((text: string) => createStructureStub(text));
+  processManuscriptCachedMock.mockReset();
+  processManuscriptCachedMock.mockImplementation((text: string) => createIntelligenceStub(text));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('ChunkManager edge cases', () => {
   it('handles chapter and scene text retrieval edge cases', () => {
@@ -159,5 +382,112 @@ describe('ChunkManager edge cases', () => {
     const analysisLow = manager.intelligenceToChunkAnalysis(intelligenceLow) as ChunkAnalysis;
     expect(analysisLow.styleFlags).toEqual(['short_sentences']);
     expect(analysisLow.timeMarkers).toEqual(['noon']);
+  });
+});
+
+describe('ChunkManager processing and persistence flows', () => {
+  it('defers batch processing when edits keep coming', async () => {
+    vi.useFakeTimers();
+    const manager = createManager({
+      idleThresholdMs: 1000,
+      maxBatchSize: 1,
+      processingIntervalMs: 0,
+    });
+
+    manager.registerChapter('edit-ch', 'steady text');
+    (manager as any).lastEditTime = Date.now();
+    const processSpy = vi.spyOn(manager as any, 'processChunk');
+
+    await manager.processNextBatch();
+
+    expect(processSpy).not.toHaveBeenCalled();
+    expect(manager.getStats().dirtyCount).toBeGreaterThan(0);
+    expect(processManuscriptCachedMock).not.toHaveBeenCalled();
+
+    processSpy.mockRestore();
+    manager.pause();
+  });
+
+  it('emits errors when chunk text cannot be loaded', async () => {
+    const errors: Array<{ chunkId: string; error: string }> = [];
+    const manager = new ChunkManager(
+      { editDebounceMs: 0, processingIntervalMs: 0, idleThresholdMs: 0 },
+      {
+        onError: (chunkId, error) => errors.push({ chunkId, error }),
+      }
+    );
+
+    manager.registerChapter('missing-text', 'alpha bravo');
+    manager.chapterTexts.delete('missing-text');
+
+    await manager.processAllDirty();
+
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].error).toBe('Could not get chunk text');
+    expect(processManuscriptCachedMock).not.toHaveBeenCalled();
+  });
+
+  it('exercises persistence, manual controls, and stats helpers', async () => {
+    const processed: Array<[string, ChunkAnalysis]> = [];
+    const manager = new ChunkManager(
+      { editDebounceMs: 0, processingIntervalMs: 0, idleThresholdMs: 0 },
+      {
+        onChunkProcessed: (chunkId, analysis) => processed.push([chunkId, analysis]),
+      }
+    );
+
+    manager.registerChapter('persist-chap', 'alpha beta gamma');
+    await manager.processAllDirty();
+
+    expect(processed.length).toBeGreaterThan(0);
+    expect(manager.getChapterChunk('persist-chap')).toBeDefined();
+    expect(manager.getAnalysisAtCursor('persist-chap', 1)).not.toBeNull();
+    expect(manager.getAllChapterAnalyses().has('persist-chap')).toBe(true);
+    expect(manager.getBookSummary()).toBeDefined();
+
+    const stats = manager.getStats();
+    expect(stats.chapterCount).toBeGreaterThan(0);
+    expect(stats.isProcessing).toBe(false);
+
+    const state = manager.exportState();
+    expect(state.chapterTexts).toHaveProperty('persist-chap');
+
+    const freshManager = createManager();
+    freshManager.loadState(state);
+    expect(freshManager.getChapterChunk('persist-chap')).toBeDefined();
+
+    manager.removeChapter('persist-chap');
+    expect(manager.getChapterChunk('persist-chap')).toBeUndefined();
+
+    manager.registerChapter('retry-chap', 'delta epsilon');
+    const retryChunkId = createChunkId('chapter', 'retry-chap');
+    const retryChunk = manager.getChunk(retryChunkId);
+    expect(retryChunk).toBeDefined();
+    if (retryChunk) {
+      retryChunk.status = 'error';
+    }
+
+    const retriedIds = manager.retryErrors();
+    expect(retriedIds).toContain(retryChunkId);
+    expect(retryChunk?.status).toBe('dirty');
+
+    const processSpy = vi.spyOn(manager as any, 'processChunk');
+    await manager.reprocessChunk(retryChunkId);
+    expect(processSpy).toHaveBeenCalledWith(retryChunkId);
+    processSpy.mockRestore();
+
+    manager.pause();
+    (manager as any).index.markDirty(retryChunkId);
+    const scheduleSpy = vi.spyOn(manager as any, 'scheduleProcessing');
+    manager.resume();
+    expect(scheduleSpy).toHaveBeenCalled();
+    scheduleSpy.mockRestore();
+
+    manager.clear();
+    expect(manager.getStats().chapterCount).toBe(0);
+    expect(manager.getChunk('book')).toBeUndefined();
+
+    manager.destroy();
+    expect((manager as any).isDestroyed).toBe(true);
   });
 });

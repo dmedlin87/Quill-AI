@@ -3,6 +3,7 @@ import { eventBus } from './eventBus';
 import { getSignificantEditMonitor, startSignificantEditMonitor } from './significantEditMonitor';
 import { startDreamingService, stopDreamingService } from './dreamingService';
 import type { AppEvent, ChapterIssueSummary, WatchedEntitySummary } from './types';
+import { eventObserverLogger } from './logger';
 
 const formatIssue = (issue: ChapterIssueSummary): string | null => {
   if (!issue.description) return null;
@@ -39,7 +40,7 @@ const handleChapterChanged = async (event: Extract<AppEvent, { type: 'CHAPTER_CH
       changeReason: 'chapter_transition',
     });
   } catch (error) {
-    console.warn('[AppBrain] Failed to evolve bedside note on chapter change', error);
+    eventObserverLogger.warn('Failed to evolve bedside note on chapter change', { error: error as Error });
   }
 };
 

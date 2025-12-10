@@ -6,12 +6,17 @@ import {
   emitSelectionChanged,
   emitCursorMoved,
   emitChapterSwitched,
+  emitIdleStatusChanged,
+  emitSignificantEditDetected,
+  emitDreamingStateChanged,
   emitTextChanged,
   emitEditMade,
   emitAnalysisCompleted,
   emitToolExecuted,
   emitNavigationRequested,
   emitZenModeToggled,
+  emitProactiveThinkingStarted,
+  emitProactiveThinkingCompleted,
 } from '@/services/appBrain';
 
 describe('eventBus', () => {
@@ -377,6 +382,106 @@ describe('eventBus branch coverage', () => {
       const formatted = eventBus.formatRecentEventsForAI(1);
       expect(formatted).toContain('Zen mode disabled');
     });
+
+    it('formats PROACTIVE_THINKING_STARTED with pending events and context hint', () => {
+      const longContext = 'A'.repeat(50);
+      eventBus.emit({
+        type: 'PROACTIVE_THINKING_STARTED',
+        payload: {
+          trigger: 'auto',
+          pendingEvents: [
+            { type: 'TEXT_CHANGED', payload: { length: 5, delta: 1 } } as any,
+          ],
+          contextPreview: longContext,
+        },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('AI thinking started (trigger: auto');
+      expect(formatted).toContain(', events: 1');
+      expect(formatted).toContain('context: ' + 'A'.repeat(40));
+      expect(formatted).toContain('...');
+    });
+
+    it('formats PROACTIVE_THINKING_COMPLETED with suggestions', () => {
+      eventBus.emit({
+        type: 'PROACTIVE_THINKING_COMPLETED',
+        payload: {
+          suggestionsCount: 2,
+          thinkingTime: 120,
+        },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('AI thinking complete (2 suggestions in 120ms)');
+    });
+
+    it('formats PROACTIVE_THINKING_COMPLETED with no suggestions', () => {
+      eventBus.emit({
+        type: 'PROACTIVE_THINKING_COMPLETED',
+        payload: {
+          suggestionsCount: 0,
+          thinkingTime: 200,
+        },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('AI thinking complete (no suggestions in 200ms)');
+    });
+
+    it('formats PROACTIVE_THINKING_STARTED without pending events or context', () => {
+      eventBus.emit({
+        type: 'PROACTIVE_THINKING_STARTED',
+        payload: { trigger: 'manual' },
+      });
+
+      const formatted = eventBus.formatRecentEventsForAI(1);
+      expect(formatted).toContain('AI thinking started (trigger: manual');
+      expect(formatted).not.toContain(', events:');
+      expect(formatted).not.toContain('context:');
+    });
+  });
+
+  describe('convenience emitters', () => {
+    it('emits idle status changes via helper', () => {
+      emitIdleStatusChanged(false);
+      const [event] = eventBus.getRecentEvents(1);
+      expect(event.type).toBe('IDLE_STATUS_CHANGED');
+      expect(event.payload.idle).toBe(false);
+    });
+
+    it('emits dreaming state changes via helper', () => {
+      emitDreamingStateChanged(true);
+      const [event] = eventBus.getRecentEvents(1);
+      expect(event.type).toBe('DREAMING_STATE_CHANGED');
+      expect(event.payload.active).toBe(true);
+    });
+
+    it('emits significant edit detection events via helper', () => {
+      emitSignificantEditDetected(42, 'chapter-1');
+      const [event] = eventBus.getRecentEvents(1);
+      expect(event.type).toBe('SIGNIFICANT_EDIT_DETECTED');
+      expect(event.payload.delta).toBe(42);
+      expect(event.payload.chapterId).toBe('chapter-1');
+    });
+
+    it('emits proactive thinking started via helper', () => {
+      emitProactiveThinkingStarted({ trigger: 'scheduler', contextPreview: 'scene' });
+      const [event] = eventBus.getRecentEvents(1);
+      expect(event.type).toBe('PROACTIVE_THINKING_STARTED');
+      expect(event.payload.trigger).toBe('scheduler');
+    });
+
+    it('emits proactive thinking completed via helper', () => {
+      emitProactiveThinkingCompleted({
+        suggestionsCount: 1,
+        thinkingTime: 99,
+        rawThinking: 'plan',
+      });
+      const [event] = eventBus.getRecentEvents(1);
+      expect(event.type).toBe('PROACTIVE_THINKING_COMPLETED');
+      expect(event.payload.rawThinking).toBe('plan');
+    });
   });
 
   describe('subscribeForOrchestrator branches', () => {
@@ -469,6 +574,28 @@ describe('eventBus branch coverage', () => {
 
       const log = eventBus.getChangeLog(1000);
       expect(log.length).toBeLessThanOrEqual(500);
+    });
+  });
+
+  describe('convenience emitters', () => {
+    it('publishes all helper events in order', () => {
+      emitIdleStatusChanged(true);
+      emitDreamingStateChanged(false);
+      emitSignificantEditDetected(42, 'chapter-1');
+      emitProactiveThinkingStarted({ trigger: 'auto' });
+      emitProactiveThinkingCompleted({ suggestionsCount: 1, thinkingTime: 90 });
+
+      const recent = eventBus.getRecentEvents(5);
+      expect(recent.map(evt => evt.type)).toEqual([
+        'IDLE_STATUS_CHANGED',
+        'DREAMING_STATE_CHANGED',
+        'SIGNIFICANT_EDIT_DETECTED',
+        'PROACTIVE_THINKING_STARTED',
+        'PROACTIVE_THINKING_COMPLETED',
+      ]);
+      expect(recent[2].payload.delta).toBe(42);
+      expect(recent[3].payload.trigger).toBe('auto');
+      expect(recent[4].payload.thinkingTime).toBe(90);
     });
   });
 });

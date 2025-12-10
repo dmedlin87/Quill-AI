@@ -172,6 +172,60 @@ describe('contextBuilder - buildAgentContext', () => {
     expect(ctx).not.toContain('[ANALYSIS INSIGHTS]');
     expect(ctx).not.toContain('[LORE BIBLE]');
   });
+
+  it('serializes context as JSON when using the API template', () => {
+    const json = buildAgentContext(baseState, undefined, API_CONTEXT_TEMPLATE);
+    const parsed = JSON.parse(json) as Array<{ key: string; lines: string[] }>;
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.some(section => section.key === 'manuscript')).toBe(true);
+  });
+
+  it('renders an XML context when requested', () => {
+    const xmlTemplate = { format: 'xml' as const };
+    const xml = buildAgentContext(baseState, undefined, xmlTemplate);
+    expect(xml).toContain('<section id="manuscript">');
+    expect(xml).toContain('<title>MANUSCRIPT STATE</title>');
+  });
+
+  it('skips HUD and session data when those sections are absent', () => {
+    const stateWithoutHud: AppBrainState = {
+      ...baseState,
+      intelligence: { ...baseState.intelligence, hud: null },
+      session: { ...baseState.session, lastAgentAction: null },
+    };
+
+    const ctx = buildAgentContext(stateWithoutHud);
+    expect(ctx).not.toContain('[INTELLIGENCE HUD]');
+    expect(ctx).not.toContain('LAST AGENT ACTION');
+  });
+
+  it('includes voice fingerprint metrics when deep analysis is requested', () => {
+    const stateWithVoice: AppBrainState = {
+      ...baseState,
+      intelligence: {
+        ...baseState.intelligence,
+        full: {
+          ...baseState.intelligence.full,
+          voice: {
+            profiles: [
+              {
+                speakerName: 'Seth',
+                impression: 'Confident',
+                metrics: {
+                  latinateRatio: 0.72,
+                  contractionRatio: 0.18,
+                },
+              },
+            ],
+          },
+        } as any,
+      },
+    };
+
+    const ctx = buildAgentContext(stateWithVoice, { deepAnalysis: true });
+    expect(ctx).toContain('DEEP ANALYSIS: VOICE FINGERPRINTS');
+    expect(ctx).toContain('Seth');
+  });
 });
 
 describe('contextBuilder - buildAgentContextWithMemory', () => {
@@ -279,6 +333,43 @@ describe('contextBuilder - derived contexts and builder', () => {
     expect(ctx).toContain('SELECTED TEXT:');
     expect(ctx).toContain('STYLE CONTEXT:');
     expect(ctx).toContain('On branch: "Alt"');
+  });
+
+  it('omits HUD-specific markers in compressed context when HUD is missing', () => {
+    const ctx = buildCompressedContext({
+      ...baseState,
+      intelligence: { ...baseState.intelligence, hud: null },
+    } as AppBrainState);
+
+    expect(ctx).toContain('ch:One');
+    expect(ctx).not.toContain('tension:');
+    expect(ctx).not.toContain('words:');
+  });
+
+  it('builds navigation context even without intelligence entities or structural data', () => {
+    const ctx = buildNavigationContext({
+      ...baseState,
+      intelligence: {
+        ...baseState.intelligence,
+        entities: null as any,
+        full: { ...baseState.intelligence.full, structural: undefined },
+      },
+    } as AppBrainState);
+
+    expect(ctx).toContain('[NAVIGATION CONTEXT]');
+    expect(ctx).not.toContain('Characters (searchable):');
+    expect(ctx).not.toContain('Scene types in chapter');
+  });
+
+  it('gracefully builds editing context without selection or branch info', () => {
+    const ctx = buildEditingContext({
+      ...baseState,
+      manuscript: { ...baseState.manuscript, activeBranchId: null },
+      ui: { ...baseState.ui, selection: null },
+    } as AppBrainState);
+
+    expect(ctx).not.toContain('SELECTED TEXT:');
+    expect(ctx).not.toContain('On branch:');
   });
 
   it('creates a context builder bound to getState', async () => {

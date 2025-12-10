@@ -69,6 +69,15 @@ describe('session lifecycle bedside note hooks', () => {
     expect(result.evolvedNote?.id).toBe('bed-2');
   });
 
+  it('does not evolve a bedside note when no meaningful focus remains', async () => {
+    chainMocks.getOrCreateBedsideNote.mockResolvedValueOnce(bedsideNote);
+
+    const result = await handleSessionStart(projectId, { previousFocus: '   ' });
+
+    expect(chainMocks.evolveBedsideNote).not.toHaveBeenCalled();
+    expect(result.evolvedNote).toBeUndefined();
+  });
+
   it('summarizes session changes on end with session_boundary tagging', async () => {
     const summaryNote: MemoryNote = { ...bedsideNote, id: 'bed-3', text: 'Session boundary update' };
     trackerMocks.getSessionState.mockReturnValue({
@@ -103,6 +112,58 @@ describe('session lifecycle bedside note hooks', () => {
     expect(summaryText).toContain('Deleted 1 note');
     expect(summaryText).toContain('Goals created: goal-1');
     expect(result).toBe(summaryNote);
+  });
+
+  it('returns the bedside note when session end fires during the debounce window', async () => {
+    const summaryNote: MemoryNote = { ...bedsideNote, id: 'bed-4', text: 'Session boundary update' };
+    trackerMocks.getSessionState.mockReturnValue({
+      created: [{
+        id: 'mem-4',
+        scope: 'project',
+        projectId,
+        type: 'fact',
+        text: 'Tracked change',
+        topicTags: [],
+        importance: 0.5,
+        createdAt: Date.now(),
+      }],
+      updated: [],
+      deleted: [],
+      goalsCreated: [],
+      startedAt: Date.now() - 5000,
+    });
+    chainMocks.getOrCreateBedsideNote.mockResolvedValue(bedsideNote);
+    chainMocks.evolveBedsideNote.mockResolvedValue(summaryNote);
+
+    const debounceMs = __getSessionLifecycleDebounceMs();
+    vi.useFakeTimers();
+    vi.setSystemTime(debounceMs + 1000);
+
+    await handleSessionEnd(projectId);
+
+    vi.setSystemTime(debounceMs + 1100);
+    const result = await handleSessionEnd(projectId);
+
+    expect(chainMocks.evolveBedsideNote).toHaveBeenCalledTimes(1);
+    expect(chainMocks.getOrCreateBedsideNote).toHaveBeenCalledTimes(1);
+    expect(result).toBe(bedsideNote);
+  });
+
+  it('falls back to the bedside note when there are no session changes to summarize', async () => {
+    trackerMocks.getSessionState.mockReturnValue({
+      created: [],
+      updated: [],
+      deleted: [],
+      goalsCreated: [],
+      startedAt: Date.now() - 1000,
+    });
+    chainMocks.getOrCreateBedsideNote.mockResolvedValue(bedsideNote);
+
+    const result = await handleSessionEnd(projectId);
+
+    expect(chainMocks.evolveBedsideNote).not.toHaveBeenCalled();
+    expect(chainMocks.getOrCreateBedsideNote).toHaveBeenCalledWith(projectId);
+    expect(result).toBe(bedsideNote);
   });
 
   it('debounces rapid reconnects to avoid duplicate bedside note evolutions', async () => {

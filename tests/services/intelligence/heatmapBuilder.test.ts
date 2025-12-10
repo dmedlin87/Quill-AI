@@ -7,6 +7,7 @@ import {
   getRiskSummary,
 } from '../../../services/intelligence/heatmapBuilder';
 import type {
+  ClassifiedParagraph,
   StructuralFingerprint,
   EntityGraph,
   Timeline,
@@ -123,6 +124,169 @@ const makeStyle = (): StyleFingerprint => ({
 const makeHeatmap = () =>
   buildHeatmap('x'.repeat(1200), makeStructural(), makeEntities(), makeTimeline(), makeStyle());
 
+const makeParagraph = (opts: {
+  offset: number;
+  length: number;
+  avgSentenceLength: number;
+  sentenceCount: number;
+  tension: number;
+  type: 'dialogue' | 'action' | 'description' | 'internal' | 'exposition';
+}) => ({
+  offset: opts.offset,
+  length: opts.length,
+  avgSentenceLength: opts.avgSentenceLength,
+  sentenceCount: opts.sentenceCount,
+  tension: opts.tension,
+  type: opts.type,
+  speakerId: null,
+  sentiment: 0,
+}) as ClassifiedParagraph;
+
+const makeRichStructural = (): StructuralFingerprint => ({
+  paragraphs: [
+    makeParagraph({ offset: 0, length: 250, avgSentenceLength: 35, sentenceCount: 5, tension: 0.1, type: 'exposition' }),
+    makeParagraph({ offset: 210, length: 50, avgSentenceLength: 3, sentenceCount: 5, tension: 0.1, type: 'dialogue' }),
+    makeParagraph({ offset: 270, length: 40, avgSentenceLength: 4, sentenceCount: 5, tension: 0.1, type: 'dialogue' }),
+    makeParagraph({ offset: 330, length: 30, avgSentenceLength: 4, sentenceCount: 5, tension: 0.05, type: 'dialogue' }),
+    makeParagraph({ offset: 600, length: 120, avgSentenceLength: 12, sentenceCount: 4, tension: 0.15, type: 'exposition' }),
+    makeParagraph({ offset: 730, length: 110, avgSentenceLength: 11, sentenceCount: 4, tension: 0.18, type: 'exposition' }),
+    makeParagraph({ offset: 860, length: 100, avgSentenceLength: 13, sentenceCount: 4, tension: 0.17, type: 'exposition' }),
+    makeParagraph({ offset: 980, length: 90, avgSentenceLength: 10, sentenceCount: 4, tension: 0.16, type: 'exposition' }),
+  ],
+  scenes: [
+    {
+      id: 'scene-a',
+      startOffset: 0,
+      endOffset: 400,
+      type: 'description',
+      pov: null,
+      location: 'Castle',
+      timeMarker: 'morning',
+      tension: 0.1,
+      dialogueRatio: 0.4,
+    },
+    {
+      id: 'scene-b',
+      startOffset: 600,
+      endOffset: 1100,
+      type: 'description',
+      pov: null,
+      location: null,
+      timeMarker: 'afternoon',
+      tension: 0.15,
+      dialogueRatio: 0.05,
+    },
+  ],
+  dialogueMap: [],
+  stats: {
+    totalWords: 2000,
+    totalSentences: 200,
+    totalParagraphs: 8,
+    avgSentenceLength: 12,
+    sentenceLengthVariance: 4,
+    dialogueRatio: 0.7,
+    sceneCount: 2,
+    povShifts: 1,
+    avgSceneLength: 550,
+  } as StructuralStats,
+  processedAt: 0,
+});
+
+const makeRichEntities = (): EntityGraph => ({
+  nodes: [
+    {
+      id: 'char-rich',
+      type: 'character',
+      name: 'Hero',
+      mentionCount: 2,
+      mentions: [
+        { offset: 10, chapterId: 'ch-1' },
+        { offset: 250, chapterId: 'ch-1' },
+      ],
+      aliases: [],
+      firstMention: 10,
+      attributes: {},
+    } as any,
+    {
+      id: 'loc-rich',
+      type: 'location',
+      name: 'Castle',
+      mentionCount: 1,
+      mentions: [{ offset: 30, chapterId: 'ch-1' }],
+      aliases: [],
+      firstMention: 30,
+      attributes: {},
+    } as any,
+  ],
+  edges: [],
+  processedAt: 0,
+});
+
+const makeRichTimeline = (): Timeline => ({
+  events: [],
+  promises: [
+    {
+      id: 'promise-rich',
+      resolved: false,
+      offset: 40,
+      type: 'question',
+      description: 'A mystery is teased',
+      quote: 'A mystery is teased',
+      chapterId: 'ch-1',
+    } as PlotPromise,
+  ],
+  causalChains: [],
+  processedAt: 0,
+});
+
+const makeRichStyle = (): StyleFingerprint => ({
+  flags: {
+    passiveVoiceRatio: 4,
+    passiveVoiceInstances: [
+      { offset: 5, quote: 'was seen' },
+      { offset: 45, quote: 'was told' },
+      { offset: 550, quote: 'was whispered' },
+      { offset: 560, quote: 'was breathed' },
+    ],
+    adverbDensity: 5,
+    adverbInstances: [
+      { offset: 6, word: 'really' },
+      { offset: 12, word: 'quietly' },
+      { offset: 20, word: 'clearly' },
+    ],
+    filterWordDensity: 6,
+    filterWordInstances: [{ offset: 7, word: 'seemed' }, { offset: 8, word: 'felt' }],
+    clicheCount: 0,
+    clicheInstances: [],
+    repeatedPhrases: [],
+  },
+  syntax: {
+    avgSentenceLength: 12,
+    sentenceLengthVariance: 2,
+    minSentenceLength: 2,
+    maxSentenceLength: 35,
+    paragraphLengthAvg: 75,
+    dialogueToNarrativeRatio: 0.6,
+    questionRatio: 0.1,
+    exclamationRatio: 0.05,
+  },
+  vocabulary: {
+    uniqueWords: 400,
+    totalWords: 1500,
+    avgWordLength: 4,
+    lexicalDiversity: 0.6,
+    topWords: [],
+    overusedWords: [],
+    rareWords: [],
+  },
+  rhythm: {
+    syllablePattern: [1, 2, 3],
+    punctuationDensity: 0.1,
+    avgClauseCount: 2,
+  },
+  processedAt: 0,
+});
+
 describe('heatmapBuilder - buildHeatmap and helpers', () => {
   it('builds sections and hotspots with non-empty text', () => {
     const heatmap = makeHeatmap();
@@ -194,5 +358,42 @@ describe('heatmapBuilder - buildHeatmap and helpers', () => {
     expect(summary.avgRisk).toBe(0);
     expect(summary.hotspotCount).toBe(0);
     expect(summary.topIssues).toEqual([]);
+  });
+
+  it('flags every relevant risk when inputs span multiple sections', () => {
+    const richHeatmap = buildHeatmap(
+      'x'.repeat(1200),
+      makeRichStructural(),
+      makeRichEntities(),
+      makeRichTimeline(),
+      makeRichStyle()
+    );
+
+    expect(richHeatmap.sections.length).toBeGreaterThan(1);
+
+    const [firstSection, secondSection] = richHeatmap.sections;
+
+    expect(firstSection.flags).toEqual(expect.arrayContaining([
+      'unresolved_promise',
+      'long_sentences',
+      'short_sentences',
+      'low_tension',
+      'dialogue_heavy',
+      'passive_voice_heavy',
+      'adverb_overuse',
+      'filter_words',
+    ]));
+
+    expect(secondSection.flags).toEqual(expect.arrayContaining([
+      'exposition_dump',
+      'character_absent',
+      'setting_unclear',
+    ]));
+
+    expect(firstSection.suggestions).toContain('Break up long sentences for better pacing');
+    expect(secondSection.suggestions).toEqual(expect.arrayContaining([
+      'Break up exposition with action or dialogue',
+      'Consider establishing the setting more clearly',
+    ]));
   });
 });

@@ -95,6 +95,7 @@ export {
   type ThinkingResult,
   type ThinkerConfig,
   type ThinkerState,
+  // Note: ProactiveThinkerSettingsAdapter exported separately above
 } from './proactiveThinker';
 
 export {
@@ -109,6 +110,41 @@ export {
   startSignificantEditMonitor,
   stopSignificantEditMonitor,
 } from './significantEditMonitor';
+
+// Unified Runtime & Lifecycle
+export {
+  getAppBrainRuntime,
+  startAppBrainRuntime,
+  stopAppBrainRuntime,
+  resetAppBrainForTests,
+  type AppBrainRuntimeConfig,
+  type SettingsAdapter,
+  type AppBrainRuntimeStatus,
+  type AppBrainRuntime,
+} from './runtime';
+
+// Unified Logger
+export {
+  appBrainLogger,
+  createServiceLogger,
+  eventBusLogger,
+  eventObserverLogger,
+  significantEditLogger,
+  proactiveThinkerLogger,
+  dreamingServiceLogger,
+  contextBuilderLogger,
+  LogLevel,
+  type LogContext,
+  type LogEntry,
+  type LogHandler,
+} from './logger';
+
+// Settings Adapter (for decoupling from React/zustand)
+export {
+  setProactiveThinkerSettingsAdapter,
+  resetProactiveThinkerSettingsAdapter,
+  type ProactiveThinkerSettingsAdapter,
+} from './proactiveThinker';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SELECTIVE STATE SLICE EXPORTS

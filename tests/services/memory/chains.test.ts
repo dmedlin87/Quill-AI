@@ -305,6 +305,79 @@ describe('memory chains bedside-note helpers', () => {
     expect(rollupCalls.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('rolls arc-only updates up to the project scope when no chapter is provided', async () => {
+    const arcNote: MemoryNote = {
+      id: 'bed-arc-only',
+      scope: 'project',
+      projectId,
+      type: 'plan',
+      text: 'Arc bedside note',
+      topicTags: [BEDSIDE_NOTE_TAG, 'arc:arc-only'],
+      importance: 0.8,
+      createdAt: Date.now(),
+    };
+
+    const projectNote: MemoryNote = {
+      id: 'bed-project-base',
+      scope: 'project',
+      projectId,
+      type: 'plan',
+      text: 'Project bedside active',
+      topicTags: [BEDSIDE_NOTE_TAG],
+      importance: 0.85,
+      createdAt: Date.now(),
+    };
+
+    memoryMocks.getMemories
+      .mockResolvedValueOnce([arcNote])
+      .mockResolvedValueOnce([projectNote]);
+
+    memoryMocks.getMemory.mockImplementation(async (id: string) => {
+      if (id === arcNote.id) return arcNote;
+      if (id === projectNote.id) return projectNote;
+      return undefined;
+    });
+
+    const createdMemories: MemoryNote[] = [];
+    memoryMocks.createMemory.mockImplementation(async (input: any) => {
+      const next: MemoryNote = {
+        ...arcNote,
+        ...input,
+        id: `bed-arc-only-${createdMemories.length + 1}`,
+        createdAt: Date.now(),
+      } as MemoryNote;
+      createdMemories.push(next);
+      return next;
+    });
+
+    memoryMocks.updateMemory.mockImplementation(async (_id: string, updates: any) => ({
+      ...arcNote,
+      ...updates,
+      id: _id,
+    } as MemoryNote));
+
+    await evolveBedsideNote(projectId, 'Arc-only insight', {
+      arcId: 'arc-only',
+    });
+
+    expect(memoryMocks.getMemories).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        scope: 'project',
+        projectId,
+        type: 'plan',
+        topicTags: [BEDSIDE_NOTE_TAG],
+        limit: 1,
+      })
+    );
+
+    expect(
+      memoryMocks.createMemory.mock.calls.some(([input]) =>
+        (input.topicTags || []).includes('change_reason:roll_up')
+      )
+    ).toBe(true);
+  });
+
   it('creates an author-scoped bedside note with author tag', async () => {
     memoryMocks.getMemories.mockResolvedValueOnce([]);
 
@@ -532,6 +605,59 @@ describe('memory chains - evolveMemory', () => {
         ]),
       })
     );
+  });
+
+  it('throws when the memory to evolve cannot be found', async () => {
+    memoryMocks.getMemory.mockResolvedValueOnce(undefined);
+    await expect(evolveMemory('missing-memory', 'some update')).rejects.toThrow(
+      'Memory not found: missing-memory'
+    );
+  });
+
+  it('supersedes the original memory when keepOriginal is false', async () => {
+    const baseMemory: MemoryNote = {
+      id: 'chain-supersede',
+      scope: 'project',
+      projectId,
+      type: 'fact',
+      text: 'Superseded fact',
+      topicTags: ['chain:super', 'chain_version:2'],
+      importance: 0.9,
+      createdAt: Date.now() - 1000,
+    };
+
+    memoryMocks.getMemory.mockResolvedValue(baseMemory);
+    memoryMocks.getMemories.mockResolvedValue([]);
+
+    let createdMemory: MemoryNote | undefined;
+    memoryMocks.createMemory.mockImplementation(async (input: any) => {
+      createdMemory = {
+        ...baseMemory,
+        ...input,
+        id: 'chain-supersede-2',
+        createdAt: Date.now(),
+      } as MemoryNote;
+      return createdMemory;
+    });
+
+    memoryMocks.updateMemory.mockImplementation(async (_id: string, updates: any) => ({
+      ...baseMemory,
+      ...updates,
+      id: _id,
+    } as MemoryNote));
+
+    const result = await evolveMemory(baseMemory.id, 'Superseded text', {
+      keepOriginal: false,
+    });
+
+    expect(createdMemory).toBeDefined();
+    expect(memoryMocks.updateMemory).toHaveBeenCalledWith(
+      baseMemory.id,
+      expect.objectContaining({
+        topicTags: expect.arrayContaining([`superseded_by:${createdMemory!.id}`]),
+      })
+    );
+    expect(result.id).toBe(createdMemory!.id);
   });
 });
 
@@ -902,5 +1028,20 @@ describe('memory chains - conflict detection edge cases', () => {
 
     expect(conflicts.length).toBeGreaterThanOrEqual(1);
     expect(conflicts[0].confidence).toBeLessThan(0.6);
+  });
+
+  it('heuristic fallback flags divergent statements that share a subject', async () => {
+    const conflicts = await detectBedsideNoteConflicts(
+      'Jamie ate pie at the fair.',
+      'Jamie ate cake with the crew.'
+    );
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({
+      confidence: 0.55,
+      strategy: 'heuristic',
+      previous: 'Jamie ate cake with the crew',
+      current: 'Jamie ate pie at the fair',
+    });
   });
 });

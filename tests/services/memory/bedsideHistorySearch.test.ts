@@ -146,4 +146,33 @@ describe('bedside history search', () => {
     expect(results).toHaveLength(1);
     expect(results[0].note.id).toBe('old');
   });
+
+  it('embeds missing vectors, honors non-positive limit, and breaks ties by creation time', async () => {
+    const recordedTexts: string[] = [];
+    setBedsideEmbeddingGenerator(text => {
+      recordedTexts.push(text);
+      return [1, 0];
+    });
+
+    const stale = baseBedsideNote({
+      id: 'stale',
+      createdAt: 1_000,
+      text: 'First note fallback',
+    });
+    const fresh = baseBedsideNote({
+      id: 'fresh',
+      createdAt: 5_000,
+      text: 'Second note fallback',
+    });
+    storedData.push(stale, fresh);
+
+    const results = await searchBedsideHistory('project-1', 'Query fallback', { limit: 0 });
+
+    expect(results).toHaveLength(2);
+    expect(results.map(r => r.note.id)).toEqual(['fresh', 'stale']);
+    expect(recordedTexts).toEqual(
+      expect.arrayContaining(['Query fallback', 'First note fallback', 'Second note fallback']),
+    );
+    expect(recordedTexts).toHaveLength(3);
+  });
 });

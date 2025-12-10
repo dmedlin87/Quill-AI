@@ -69,6 +69,55 @@ describe('driftDetector', () => {
     expect(conflicts[0].current).toContain('resolved promise');
   });
 
+  it('processes character lookups across aliases and skips other node types', () => {
+    const intelligence = mockIntelligence({
+      entities: {
+        nodes: [
+          {
+            id: 'n1',
+            name: 'Marcus',
+            type: 'character',
+            aliases: ['the old man'],
+            firstMention: 0,
+            mentionCount: 3,
+            mentions: [],
+            attributes: {},
+          },
+          {
+            id: 'n2',
+            name: 'Talia',
+            type: 'character',
+            aliases: [],
+            firstMention: 5,
+            mentionCount: 2,
+            mentions: [],
+            attributes: {},
+          },
+          {
+            id: 'n3',
+            name: 'The Keep',
+            type: 'location',
+            aliases: ['keep'],
+            firstMention: 10,
+            mentionCount: 1,
+            mentions: [],
+            attributes: {},
+          },
+        ],
+      } as any,
+    });
+
+    const plan: BedsideNoteContent = {
+      activeGoals: [
+        { title: 'Guide Talia through training', status: 'active', progress: 40 },
+        { title: 'Introduce the old man to the scouts', status: 'active', progress: 10 },
+      ],
+    };
+
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(0);
+  });
+
   it('returns empty array when aligned', () => {
     const intelligence = mockIntelligence({
       structural: { stats: { avgTension: 0.8 } } as any

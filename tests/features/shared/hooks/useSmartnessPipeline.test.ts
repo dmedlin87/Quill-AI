@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import {
   useSmartnessPipeline,
   createIntelligenceCallback,
@@ -7,6 +7,7 @@ import {
 } from '@/features/shared/hooks/useSmartnessPipeline';
 import type { AppBrainState } from '@/services/appBrain/types';
 import type { ManuscriptIntelligence } from '@/types/intelligence';
+import type { ProactiveSuggestion } from '@/services/memory/proactive';
 
 // Mock dependencies
 vi.mock('@/services/appBrain/intelligenceMemoryBridge', () => ({
@@ -201,6 +202,63 @@ describe('useSmartnessPipeline', () => {
       );
 
       expect(startProactiveThinker).not.toHaveBeenCalled();
+    });
+
+    it('records suggestions emitted by the proactive thinker', () => {
+      const suggestion: ProactiveSuggestion = {
+        id: 'suggestion-1',
+        type: 'reminder',
+        priority: 'medium',
+        title: 'Stay consistent',
+        description: 'Keep this thread aligned with lore',
+        source: { type: 'memory', id: 'mem-1' },
+        tags: ['continuity'],
+        createdAt: Date.now(),
+      };
+
+      vi.mocked(startProactiveThinker).mockImplementationOnce((_getState, _projectId, onSuggestion) => {
+        onSuggestion(suggestion);
+        return {
+          getStatus: vi.fn(() => ({ isThinking: false })),
+        } as any;
+      });
+
+      const { result } = renderHook(() =>
+        useSmartnessPipeline(mockGetState, defaultConfig)
+      );
+
+      expect(result.current.suggestions).toContainEqual(suggestion);
+    });
+
+    it('ignores duplicate suggestions by title', () => {
+      const firstSuggestion: ProactiveSuggestion = {
+        id: 'suggestion-1',
+        type: 'reminder',
+        priority: 'medium',
+        title: 'Stay consistent',
+        description: 'Keep this thread aligned with lore',
+        source: { type: 'memory', id: 'mem-1' },
+        tags: ['continuity'],
+        createdAt: Date.now(),
+      };
+      const duplicateSuggestion: ProactiveSuggestion = {
+        ...firstSuggestion,
+        id: 'suggestion-2',
+      };
+
+      vi.mocked(startProactiveThinker).mockImplementationOnce((_getState, _projectId, onSuggestion) => {
+        onSuggestion(firstSuggestion);
+        onSuggestion(duplicateSuggestion);
+        return {
+          getStatus: vi.fn(() => ({ isThinking: false })),
+        } as any;
+      });
+
+      const { result } = renderHook(() =>
+        useSmartnessPipeline(mockGetState, defaultConfig)
+      );
+
+      expect(result.current.suggestions).toHaveLength(1);
     });
 
     it('updates thinker state periodically', async () => {
