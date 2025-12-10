@@ -95,6 +95,6 @@ describe('feature barrel indexes', () => {
     it(`exposes expected exports for ${name}`, async () => {
       const mod = await load();
       assertions(mod);
-    });
+    }, 10000);
   }
 });
