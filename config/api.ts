@@ -76,6 +76,13 @@ export function validateApiKey(key: string): string | null {
 }
 
 /**
+ * Checks if the API key is configured.
+ */
+export function isApiConfigured(): boolean {
+  return !!getApiKey();
+}
+
+/**
  * API request configuration defaults
  */
 export const ApiDefaults = {

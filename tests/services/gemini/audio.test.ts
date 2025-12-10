@@ -43,7 +43,13 @@ const createMockAudioContext = () => ({
   createBuffer: vi.fn(),
 });
 
-const MockAudioContextConstructor = vi.fn(() => createMockAudioContext());
+// Store created contexts for test assertions
+let lastCreatedAudioContext: ReturnType<typeof createMockAudioContext> | null = null;
+
+const MockAudioContextConstructor = vi.fn(() => {
+  lastCreatedAudioContext = createMockAudioContext();
+  return lastCreatedAudioContext;
+});
 
 const mockAudioBuffer = {
   length: 1000,
@@ -58,8 +64,9 @@ const mockAudioBuffer = {
 describe('generateSpeech', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset AudioContext constructor mock
+    // Reset AudioContext constructor mock and stored context
     MockAudioContextConstructor.mockClear();
+    lastCreatedAudioContext = null;
     vi.stubGlobal('AudioContext', MockAudioContextConstructor);
     vi.stubGlobal('webkitAudioContext', MockAudioContextConstructor);
   });
