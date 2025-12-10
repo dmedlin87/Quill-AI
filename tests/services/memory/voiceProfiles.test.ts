@@ -70,22 +70,28 @@ describe('Voice Profiles', () => {
   describe('upsertVoiceProfile', () => {
     it('should create a new profile if none exists', async () => {
       vi.mocked(getMemories).mockResolvedValue([]);
+      const uuidSpy = vi.spyOn(crypto, 'randomUUID').mockReturnValue('new-voice-id');
       vi.mocked(generateVoiceProfile).mockReturnValue(mockProfile as any);
 
-      const result = await upsertVoiceProfile(mockProjectId, mockCharacter, mockDialogue);
+      const result = await upsertVoiceProfile(mockProjectId, '  ALIce  ', mockDialogue);
 
       expect(result).toEqual(mockProfile);
       expect(createMemory).toHaveBeenCalledWith(expect.objectContaining({
-        topicTags: expect.arrayContaining(['voice_profile', 'character:alice']),
+        id: 'new-voice-id',
+        topicTags: ['voice_profile', 'character:alice'],
         structuredContent: { voiceProfile: mockProfile },
       }));
+      expect(getMemories).toHaveBeenCalledWith(expect.objectContaining({
+        topicTags: ['voice_profile', 'character:alice'],
+      }));
+      uuidSpy.mockRestore();
     });
 
     it('should update and merge profile if exists', async () => {
       const existingProfile = { ...mockProfile, lineCount: 10, metrics: { ...mockProfile.metrics, avgSentenceLength: 20 } };
       vi.mocked(getMemories).mockResolvedValue([{
         id: 'mem-1',
-        topicTags: ['voice_profile', 'character:alice'],
+        topicTags: ['voice_profile', 'character:alice', 'voice_profile'],
         structuredContent: { voiceProfile: existingProfile }
       }] as any);
       vi.mocked(generateVoiceProfile).mockReturnValue(mockProfile as any); // new profile has avg 10, count 1
@@ -97,8 +103,11 @@ describe('Voice Profiles', () => {
       expect(result.lineCount).toBe(11);
 
       expect(updateMemory).toHaveBeenCalledWith('mem-1', expect.objectContaining({
+         topicTags: ['voice_profile', 'character:alice'],
          structuredContent: expect.objectContaining({
-             voiceProfile: result
+             voiceProfile: expect.objectContaining({
+              metrics: expect.objectContaining({ avgSentenceLength: result.metrics.avgSentenceLength }),
+             })
          })
       }));
     });
@@ -257,6 +266,20 @@ describe('Voice Profiles', () => {
          const result = mergeVoiceMetrics(p1 as any, p2 as any);
 
          expect(result.signatureWords).toEqual([]);
+      });
+
+      it('returns incoming metrics when both line counts are zero and dedupes signature words', () => {
+        const maxSpy = vi.spyOn(Math, 'max').mockReturnValue(0);
+
+        const p1 = { ...mockProfile, lineCount: 0, signatureWords: ['echo', 'echo'] };
+        const p2 = { ...mockProfile, lineCount: 0, signatureWords: ['echo', 'voice'] };
+
+        const result = mergeVoiceMetrics(p1 as any, p2 as any);
+
+        expect(result.metrics.avgSentenceLength).toBe(mockProfile.metrics.avgSentenceLength);
+        expect(result.signatureWords).toEqual(['echo', 'voice']);
+
+        maxSpy.mockRestore();
       });
   });
 });
