@@ -110,6 +110,36 @@ export {
   stopSignificantEditMonitor,
 } from './significantEditMonitor';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SELECTIVE STATE SLICE EXPORTS
+// These allow consumers to import only the types they need for better tree-shaking
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type {
+  // State slices
+  ManuscriptState,
+  IntelligenceState,
+  AnalysisState,
+  LoreState,
+  UIState,
+  SessionState,
+  MicrophoneState,
+  PendingToolCall,
+  AgentAction,
+  // Action types
+  NavigateToTextParams,
+  UpdateManuscriptParams,
+  RewriteSelectionParams,
+  // Event types
+  AppEvent,
+  AppEventBase,
+  EventHandler,
+} from './types';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE FACTORIES
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const createEmptyAppBrainState = (): AppBrainState => ({
   manuscript: {
     projectId: null,
