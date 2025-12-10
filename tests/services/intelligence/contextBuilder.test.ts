@@ -224,6 +224,75 @@ const loadContextBuilderWithRichMocks = async () => {
   return module;
 };
 
+const loadContextBuilderForGlobalStyleAlerts = async () => {
+  vi.doMock('../../../services/intelligence/structuralParser', () => ({
+    getSceneAtOffset: vi.fn(() => null),
+    getParagraphAtOffset: vi.fn(() => ({
+      avgSentenceLength: 30,
+    })),
+  }));
+
+  vi.doMock('../../../services/intelligence/entityExtractor', () => ({
+    getEntitiesInRange: vi.fn(() => []),
+    getRelatedEntities: vi.fn(() => []),
+  }));
+
+  vi.doMock('../../../services/intelligence/timelineTracker', () => ({
+    getUnresolvedPromises: vi.fn(() => []),
+    getEventsInRange: vi.fn(() => []),
+  }));
+
+  vi.doMock('../../../services/intelligence/heatmapBuilder', () => ({
+    getSectionAtOffset: vi.fn(() => null),
+  }));
+
+  return import('../../../services/intelligence/contextBuilder');
+};
+
+const loadContextBuilderForIssues = async () => {
+  const section = {
+    offset: 100,
+    length: 120,
+    scores: {
+      plotRisk: 0.6,
+      pacingRisk: 0.7,
+      characterRisk: 0.3,
+      settingRisk: 0.2,
+      styleRisk: 0.4,
+    },
+    overallRisk: 0.8,
+    flags: ['pacing_slow'],
+    suggestions: ['Tighten the pacing'],
+  };
+
+  vi.doMock('../../../services/intelligence/structuralParser', () => ({
+    getSceneAtOffset: vi.fn(() => ({
+      ...makeScene(),
+      tension: 0.2,
+    })),
+    getParagraphAtOffset: vi.fn(() => ({
+      ...makeParagraph(),
+      avgSentenceLength: 32,
+    })),
+  }));
+
+  vi.doMock('../../../services/intelligence/entityExtractor', () => ({
+    getEntitiesInRange: vi.fn(() => makeEntities()),
+    getRelatedEntities: vi.fn(() => []),
+  }));
+
+  vi.doMock('../../../services/intelligence/timelineTracker', () => ({
+    getUnresolvedPromises: vi.fn(() => [makePromise()]),
+    getEventsInRange: vi.fn(() => [makeEvent()]),
+  }));
+
+  vi.doMock('../../../services/intelligence/heatmapBuilder', () => ({
+    getSectionAtOffset: vi.fn(() => section),
+  }));
+
+  return import('../../../services/intelligence/contextBuilder');
+};
+
 const loadContextBuilderWithEmptyMocks = async () => {
   vi.doMock('../../../services/intelligence/structuralParser', () => ({
     getSceneAtOffset: vi.fn(() => null),
@@ -293,6 +362,73 @@ describe('contextBuilder - buildHUD', () => {
     expect(hud.context.recentEvents).toEqual([]);
     expect(hud.styleAlerts).toEqual([]);
     expect(hud.prioritizedIssues).toEqual([]);
+  });
+
+  it('surfaces global style alerts even when no section data is available', async () => {
+    const { buildHUD } = await loadContextBuilderForGlobalStyleAlerts();
+    const intelligence = makeBaseIntelligence();
+
+    intelligence.style.flags.passiveVoiceRatio = 4.12;
+    intelligence.style.flags.adverbDensity = 5.01;
+    intelligence.style.flags.clicheCount = 2;
+    intelligence.style.vocabulary.overusedWords = ['really', 'just', 'actually'];
+
+    const hud = buildHUD(intelligence, 25);
+
+    expect(hud.styleAlerts).toEqual(
+      expect.arrayContaining([
+        'Overall passive voice: 4.1 per 100 words',
+        'Adverb density: 5.0 per 100 words',
+        '2 cliché(s) detected',
+        'Overused words: really, just, actually',
+      ])
+    );
+  });
+
+  it('deduplicates prioritized issues across heatmap, promises, and clichés', async () => {
+    const { buildHUD } = await loadContextBuilderForIssues();
+    const intelligence = makeBaseIntelligence();
+    const duplicatedSection = {
+      offset: 100,
+      length: 120,
+      flags: ['pacing_slow'],
+      suggestions: ['Tighten the pacing'],
+      scores: intelligence.heatmap.sections[0]?.scores ?? {
+        plotRisk: 0.6,
+        pacingRisk: 0.7,
+        characterRisk: 0.3,
+        settingRisk: 0.2,
+        styleRisk: 0.4,
+      },
+      overallRisk: 0.75,
+    };
+
+    intelligence.heatmap.sections = [
+      duplicatedSection as any,
+      { ...duplicatedSection, overallRisk: 0.6 } as any,
+    ];
+    intelligence.timeline.promises = [
+      makePromise(),
+      { ...makePromise(), id: 'resolved', resolved: true },
+    ] as any;
+    intelligence.style.flags.clicheInstances = [
+      { phrase: 'it was all a dream', offset: 140 },
+    ] as any;
+
+    const hud = buildHUD(intelligence, 105);
+
+    const pacingIssues = hud.prioritizedIssues.filter(
+      issue => issue.type === 'pacing_slow'
+    );
+    expect(pacingIssues).toHaveLength(1);
+    expect(
+      hud.prioritizedIssues.some(issue => issue.type === 'unresolved_promise')
+    ).toBe(true);
+    expect(
+      hud.prioritizedIssues.some(issue => issue.description.includes('Cliché'))
+    ).toBe(true);
+    expect(hud.situational.tensionLevel).toBe('low');
+    expect(hud.situational.pacing).toBe('slow');
   });
 });
 
