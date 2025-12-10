@@ -482,6 +482,32 @@ describe('ProactiveThinker', () => {
     }));
   });
 
+  it('applies weighting rules and sorting for related memory suggestions', () => {
+    vi.mocked(useSettingsStore.getState).mockReturnValue({
+        suggestionWeights: {
+            plot: 0.01, // Hard mute
+            character: 0.4, // Downgrade from high to medium
+            style: 2.0, // Boost from low to high
+        },
+    } as any);
+
+    const weighted = (thinker as any).applyAdaptiveRelevance([
+        { title: 'Plot callback', type: 'related_memory', tags: ['plot'], priority: 'high' },
+        { title: 'Character arc', type: 'related_memory', tags: ['character'], priority: 'high' },
+        { title: 'Style tweak', type: 'related_memory', tags: ['style'], priority: 'low' },
+    ]);
+
+    expect(weighted).toHaveLength(2);
+    expect(weighted[0]).toMatchObject({
+        title: 'Style tweak',
+        priority: 'high',
+    });
+    expect(weighted[1]).toMatchObject({
+        title: 'Character arc',
+        priority: 'medium',
+    });
+  });
+
   it('should fetch long term memory context with matches', async () => {
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
 
