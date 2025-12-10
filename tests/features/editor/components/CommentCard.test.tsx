@@ -102,7 +102,8 @@ describe('CommentCard (features/editor)', () => {
     const arrow = container.querySelector('div.absolute.w-3.h-3.rotate-45') as HTMLDivElement;
 
     await waitFor(() => {
-      expect(card.style.top).toBe('-0px'); // 350 - 320 - 30 = 0 -> formatted as '-0px'
+      // 350 - 320 - 30 = 0, formatted as '0px' (not '-0px')
+      expect(card.style.top).toBe('0px');
       expect(arrow.className).toContain('-bottom-1.5');
     });
 

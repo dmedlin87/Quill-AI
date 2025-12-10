@@ -250,6 +250,12 @@ describe('ChunkManager edge cases', () => {
     const invalidChapter = index.registerChunk('chapter-ch2', 'chapter', -1, 3, '', 'book');
     expect(manager.getChunkText(invalidChapter)).toBeNull();
 
+    // Scene exactly on chapter boundary returns full text
+    manager.chapterTexts.set('boundary', '0123456789');
+    const boundaryParent = index.registerChunk('chapter-boundary', 'chapter', 0, 10, '', 'book');
+    const boundaryScene = index.registerChunk('chapter-boundary-scene-0', 'scene', 0, 10, '', boundaryParent.id);
+    expect(manager.getChunkText(boundaryScene)).toBe('0123456789');
+
     // Scene slices valid content
     manager.chapterTexts.set('ch3', 'abcdefghij');
     const parent = index.registerChunk('chapter-ch3', 'chapter', 0, 10, '', 'book');
@@ -425,6 +431,36 @@ describe('ChunkManager processing and persistence flows', () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0].error).toBe('Could not get chunk text');
     expect(processManuscriptCachedMock).not.toHaveBeenCalled();
+  });
+
+  it('handles edits that shrink and greatly expand chapter text around chunk boundaries', async () => {
+    vi.useFakeTimers();
+
+    const manager = createManager({ editDebounceMs: 0, processingIntervalMs: 0, idleThresholdMs: 0 });
+
+    // Start with a moderate-length chapter registered through the normal path
+    manager.registerChapter('resize-ch', 'abcdefghij');
+    const initialChunk = manager.getChapterChunk('resize-ch');
+    expect(initialChunk?.endIndex).toBe(10);
+
+    // Apply an edit that shrinks the chapter so text is shorter than the original chunk length
+    manager.handleEdit('resize-ch', 'abc', 0, 10);
+    await vi.runAllTimersAsync();
+
+    const shrunkChunk = manager.getChapterChunk('resize-ch');
+    expect(shrunkChunk?.endIndex).toBe(3);
+    expect((manager as any).chapterTexts.get('resize-ch')).toBe('abc');
+
+    // Now grow the chapter to an extremely large size to ensure processing and indexing stay stable
+    const largeText = 'Alpha beta gamma '.repeat(4000); // reasonably large but safe for tests
+    manager.handleEdit('resize-ch', largeText, 0, 3);
+    await vi.runAllTimersAsync();
+
+    const grownChunk = manager.getChapterChunk('resize-ch');
+    expect(grownChunk?.endIndex).toBe(largeText.length);
+    expect((manager as any).chapterTexts.get('resize-ch')?.length).toBe(largeText.length);
+
+    vi.useRealTimers();
   });
 
   it('exercises persistence, manual controls, and stats helpers', async () => {

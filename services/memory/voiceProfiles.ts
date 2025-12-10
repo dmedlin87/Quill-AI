@@ -1,6 +1,7 @@
 import { generateVoiceProfile } from '../intelligence/voiceProfiler';
 import type { DialogueLine, VoiceMetrics, VoiceProfile } from '../../types/intelligence';
-import { createMemory, getMemories, updateMemory } from './memoryService';
+import { createMemory, updateMemory } from './memoryService';
+import { getMemories } from './memoryQueries';
 import type { MemoryNote } from './types';
 
 const VOICE_PROFILE_TAG = 'voice_profile';

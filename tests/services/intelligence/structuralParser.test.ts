@@ -87,6 +87,36 @@ Scene two starts here.`;
         expect(result.scenes[0].endOffset).toBeLessThanOrEqual(result.scenes[1].startOffset);
       }
     });
+
+    it('splits scenes on multiple blank lines even without explicit dividers', () => {
+      const text = `Scene one line.
+
+
+Scene two line after gap.`;
+
+      const result = parseStructure(text);
+
+      expect(result.scenes.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('handles markdown headers and horizontal rules without creating tiny scenes', () => {
+      const text = `Intro
+
+---
+
+# Chapter 2 - Broken Header
+
+More content after the header.`;
+
+      const result = parseStructure(text);
+
+      // Should treat the horizontal rule and header as structural markers
+      // but skip any zero-length or tiny fragments around them.
+      expect(result.scenes.length).toBeGreaterThanOrEqual(1);
+      for (const scene of result.scenes) {
+        expect(scene.endOffset - scene.startOffset).toBeGreaterThanOrEqual(10);
+      }
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────

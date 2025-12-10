@@ -1,25 +1,31 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook, act, fireEvent } from '@testing-library/react';
 import {
   calculateSafePosition,
   observeElementDimensions,
+  useViewportCollision,
 } from '@/features/shared/hooks/useViewportCollision';
+
+// Helper to mock window dimensions
+function mockViewport(width: number, height: number) {
+  vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
+  vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(height);
+}
 
 const originalWidth = window.innerWidth;
 const originalHeight = window.innerHeight;
 
-beforeEach(() => {
-  Object.defineProperty(window, 'innerWidth', { writable: true, value: 800 });
-  Object.defineProperty(window, 'innerHeight', { writable: true, value: 600 });
-});
-
+// Restore spies after each test
 afterEach(() => {
-  Object.defineProperty(window, 'innerWidth', { writable: true, value: originalWidth });
-  Object.defineProperty(window, 'innerHeight', { writable: true, value: originalHeight });
-  delete (window as any).ResizeObserver;
+  vi.restoreAllMocks();
 });
 
 describe('calculateSafePosition', () => {
+  beforeEach(() => {
+    mockViewport(800, 600);
+  });
+
   it('shifts horizontally and flips vertically based on viewport', () => {
     const collision = calculateSafePosition({ top: 20, left: 10 });
 
@@ -77,6 +83,7 @@ describe('observeElementDimensions', () => {
   let constructorSpy: ReturnType<typeof vi.fn> | null = null;
 
   beforeEach(() => {
+    mockViewport(800, 600);
     lastInstance = null;
     constructorSpy = vi.fn(function (this: MockResizeObserver, callback: ResizeObserverCallback) {
       const instance = new MockResizeObserver(callback);
@@ -120,5 +127,43 @@ describe('observeElementDimensions', () => {
     expect(cleanup).toBeUndefined();
     expect(constructorSpy).not.toHaveBeenCalled();
     expect(measureCallback).not.toHaveBeenCalled();
+  });
+});
+
+describe('useViewportCollision', () => {
+  beforeEach(() => {
+     mockViewport(800, 600);
+  });
+
+  it('recalculates when viewport changes', () => {
+    // Stable object reference
+    const testPos = { top: 300, left: 300 };
+
+    // Capture the hook return value
+    const { result } = renderHook(() => useViewportCollision(testPos));
+
+    // Initial: Viewport 800. Left 300.
+    // Fits.
+    expect(result.current?.adjusted).toBe(false);
+    expect(result.current?.left).toBe(300);
+
+    // Resize Viewport to 300
+    act(() => {
+      // Update mock
+      mockViewport(300, 600);
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    // Check adjustment detection
+    expect(result.current?.adjustments.horizontal).toBe('left');
+    expect(result.current?.adjusted).toBe(true);
+
+    // Expected value:
+    // Initial Shift = 500 - 284 = 216.
+    // Adjusted Left = 300 - 216 = 84.
+    // Final Clamp: max(padding + halfWidth, min(84, ...))
+    // padding(16) + halfWidth(200) = 216.
+    // Result is clamped to 216 because element is wider than viewport and prioritizes left safety.
+    expect(result.current?.left).toBe(216);
   });
 });

@@ -17,16 +17,24 @@ vi.mock('@/features/core/context/EditorContext', () => ({
 vi.mock('@/features/project', () => ({
   useProjectStore: vi.fn(),
 }));
+
+// Capture props passed to mocked components for testing
+const mockRichTextProps = vi.fn();
+const mockCommentCardProps = vi.fn();
+
 // Mock sub-components before they are used in imports (and because they might be memoized)
 vi.mock('@/features/editor/components/RichTextEditor', () => ({
-  RichTextEditor: ({ onUpdate, onSelectionChange }: any) => (
-    <div data-testid="rich-text-editor">
-      <textarea
-        data-testid="editor-textarea"
-        onChange={(e) => onUpdate(e.target.value)}
-      />
-    </div>
-  ),
+  RichTextEditor: (props: any) => {
+    mockRichTextProps(props);
+    return (
+      <div data-testid="rich-text-editor">
+        <textarea
+          data-testid="editor-textarea"
+          onChange={(e) => props.onUpdate(e.target.value)}
+        />
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/features/editor/components/MagicBar', () => ({
@@ -44,12 +52,15 @@ vi.mock('@/features/editor/components/VisualDiff', () => ({
 }));
 
 vi.mock('@/features/editor/components/CommentCard', () => ({
-  CommentCard: ({ onDismiss, onFixWithAgent }: any) => (
-    <div data-testid="comment-card">
-      <button onClick={() => onDismiss('c1')}>Dismiss</button>
-      <button onClick={() => onFixWithAgent('issue', 'suggestion')}>Fix</button>
-    </div>
-  ),
+  CommentCard: (props: any) => {
+    mockCommentCardProps(props);
+    return (
+      <div data-testid="comment-card">
+        <button onClick={() => props.onDismiss('c1')}>Dismiss</button>
+        <button onClick={() => props.onFixWithAgent('issue', 'suggestion')}>Fix</button>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/features/shared', () => ({
@@ -82,6 +93,8 @@ describe('EditorWorkspace', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRichTextProps.mockClear();
+    mockCommentCardProps.mockClear();
 
     (useEditorState as any).mockReturnValue({
       currentText: 'Sample text',

@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { analyzeStyle } from '@/services/intelligence/styleAnalyzer';
+import { analyzeStyle, calculateReadability, compareStyles } from '@/services/intelligence/styleAnalyzer';
 
 describe('styleAnalyzer', () => {
   // ─────────────────────────────────────────────────────────────────────────
@@ -365,6 +365,59 @@ describe('styleAnalyzer', () => {
       const result = analyzeStyle(text);
       
       expect(result.vocabulary.totalWords).toBeGreaterThan(0);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // READABILITY & COMPARISON HELPERS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  describe('readability and comparison helpers', () => {
+    it('calculates readability for text with no ASCII punctuation and unusual unicode without NaN values', () => {
+      const text = 'αβγδ εζηθ 你好 мир 😀';
+
+      const result = calculateReadability(text);
+
+      expect(Number.isFinite(result.fleschKincaid)).toBe(true);
+      // Unicode-only text produces 0 words via ASCII tokenizer, so readingTime is 0
+      expect(result.readingTime).toBe(0);
+      expect([
+        'Elementary',
+        'Middle School',
+        'High School',
+        'College',
+        'Professional',
+      ]).toContain(result.gradeLevel);
+    });
+
+    it('uses fallback branch when text has no sentences and when text is empty', () => {
+      const noSentenceText = 'words without any sentence delimiters or punctuation like periods or question marks';
+      const emptyText = '';
+
+      const noSentenceResult = calculateReadability(noSentenceText);
+      const emptyResult = calculateReadability(emptyText);
+
+      // Non-empty text should still produce a finite FK score
+      expect(Number.isFinite(noSentenceResult.fleschKincaid)).toBe(true);
+      expect(noSentenceResult.readingTime).toBeGreaterThan(0);
+
+      // Empty text should hit the 0-sentence fallback path
+      expect(emptyResult.fleschKincaid).toBe(0);
+      expect(emptyResult.readingTime).toBe(0);
+      expect(emptyResult.gradeLevel).toBe('Elementary');
+    });
+
+    it('compares before and after styles using lexical diversity and sentence length', () => {
+      const beforeText = 'word word word word.'; // very low lexical diversity, short sentence
+      const afterText = 'One two three four five six seven eight nine ten.'; // higher diversity, longer sentence
+
+      const before = analyzeStyle(beforeText);
+      const after = analyzeStyle(afterText);
+
+      const diff = compareStyles(before, after);
+
+      expect(diff.vocabularyChange).toBeGreaterThan(0);
+      expect(diff.sentenceLengthChange).toBeGreaterThan(0);
     });
   });
 

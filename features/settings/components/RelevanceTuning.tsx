@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
 import { SuggestionCategory } from '@/types/experienceSettings';
 
@@ -17,10 +17,69 @@ const CATEGORY_LABELS: Record<SuggestionCategory, string> = {
   other: 'Other Suggestions',
 };
 
+interface WeightInputProps {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+  label: string;
+}
+
+const WeightInput: React.FC<WeightInputProps> = ({ value, min, max, onChange, label }) => {
+  const [localValue, setLocalValue] = useState(value.toFixed(2));
+
+  // Sync with external changes (e.g. slider)
+  useEffect(() => {
+    // Only update if the value is significantly different to avoid fighting cursor
+    // But since we only commit on blur, prop shouldn't change while typing unless slider moves.
+    // If slider moves, we want to update.
+    setLocalValue(value.toFixed(2));
+  }, [value]);
+
+  const handleBlur = () => {
+    let floatVal = parseFloat(localValue);
+    if (isNaN(floatVal)) {
+      floatVal = value; // Revert to current prop value
+    } else {
+      floatVal = Math.min(Math.max(floatVal, min), max); // Clamp
+    }
+
+    // Update parent/store
+    onChange(floatVal);
+    // Format local display
+    setLocalValue(floatVal.toFixed(2));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      step="0.1"
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      className="text-xs text-gray-500 w-12 text-right border rounded p-1"
+      aria-label={`${label} weight`}
+    />
+  );
+};
+
 export const RelevanceTuning: React.FC = () => {
   const { suggestionWeights, updateSuggestionWeight, resetSuggestionWeights } = useSettingsStore();
 
   const handleSliderChange = (category: SuggestionCategory, value: number) => {
+    updateSuggestionWeight(category, value);
+  };
+
+  const handleInputChange = (category: SuggestionCategory, value: number) => {
     updateSuggestionWeight(category, value);
   };
 
@@ -58,9 +117,13 @@ export const RelevanceTuning: React.FC = () => {
               onChange={(e) => handleSliderChange(category, parseFloat(e.target.value))}
               className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
             />
-            <span className="text-xs text-gray-500 w-8 text-right">
-              {(suggestionWeights[category] ?? 1.0).toFixed(2)}
-            </span>
+            <WeightInput
+              value={suggestionWeights[category] ?? 1.0}
+              min={0}
+              max={2}
+              onChange={(val) => handleInputChange(category, val)}
+              label={CATEGORY_LABELS[category] || category}
+            />
           </div>
         ))}
       </div>
