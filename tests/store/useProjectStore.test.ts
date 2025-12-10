@@ -744,7 +744,7 @@ describe('useProjectStore', () => {
 
       const { updateChapterBranchState } = useProjectStore.getState();
       const updates = {
-        branches: [{ id: 'b1', label: 'Draft', content: 'New Content', timestamp: 1 }],
+        branches: [{ id: 'b1', name: 'Draft', content: 'New Content', createdAt: 1 }],
         activeBranchId: 'b1',
         content: 'New Content'
       };
@@ -780,6 +780,61 @@ describe('useProjectStore', () => {
         expect(db.chapters.update).toHaveBeenCalled();
 
         vi.useRealTimers();
+    });
+
+    it('queues persistence keepalive when keepAlive is true', async () => {
+      vi.useFakeTimers();
+
+      const mockSendBeacon = vi.fn(() => true);
+      globalThis.navigator = {
+        sendBeacon: mockSendBeacon,
+        serviceWorker: {
+          ready: Promise.resolve({} as ServiceWorkerRegistration),
+        },
+      } as unknown as Navigator;
+
+      const { updateChapterContent, flushPendingWrites } = useProjectStore.getState();
+      const { db } = await import('@/services/db');
+
+      vi.mocked(db.chapters.get).mockResolvedValue({ projectId: 'p1' } as any);
+
+      const persistPromise = updateChapterContent('c1', 'new content');
+
+      const result = await flushPendingWrites({ reason: 'test-keepalive', keepAlive: true });
+      await persistPromise;
+
+      expect(result.pendingCount).toBe(1);
+      expect(mockSendBeacon).toHaveBeenCalledWith(
+        '/__quill/pending-writes',
+        expect.any(Blob),
+      );
+
+      vi.useRealTimers();
+    });
+
+    it('persists chapter content even when project cannot be resolved', async () => {
+      vi.useFakeTimers();
+
+      const { updateChapterContent, flushPendingWrites } = useProjectStore.getState();
+      const { db } = await import('@/services/db');
+
+      // First call returns a chapter without projectId so the fallback path is used
+      vi.mocked(db.chapters.get).mockResolvedValueOnce({ id: 'c1' } as any);
+
+      const persistPromise = updateChapterContent('c1', 'orphan content');
+
+      const result = await flushPendingWrites({ reason: 'test-orphan' });
+      await persistPromise;
+
+      expect(result.pendingCount).toBe(1);
+      expect(db.chapters.update).toHaveBeenCalledWith(
+        'c1',
+        expect.objectContaining({ content: 'orphan content' }),
+      );
+      // When projectId is missing, the store should not attempt to update a project row
+      expect(db.projects.update).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
     });
   });
 });

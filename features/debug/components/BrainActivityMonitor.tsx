@@ -113,12 +113,13 @@ const renderDetails = (event: AppEvent) => {
 export const BrainActivityMonitor: React.FC = () => {
   const developerModeEnabled = useSettingsStore((state) => state.developerModeEnabled);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [events, setEvents] = useState<BrainActivityEntry[]>(() =>
-    eventBus.getChangeLog(10).map((evt, idx) => ({ ...evt, id: createEventId(evt, idx) }))
-  );
+  const [events, setEvents] = useState<BrainActivityEntry[]>([]);
 
   useEffect(() => {
-    if (!developerModeEnabled) return;
+    if (!developerModeEnabled) {
+      setEvents([]);
+      return;
+    }
 
     setEvents(eventBus.getChangeLog(10).map((evt, idx) => ({ ...evt, id: createEventId(evt, idx) })));
 

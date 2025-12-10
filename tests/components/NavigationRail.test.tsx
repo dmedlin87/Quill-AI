@@ -8,20 +8,28 @@ import { SidebarTab, MainView } from '@/types';
 const mockOpenTabWithPanel = vi.fn();
 const mockToggleView = vi.fn();
 const mockToggleTheme = vi.fn();
+const mockResetToProjectDashboard = vi.fn();
+
+const mockLayoutStore = {
+  activeTab: SidebarTab.ANALYSIS,
+  activeView: MainView.EDITOR,
+  theme: 'light' as const,
+  currentPersonaIndex: 0,
+  openTabWithPanel: mockOpenTabWithPanel,
+  toggleView: mockToggleView,
+  toggleTheme: mockToggleTheme,
+  resetToProjectDashboard: mockResetToProjectDashboard,
+};
 
 vi.mock('@/features/layout/store/useLayoutStore', () => ({
-  useLayoutStore: vi.fn((selector) => {
-    const state = {
-      activeTab: SidebarTab.ANALYSIS,
-      activeView: MainView.EDITOR,
-      theme: 'light' as const,
-      currentPersonaIndex: 0,
-      openTabWithPanel: mockOpenTabWithPanel,
-      toggleView: mockToggleView,
-      toggleTheme: mockToggleTheme,
-    };
-    return typeof selector === 'function' ? selector(state) : state;
-  }),
+  useLayoutStore: Object.assign(
+    vi.fn((selector) => {
+      return typeof selector === 'function' ? selector(mockLayoutStore) : mockLayoutStore;
+    }),
+    {
+      getState: () => mockLayoutStore,
+    }
+  ),
 }));
 
 // Mock framer-motion
@@ -116,12 +124,12 @@ describe('NavigationRail', () => {
   });
 
   describe('Home Button', () => {
-    it('reloads page when home button is clicked', () => {
+    it('calls resetToProjectDashboard when home button is clicked', () => {
       render(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Return to Library'));
 
-      expect(window.location.reload).toHaveBeenCalled();
+      expect(mockResetToProjectDashboard).toHaveBeenCalled();
     });
   });
 

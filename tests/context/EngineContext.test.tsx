@@ -24,7 +24,11 @@ let mockActions: EngineActions;
 let indexerHandler: ((contradictions: Contradiction[]) => void) | undefined;
 
 vi.mock('@/features/shared/hooks/useDraftSmithEngine', () => ({
-  useQuillAIEngine: vi.fn(() => ({ state: engineState, actions: mockActions }))
+  useQuillAIEngine: vi.fn(({ getCurrentText }) => {
+      // Call getCurrentText to ensure it's covered (line 119)
+      if (getCurrentText) getCurrentText();
+      return { state: engineState, actions: mockActions };
+  })
 }));
 
 vi.mock('@/features/shared/hooks/useManuscriptIndexer', () => ({

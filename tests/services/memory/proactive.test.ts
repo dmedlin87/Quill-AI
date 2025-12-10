@@ -41,6 +41,7 @@ import {
   getRelatedMemories,
   generateSuggestionsForChapter,
   getImportantReminders,
+  createChapterSwitchHandler,
 } from '@/services/memory/proactive';
 import { db } from '@/services/db';
 import {
@@ -347,6 +348,51 @@ describe('Proactive Memory Suggestions', () => {
       });
 
       expect(suggestions.length).toBeLessThanOrEqual(5);
+    });
+  });
+
+  describe('createChapterSwitchHandler', () => {
+    it('calls onSuggestions when generated suggestions are non-empty', async () => {
+      const mockSuggestions: ProactiveSuggestion[] = [
+        {
+          id: 'suggestion-1',
+          type: 'watched_entity',
+          priority: 'high',
+          title: 'Follow Alice',
+          description: 'Alice drove the plot forward',
+          source: { type: 'entity', id: 'entity-1' },
+          tags: ['character'],
+          createdAt: Date.now(),
+        },
+      ];
+
+      const suggestionGenerator = vi.fn().mockResolvedValue(mockSuggestions);
+      const onSuggestions = vi.fn();
+      const handler = createChapterSwitchHandler(mockProjectId, onSuggestions, suggestionGenerator);
+
+      await handler('ch-1', 'Chapter 1', 'some content');
+
+      expect(suggestionGenerator).toHaveBeenCalledWith(mockProjectId, {
+        chapterId: 'ch-1',
+        chapterTitle: 'Chapter 1',
+        content: 'some content',
+      });
+      expect(onSuggestions).toHaveBeenCalledWith(mockSuggestions);
+    });
+
+    it('does not call onSuggestions when no suggestions are returned', async () => {
+      const suggestionGenerator = vi.fn().mockResolvedValue([] as ProactiveSuggestion[]);
+      const onSuggestions = vi.fn();
+      const handler = createChapterSwitchHandler(mockProjectId, onSuggestions, suggestionGenerator);
+
+      await handler('ch-1', 'Chapter 1', 'irrelevant');
+
+      expect(suggestionGenerator).toHaveBeenCalledWith(mockProjectId, {
+        chapterId: 'ch-1',
+        chapterTitle: 'Chapter 1',
+        content: 'irrelevant',
+      });
+      expect(onSuggestions).not.toHaveBeenCalled();
     });
   });
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { SidebarTab, MainView, CharacterProfile } from '@/types';
 import { emitPanelSwitched } from '@/services/appBrain';
+import { useProjectStore } from '@/features/project/store/useProjectStore';
 
 type Theme = 'light' | 'dark';
 
@@ -31,6 +32,10 @@ interface LayoutState {
   
   // Persona
   currentPersonaIndex: number;
+  
+  // Tools Panel
+  toolsPanelWidth: number;
+  isToolsPanelExpanded: boolean;
 }
 
 interface LayoutActions {
@@ -73,6 +78,11 @@ interface LayoutActions {
   handleInterviewCharacter: (character: CharacterProfile) => void;
   openLoreDraft: (character: CharacterProfile) => void;
   consumeLoreDraft: () => void;
+  resetToProjectDashboard: () => void;
+  
+  // Tools Panel
+  setToolsPanelWidth: (width: number) => void;
+  toggleToolsPanelExpanded: () => void;
 }
 
 type LayoutStore = LayoutState & LayoutActions;
@@ -114,6 +124,8 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     isHeaderHovered: false,
     currentPersonaIndex: 0,
     loreDraftCharacter: null,
+    toolsPanelWidth: 380,
+    isToolsPanelExpanded: false,
 
     // Tab/View Actions
     setActiveTab: (tab) => {
@@ -145,6 +157,7 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     toggleTheme: () => set((state) => {
       const newMode = state.theme === 'light' ? 'dark' : 'light';
       applyTheme(newMode, state.visualTheme);
+      localStorage.setItem('quillai-theme', newMode);
       return { theme: newMode };
     }),
 
@@ -199,6 +212,25 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
         activeTab: SidebarTab.CHAT,
         isToolsCollapsed: false
       });
-    }
+    },
+
+    resetToProjectDashboard: () => {
+      // Clear project selection to return to dashboard
+      useProjectStore.getState().closeProject();
+      // Reset layout state
+      set({
+        activeTab: SidebarTab.ANALYSIS,
+        activeView: MainView.EDITOR,
+        isSidebarCollapsed: false,
+        isToolsCollapsed: false,
+        chatInitialMessage: undefined,
+        interviewTarget: null,
+        selectedGraphCharacter: null,
+        loreDraftCharacter: null,
+      });
+    },
+
+    setToolsPanelWidth: (width) => set({ toolsPanelWidth: Math.max(320, Math.min(600, width)) }),
+    toggleToolsPanelExpanded: () => set((state) => ({ isToolsPanelExpanded: !state.isToolsPanelExpanded }))
   };
 });

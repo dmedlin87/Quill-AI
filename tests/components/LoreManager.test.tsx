@@ -330,4 +330,65 @@ describe('LoreManager', () => {
       expect(screen.getByText('Alice')).toBeInTheDocument();
     });
   });
+
+  describe('Interview & drafts', () => {
+    it('invokes onInterviewCharacter when interview button is clicked', () => {
+      const onInterviewCharacter = vi.fn();
+
+      const { rerender } = renderLoreManager({ characters: [baseCharacter], worldRules: [] });
+
+      // Ensure project store still returns our character before rerender
+      mockedUseProjectStore.mockReturnValue({
+        currentProject: {
+          id: 'project-1',
+          lore: { characters: [baseCharacter], worldRules: [] },
+        },
+        updateProjectLore,
+      } as any);
+
+      // Re-render with interview callback so CharacterCard receives onInterview
+      rerender(
+        <LoreManager
+          onInterviewCharacter={onInterviewCharacter}
+        />,
+      );
+
+      // Click the interview button for Alice
+      const interviewButton = screen.getByRole('button', { name: /interview alice/i });
+      fireEvent.click(interviewButton);
+
+      expect(onInterviewCharacter).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Alice' }),
+      );
+    });
+
+    it('initializes editor from draftCharacter and consumes draft', () => {
+      const onDraftConsumed = vi.fn();
+      const draftCharacter = {
+        ...baseCharacter,
+        name: 'Drafty',
+      } as CharacterProfile;
+
+      mockedUseProjectStore.mockReturnValue({
+        currentProject: {
+          id: 'project-1',
+          lore: { characters: [], worldRules: [] },
+        },
+        updateProjectLore,
+      } as any);
+
+      render(
+        <LoreManager
+          draftCharacter={draftCharacter}
+          onDraftConsumed={onDraftConsumed}
+        />,
+      );
+
+      expect(onDraftConsumed).toHaveBeenCalled();
+      expect(screen.getByText('New Character')).toBeInTheDocument();
+
+      const nameInput = findInputByLabel('Name');
+      expect(nameInput.value).toBe('Drafty');
+    });
+  });
 });

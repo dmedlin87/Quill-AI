@@ -279,10 +279,14 @@ export async function generateSuggestionsForChapter(
  */
 export function createChapterSwitchHandler(
   projectId: string,
-  onSuggestions: (suggestions: ProactiveSuggestion[]) => void
+  onSuggestions: (suggestions: ProactiveSuggestion[]) => void,
+  suggestionProvider: (
+    projectId: string,
+    args: { chapterId: string; chapterTitle: string; content?: string }
+  ) => Promise<ProactiveSuggestion[]> = generateSuggestionsForChapter,
 ) {
   return async (chapterId: string, chapterTitle: string, content?: string) => {
-    const suggestions = await generateSuggestionsForChapter(projectId, {
+    const suggestions = await suggestionProvider(projectId, {
       chapterId,
       chapterTitle,
       content,
