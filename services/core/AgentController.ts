@@ -303,7 +303,11 @@ export class DefaultAgentController implements AgentController {
 
     // Ensure we have an initialized chat session
     if (!this.chat && this.currentPersona) {
-      await this.initializeChat(this.currentPersona, this.context.projectId ?? null);
+      try {
+        await this.initializeChat(this.currentPersona, this.context.projectId ?? null);
+      } catch (error) {
+        console.warn('Failed to initialize chat session:', error);
+      }
     }
     const chat = this.chat;
     if (!chat) {
