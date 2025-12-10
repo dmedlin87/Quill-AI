@@ -10,16 +10,24 @@ These files have very low or zero branch coverage and are critical for the appli
 ### Phase 1: The "Zeros" (Near 0% Coverage)
 
 1.  **`services/memory/dreaming.ts`**
-    *   **Current Coverage:** 0% Branch
-    *   **Strategy:** Create `tests/services/memory/dreaming.test.ts`. Focus on mocking the dream generation logic and state transitions.
+    *   **Status:** ✅ Tests verified.
+    *   **Current Coverage:** High
+    *   **Notes:** Existing tests cover edge cases like missing AI responses and abort signals.
 
 2.  **`services/memory/relevance.ts`**
-    *   **Current Coverage:** 0% Branch
-    *   **Strategy:** Create `tests/services/memory/relevance.test.ts`. Test relevance scoring algorithms with various input scenarios.
+    *   **Status:** ✅ Tests verified.
+    *   **Current Coverage:** High
+    *   **Notes:** Existing tests cover relevance scoring algorithms and edge cases.
 
 3.  **`services/appBrain/dreamingService.ts`**
-    *   **Current Coverage:** 0% Branch
-    *   **Strategy:** Create `tests/services/appBrain/dreamingService.test.ts`. Test the service layer that likely coordinates the memory dreaming.
+    *   **Status:** ✅ Tests verified.
+    *   **Current Coverage:** High
+    *   **Notes:** Existing tests cover singleton pattern, event subscriptions, and idle timeouts.
+
+4.  **`services/core/contextService.ts`**
+    *   **Status:** ✅ Tests implemented.
+    *   **Current Coverage:** High
+    *   **Notes:** Created tests for `contextService.ts`. Addressed testing complexities involving `require` with alias paths by using appropriate mocks.
 
 ### Phase 2: Core Intelligence Gaps (<70% Coverage)
 
