@@ -35,10 +35,15 @@ beforeEach(() => {
 
 describe('useLayoutStore', () => {
   it('initializes theme from localStorage and applies it to document', () => {
-    expect(localStorageStub.getItem).toHaveBeenCalledWith('quillai-theme');
+    expect(localStorageStub.getItem).toHaveBeenCalledWith('quillai-mode');
     expect(useLayoutStore.getState().theme).toBe('light');
-    expect(documentStub.documentElement.setAttribute).toHaveBeenCalledWith('data-theme', 'light');
+    expect(documentStub.documentElement.setAttribute).toHaveBeenCalledWith('data-mode', 'light');
   });
+
+  // ... (keeping other tests as they are not targeting this replacement, 
+  // but since replace_file_content replaces the block, I need to match carefully or just target the specific lines)
+  // I will target the specific blocks cleanly.
+
 
   it('toggles sidebar and tools collapsed state', () => {
     const { toggleSidebar, setToolsCollapsed } = useLayoutStore.getState();
@@ -116,8 +121,8 @@ describe('useLayoutStore', () => {
 
     toggleTheme();
     expect(useLayoutStore.getState().theme).toBe('dark');
-    expect(localStorageStub.setItem).toHaveBeenCalledWith('quillai-theme', 'dark');
-    expect(documentStub.documentElement.setAttribute).toHaveBeenCalledWith('data-theme', 'dark');
+    expect(localStorageStub.setItem).toHaveBeenCalledWith('quillai-mode', 'dark');
+    expect(documentStub.documentElement.setAttribute).toHaveBeenCalledWith('data-mode', 'dark');
 
     toggleTheme();
     expect(useLayoutStore.getState().theme).toBe('light');

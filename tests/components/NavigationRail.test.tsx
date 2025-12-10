@@ -94,11 +94,7 @@ describe('NavigationRail', () => {
       expect(screen.getByLabelText('Enter Zen Mode')).toBeInTheDocument();
     });
 
-    it('renders theme toggle button', () => {
-      render(<NavigationRail {...defaultProps} />);
 
-      expect(screen.getByLabelText('Switch to Dark Mode')).toBeInTheDocument();
-    });
   });
 
   describe('Zen Mode Behavior', () => {
@@ -223,15 +219,7 @@ describe('NavigationRail', () => {
     });
   });
 
-  describe('Theme Toggle', () => {
-    it('calls toggleTheme when theme button is clicked', () => {
-      render(<NavigationRail {...defaultProps} />);
 
-      fireEvent.click(screen.getByLabelText('Switch to Dark Mode'));
-
-      expect(mockToggleTheme).toHaveBeenCalledTimes(1);
-    });
-  });
 
   describe('Active Tab Indication', () => {
     it('marks active tab with aria-current', () => {

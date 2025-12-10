@@ -84,6 +84,14 @@ const PresetCard = ({ preset, isActive, onSelect }: PresetCardProps) => (
     onClick={() => onSelect(preset.id)}
     whileHover={{ scale: 1.02 }}
     whileTap={{ scale: 0.98 }}
+    role="button"
+    tabIndex={0}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelect(preset.id);
+      }
+    }}
   >
     <span className="text-2xl mb-1">{preset.icon}</span>
     <Text variant="muted" className={`text-xs font-medium ${isActive ? 'text-[var(--interactive-accent)]' : ''}`}>

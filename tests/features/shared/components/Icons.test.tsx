@@ -15,6 +15,7 @@ import {
   BoardIcon,
   SunIcon,
   MoonIcon,
+  SettingsIcon,
   Icons,
   type IconName,
 } from '@/features/shared/components/Icons';
@@ -90,6 +91,11 @@ describe('Icons', () => {
       const { container } = render(<MoonIcon />);
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
+
+    it('renders SettingsIcon without crashing', () => {
+      const { container } = render(<SettingsIcon />);
+      expect(container.querySelector('svg')).toBeInTheDocument();
+    });
   });
 
   describe('Icons with className prop', () => {
@@ -120,10 +126,11 @@ describe('Icons', () => {
       expect(Icons.Board).toBe(BoardIcon);
       expect(Icons.Sun).toBe(SunIcon);
       expect(Icons.Moon).toBe(MoonIcon);
+      expect(Icons.Settings).toBe(SettingsIcon);
     });
 
     it('has correct number of icons', () => {
-      expect(Object.keys(Icons)).toHaveLength(14);
+      expect(Object.keys(Icons)).toHaveLength(15);
     });
   });
 
@@ -144,6 +151,7 @@ describe('Icons', () => {
         'Board',
         'Sun',
         'Moon',
+        'Settings',
       ];
       
       iconNames.forEach((name) => {
