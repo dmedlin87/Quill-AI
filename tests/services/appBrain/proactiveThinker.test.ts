@@ -143,6 +143,74 @@ describe('ProactiveThinker', () => {
     vi.useRealTimers();
   });
 
+  it('processes urgent events immediately and batches non-urgent events', async () => {
+    const getStateSpy = vi.fn(() => mockGetState());
+    const onSuggestionSpy = vi.fn();
+
+    thinker.start(getStateSpy, mockProjectId, onSuggestionSpy);
+
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+
+    expect(vi.getTimerCount()).toBe(0);
+
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(ai.models.generateContent).toHaveBeenCalledTimes(1);
+
+    vi.mocked(ai.models.generateContent).mockClear();
+
+    callback({ type: 'ANALYSIS_COMPLETED', payload: { section: 'full_text', status: 'success' }, timestamp: Date.now() });
+
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(ai.models.generateContent).toHaveBeenCalledTimes(1);
+    expect(getStateSpy).toHaveBeenCalled();
+    expect(onSuggestionSpy).not.toHaveBeenCalled();
+  });
+
+  it('clears timers and pending events on stop', () => {
+    const unsubscribe = vi.fn();
+    vi.mocked(eventBus.subscribeAll).mockReturnValue(unsubscribe);
+
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+
+    expect(thinker.getStatus().pendingEvents).toHaveLength(3);
+    expect(vi.getTimerCount()).toBe(1);
+
+    thinker.stop();
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(thinker.getStatus().pendingEvents).toHaveLength(0);
+  });
+
+  it('is a no-op when disabled', () => {
+    resetProactiveThinker();
+
+    const disabledThinker = getProactiveThinker({ enabled: false });
+
+    disabledThinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    expect(eventBus.subscribeAll).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(disabledThinker.getStatus().pendingEvents).toHaveLength(0);
+  });
+
   it('should be a singleton', () => {
     const t1 = getProactiveThinker();
     const t2 = getProactiveThinker();
