@@ -58,4 +58,48 @@ describe('ImportWizard multi-step flow', () => {
     expect(confirmedChapters[1].title).toBe('Renamed Chapter');
     expect(confirmedChapters).toHaveLength(2);
   });
+
+  it('detects and auto-fixes missing Chapter 1 sequence gap', async () => {
+    const initialChapters: ParsedChapter[] = [
+      {
+        title: 'Prologue / Front Matter',
+        content: '“This looks like chapter 1 content.”',
+      },
+      {
+        title: 'Chapter 2',
+        content: 'Chapter 2 content starts here.',
+      },
+    ];
+    const handleConfirm = vi.fn();
+
+    render(
+      <ImportWizard
+        initialChapters={initialChapters}
+        onConfirm={handleConfirm}
+        onCancel={vi.fn()}
+      />
+    );
+
+    // 1. Verify warning is displayed
+    const warnings = await screen.findAllByText(/Sequence Gap: Next is Chapter 2/i);
+    expect(warnings.length).toBeGreaterThan(0);
+
+    // 2. Verify Auto-Fix button is present
+    const autoFixButton = screen.getByText(/Auto-Fix \d+ Issues/i);
+    expect(autoFixButton).toBeInTheDocument();
+
+    // 3. Click Auto-Fix
+    fireEvent.click(autoFixButton);
+
+    // 4. Verify title changed to "Chapter 1"
+    await waitFor(() => {
+      const chapters = screen.getAllByText('Chapter 1');
+      expect(chapters.length).toBeGreaterThan(0);
+    });
+
+    // 5. Verify warning is gone
+    await waitFor(() => {
+      expect(screen.queryByText(/Sequence Gap: Next is Chapter 2/i)).not.toBeInTheDocument();
+    });
+  });
 });
