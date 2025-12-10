@@ -6,7 +6,13 @@
  */
 
 import type { AppBrainState } from '@/services/appBrain/types';
-import type { EditorContext } from '@/types';
+import {
+  getSmartAgentContext,
+  buildCompressedContext,
+  buildNavigationContext,
+  buildEditingContext,
+  buildAgentContextWithMemory
+} from '@/services/appBrain';
 
 /**
  * Result of building agent context.
@@ -76,28 +82,22 @@ export interface ContextService {
 export function createDefaultContextService(): ContextService {
   return {
     getSmartAgentContext: async (state, projectId, options) => {
-      const { getSmartAgentContext } = await import('@/services/appBrain');
       return getSmartAgentContext(state, projectId, options);
     },
 
     getCompressedContext: (state) => {
-      // Synchronous import for synchronous method
-      const { buildCompressedContext } = require('@/services/appBrain');
       return buildCompressedContext(state);
     },
 
     getNavigationContext: (state) => {
-      const { buildNavigationContext } = require('@/services/appBrain');
       return buildNavigationContext(state);
     },
 
     getEditingContext: (state) => {
-      const { buildEditingContext } = require('@/services/appBrain');
       return buildEditingContext(state);
     },
 
     getAgentContextWithMemory: async (state, projectId) => {
-      const { buildAgentContextWithMemory } = await import('@/services/appBrain');
       return buildAgentContextWithMemory(state, projectId);
     },
   };
