@@ -428,13 +428,14 @@ When starting a new project:
 | Phase | Effort | Impact | Priority |
 |-------|--------|--------|----------|
 | 3.1 Goal Lifecycle | Low | High | **Done** |
+| 3.4 Significant Edit Triggers | Medium | High | **Done** |
 | 3.5 Staleness Refresh | Low | Medium | **P1** |
-| 4.1–4.2 Structured Schema + Budgets | Medium | High | **P2** |
+| 4.1–4.2 Structured Schema + Budgets | Medium | High | **Done** (Foundation for "Living Bible") |
 | 5.1 Agent Tool | Medium | High | **P2** |
-| 3.2 Chapter Transitions | Low | Medium | **P3** |
+| 3.2 Chapter Transitions | Low | Medium | **Done** (Basic implementation) |
 | 3.3 Session Boundaries | Medium | Medium | **P3** |
-| 6.1 Per-Chapter Notes | Medium | Medium | **P3** |
-| 7.1–7.2 Conflict Detection | High | High | **P4** |
+| 6.1 Per-Chapter Notes | Medium | Medium | **Done** (Implicitly via Alignment Check) |
+| 7.1–7.2 Conflict Detection | High | High | **In Progress** (Active Narrative Alignment / Drift Detection) |
 | 9.1 Sidebar Panel | Medium | High | **P4** |
 | 8.1–8.2 Embeddings | High | Medium | **P5** |
 | 10.1–10.3 Cross-Project | High | Medium | **P5** |

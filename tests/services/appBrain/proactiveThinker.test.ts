@@ -17,9 +17,7 @@ import { extractTemporalMarkers } from '../../../services/intelligence/timelineT
 import { extractFacts } from '../../../services/memory/factExtractor';
 import { filterNovelLoreEntities } from '../../../services/memory/relevance';
 
-const memoryMocks = vi.hoisted(() => ({
-  evolveBedsideNote: vi.fn().mockResolvedValue(undefined),
-}));
+
 
 // Mock dependencies
 vi.mock('../../../services/gemini/client', () => ({

@@ -7,6 +7,10 @@ import { BEDSIDE_NOTE_TAG, BEDSIDE_NOTE_DEFAULT_TAGS, type MemoryNote } from '@/
 const dbMocks = vi.hoisted(() => ({
   memoriesFilter: vi.fn(),
   memoriesWhere: vi.fn(),
+  memoriesAdd: vi.fn(),
+  memoriesGet: vi.fn(),
+  memoriesPut: vi.fn(),
+  memoriesDelete: vi.fn(),
 }));
 
 vi.mock('@/services/db', () => ({
@@ -14,6 +18,10 @@ vi.mock('@/services/db', () => ({
     memories: {
       filter: dbMocks.memoriesFilter,
       where: dbMocks.memoriesWhere,
+      add: dbMocks.memoriesAdd,
+      get: dbMocks.memoriesGet,
+      put: dbMocks.memoriesPut,
+      delete: dbMocks.memoriesDelete,
     },
     projects: {
       get: vi.fn().mockResolvedValue({ title: 'Test Project' }),
@@ -26,18 +34,31 @@ const memoryMocks = vi.hoisted(() => ({
   createMemory: vi.fn(),
   getMemory: vi.fn(),
   updateMemory: vi.fn(),
+  embedBedsideNoteText: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+  serializeBedsideNote: vi.fn().mockReturnValue({ text: '' }),
 }));
 
-vi.mock('@/services/memory/index', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/memory/index')>();
-  return {
-    ...actual,
-    getMemories: (...args: any[]) => memoryMocks.getMemories(...args),
-    createMemory: (...args: any[]) => memoryMocks.createMemory(...args),
-    getMemory: (...args: any[]) => memoryMocks.getMemory(...args),
-    updateMemory: (...args: any[]) => memoryMocks.updateMemory(...args),
-  };
-});
+// Mock memoryService - chains.ts imports from here
+vi.mock('@/services/memory/memoryService', () => ({
+  createMemory: (...args: any[]) => memoryMocks.createMemory(...args),
+  updateMemory: (...args: any[]) => memoryMocks.updateMemory(...args),
+}));
+
+// Mock memoryQueries - chains.ts imports from here
+vi.mock('@/services/memory/memoryQueries', () => ({
+  getMemory: (...args: any[]) => memoryMocks.getMemory(...args),
+  getMemories: (...args: any[]) => memoryMocks.getMemories(...args),
+}));
+
+// Mock bedsideEmbeddings - chains.ts imports this too
+vi.mock('@/services/memory/bedsideEmbeddings', () => ({
+  embedBedsideNoteText: (...args: any[]) => memoryMocks.embedBedsideNoteText(...args),
+}));
+
+// Mock bedsideNoteSerializer
+vi.mock('@/services/memory/bedsideNoteSerializer', () => ({
+  serializeBedsideNote: (...args: any[]) => memoryMocks.serializeBedsideNote(...args),
+}));
 
 const {
   getOrCreateBedsideNote,

@@ -43,6 +43,16 @@ vi.mock('@/services/memory', () => ({
   evolveBedsideNote: (...args: any[]) => memoryMocks.evolveBedsideNote(...args),
 }));
 
+vi.mock('@/services/appBrain/proactiveThinker', () => ({
+  getProactiveThinker: () => ({
+    forceThink: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+vi.mock('@/services/appBrain/narrativeAlignment', () => ({
+  runNarrativeAlignmentCheck: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('significantEditMonitor', () => {
   let startSignificantEditMonitor: (projectId: string, options?: any) => void;
   let stopSignificantEditMonitor: () => void;
@@ -77,14 +87,18 @@ describe('significantEditMonitor', () => {
       expect.any(Function),
     );
 
-    latestHandler = eventBusMock.subscribe.mock.calls.at(-1)?.[1] ?? null;
+    // Find the TEXT_CHANGED handler specifically (not CHAPTER_CHANGED)
+    const textChangedCall = eventBusMock.subscribe.mock.calls.find(call => call[0] === 'TEXT_CHANGED');
+    latestHandler = textChangedCall?.[1] ?? null;
     expect(latestHandler).toBeInstanceOf(Function);
   });
 
   it('stop cleans up subscription and pending timers', () => {
     startSignificantEditMonitor('project-1', { threshold: 500, debounceMs: 200 });
 
-    latestHandler = eventBusMock.subscribe.mock.calls.at(-1)?.[1] ?? null;
+    // Find the TEXT_CHANGED handler specifically (start() also subscribes to CHAPTER_CHANGED)
+    const textChangedCall = eventBusMock.subscribe.mock.calls.find(call => call[0] === 'TEXT_CHANGED');
+    latestHandler = textChangedCall?.[1] ?? null;
     expect(latestHandler).toBeTruthy();
     // simulate an edit to create a timer
     latestHandler?.({ type: 'TEXT_CHANGED', payload: { delta: 600, length: 1200 } });
@@ -94,7 +108,8 @@ describe('significantEditMonitor', () => {
 
     stopSignificantEditMonitor();
 
-    expect(eventBusMock.subscribe).toHaveBeenCalledTimes(1);
+    // subscribe is called twice: once for TEXT_CHANGED, once for CHAPTER_CHANGED
+    expect(eventBusMock.subscribe).toHaveBeenCalledTimes(2);
     expect((monitor as any).debounceTimer).toBeNull();
   });
 
@@ -113,7 +128,9 @@ describe('significantEditMonitor', () => {
   it('flushes when accumulated delta exceeds threshold after debounce', async () => {
     startSignificantEditMonitor('project-1', { threshold: 500, debounceMs: 300 });
 
-    latestHandler = eventBusMock.subscribe.mock.calls.at(-1)?.[1] ?? null;
+    // Find the TEXT_CHANGED handler specifically
+    const textChangedCall = eventBusMock.subscribe.mock.calls.find(call => call[0] === 'TEXT_CHANGED');
+    latestHandler = textChangedCall?.[1] ?? null;
     expect(latestHandler).toBeTruthy();
 
     latestHandler?.({ type: 'TEXT_CHANGED', payload: { delta: 200, length: 1000 } });
@@ -138,7 +155,9 @@ describe('significantEditMonitor', () => {
   it('debounces rapid edits and flushes after silence', async () => {
     startSignificantEditMonitor('project-1', { threshold: 500, debounceMs: 400, cooldownMs: 300000 });
 
-    latestHandler = eventBusMock.subscribe.mock.calls.at(-1)?.[1] ?? null;
+    // Find the TEXT_CHANGED handler specifically
+    const textChangedCall = eventBusMock.subscribe.mock.calls.find(call => call[0] === 'TEXT_CHANGED');
+    latestHandler = textChangedCall?.[1] ?? null;
     expect(latestHandler).toBeTruthy();
 
     latestHandler?.({ type: 'TEXT_CHANGED', payload: { delta: 300, length: 900 } });
@@ -164,7 +183,9 @@ describe('significantEditMonitor', () => {
   it('respects cooldown to prevent repeated triggers', async () => {
     startSignificantEditMonitor('project-1', { threshold: 300, debounceMs: 50, cooldownMs: 1000 });
 
-    latestHandler = eventBusMock.subscribe.mock.calls.at(-1)?.[1] ?? null;
+    // Find the TEXT_CHANGED handler specifically
+    const textChangedCall = eventBusMock.subscribe.mock.calls.find(call => call[0] === 'TEXT_CHANGED');
+    latestHandler = textChangedCall?.[1] ?? null;
     expect(latestHandler).toBeTruthy();
 
     // First burst crosses threshold -> should fire once
