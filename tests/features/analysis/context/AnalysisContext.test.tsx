@@ -213,6 +213,31 @@ describe('AnalysisContext', () => {
       expect(result.current.analysisStatus.setting).toBe('error');
       consoleSpy.mockRestore();
     });
+
+    it('aborts incremental analyses when API is not configured', async () => {
+      vi.mocked(isApiConfigured).mockReturnValue(false);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <AnalysisProvider>{children}</AnalysisProvider>
+      );
+      const { result } = renderHook(() => useAnalysis(), { wrapper });
+
+      await act(async () => {
+        await result.current.analyzePacing('text');
+        await result.current.analyzeCharacters('text');
+        await result.current.analyzePlot('text');
+        await result.current.analyzeSetting('text', { timePeriod: '', location: '' });
+      });
+
+      expect(result.current.analysisStatus.pacing).toBe('error');
+      expect(result.current.analysisStatus.characters).toBe('error');
+      expect(result.current.analysisStatus.plot).toBe('error');
+      expect(result.current.analysisStatus.setting).toBe('error');
+
+      expect(consoleSpy).toHaveBeenCalledTimes(4); // Warn for each
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('Full Analysis', () => {

@@ -284,4 +284,19 @@ describe('Intelligence worker message handling', () => {
     const partialCalls = postMessage.mock.calls.filter(c => c[0]?.type === 'PARTIAL');
     expect(partialCalls.length).toBe(0);
   });
+
+  it('ignores unknown message types', async () => {
+    const workerSelf = await loadWorker();
+    const postMessage = (globalThis as any).self.postMessage as ReturnType<typeof vi.fn>;
+
+    workerSelf.onmessage?.({
+      data: {
+        type: 'UNKNOWN_TYPE',
+        id: 'unknown-1',
+        payload: {},
+      } as any,
+    } as MessageEvent);
+
+    expect(postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'unknown-1' }));
+  });
 });
