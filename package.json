@@ -10,7 +10,7 @@
     "test": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest",
     "test:run": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest run",
     "test:ui": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest --ui",
-    "test:coverage": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest run --coverage; npm run test:status",
+    "test:coverage": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest run --coverage && npm run test:status",
     "test:mutation": "stryker run",
     "test:status": "node scripts/generate-test-status.mjs",
     "test:audit": "node scripts/audit-test-gaps.mjs",

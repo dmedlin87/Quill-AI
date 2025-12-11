@@ -497,4 +497,26 @@ describe('KnowledgeGraph', () => {
     expect(() => render(<KnowledgeGraph onSelectCharacter={vi.fn()} />)).not.toThrow();
     consoleSpy.mockRestore();
   });
+  describe('Rendering Details', () => {
+    it('renders edges between related characters', async () => {
+      const loreCharacters: CharacterProfile[] = [
+        { name: 'A', relationships: [{ name: 'B', type: 'related', dynamic: 'x' }] } as any,
+        { name: 'B', relationships: [{ name: 'A', type: 'related', dynamic: 'x' }] } as any,
+      ];
+
+      mockedUseProjectStore.mockReturnValue({
+        currentProject: { lore: { characters: loreCharacters, worldRules: [] } },
+        chapters: [],
+      } as any);
+
+      render(<KnowledgeGraph onSelectCharacter={vi.fn()} />);
+
+      await waitFor(() => expect(mockContext.fillRect).toHaveBeenCalled());
+
+      expect(mockContext.beginPath).toHaveBeenCalled();
+      expect(mockContext.moveTo).toHaveBeenCalled();
+      expect(mockContext.lineTo).toHaveBeenCalled();
+      expect(mockContext.stroke).toHaveBeenCalled();
+    });
+  });
 });

@@ -22,6 +22,12 @@ vi.mock('@/services/appBrain/eventBus', () => ({
   },
 }));
 
+vi.mock('@/services/commands/history', () => ({
+  getCommandHistory: () => ({
+    formatForPrompt: vi.fn(() => 'Cmd 1\nCmd 2'),
+  }),
+}));
+
 const baseState: AppBrainState = {
   manuscript: {
     projectId: 'p1',
@@ -162,6 +168,8 @@ describe('contextBuilder - buildAgentContext', () => {
     expect(ctx).toContain('Evt 1');
     expect(ctx).toContain('[AGENT MEMORY]');
     expect(ctx).toContain('LAST AGENT ACTION');
+    expect(ctx).toContain('[RECENT AGENT ACTIONS]');
+    expect(ctx).toContain('Cmd 1');
   });
 
   it('omits optional sections when data is missing', () => {
@@ -302,7 +310,22 @@ describe('contextBuilder - buildAgentContextWithMemory', () => {
 
     expect(baseXml).not.toContain('XML_MEM');
     expect(withMem).toContain('<section id="agent_memory">');
+    expect(withMem).toContain('<section id="agent_memory">');
     expect(withMem).toContain('XML_MEM');
+  });
+
+  it('handles memory service failures gracefully by leaving placeholder or warning', async () => {
+    vi.spyOn(memoryService, 'getMemoriesForContext').mockRejectedValueOnce(new Error('Memory DB Fail'));
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await buildAgentContextWithMemory(baseState, 'p1', CHAT_CONTEXT_TEMPLATE);
+    
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to load memory'), expect.any(Error));
+    // Should still return base context with placeholder or similar partial result
+    expect(result).not.toBe('');
+    expect(result).toContain(baseState.manuscript.projectTitle);
+
+    consoleSpy.mockRestore();
   });
 });
 
