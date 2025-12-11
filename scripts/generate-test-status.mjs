@@ -344,7 +344,63 @@ The full HTML coverage report is available at \`coverage/index.html\` after runn
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 9. Print terminal summary
+  // 9. Update README.md badges
+  // ─────────────────────────────────────────────────────────────────────────────
+  const readmePath = path.join(projectRoot, 'README.md');
+  try {
+    if (fs.existsSync(readmePath)) {
+      let readmeContent = await readFile(readmePath, 'utf-8');
+      
+      // Find the badge section markers
+      const startMarker = '<!-- TEST_HEALTH_BADGES:START - Do not remove or modify this section -->';
+      const endMarker = '<!-- TEST_HEALTH_BADGES:END -->';
+      const startIdx = readmeContent.indexOf(startMarker);
+      const endIdx = readmeContent.indexOf(endMarker);
+      
+      if (startIdx !== -1 && endIdx !== -1) {
+        // Format test count badge (show exact number if < 1000, otherwise use 1000+, 2000+, etc.)
+        let testBadgeText;
+        if (testCounts?.totalTests) {
+          if (testCounts.totalTests < 1000) {
+            testBadgeText = testCounts.totalTests.toString();
+          } else {
+            const rounded = Math.floor(testCounts.totalTests / 1000) * 1000;
+            testBadgeText = `${rounded}+`;
+          }
+        } else {
+          testBadgeText = '?';
+        }
+        
+        // Format coverage badge (round to nearest integer)
+        const coveragePct = Math.round(total.statements.pct);
+        
+        // Determine badge colors
+        const testColor = testCounts?.failedTests > 0 ? 'red' : 'brightgreen';
+        const coverageColor = coveragePct >= 90 ? 'brightgreen' : coveragePct >= 80 ? 'yellow' : 'red';
+        
+        // Build new badge section
+        const newBadges = `${startMarker}
+<!-- Badges are updated by npm run test:status -->
+![Tests](https://img.shields.io/badge/tests-${encodeURIComponent(testBadgeText)}-${testColor})
+![Coverage](https://img.shields.io/badge/coverage-${coveragePct}%25-${coverageColor})
+${endMarker}`;
+        
+        // Replace the old badge section with the new one
+        const before = readmeContent.substring(0, startIdx);
+        const after = readmeContent.substring(endIdx + endMarker.length);
+        readmeContent = before + newBadges + after;
+        
+        await writeFile(readmePath, readmeContent, 'utf-8');
+      } else {
+        console.warn(`${colors.yellow}[test-status] Could not find badge markers in README.md${colors.reset}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`${colors.yellow}[test-status] Could not update README.md badges:${colors.reset}`, err);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 10. Print terminal summary
   // ─────────────────────────────────────────────────────────────────────────────
   const line = '─'.repeat(62);
   const thresholdIcon = allThresholdsPassing 
@@ -377,6 +433,7 @@ The full HTML coverage report is available at \`coverage/index.html\` after runn
     '',
     `${colors.green}✓${colors.reset} Wrote ${colors.bold}docs/TEST_COVERAGE.md${colors.reset}`,
     `${colors.green}✓${colors.reset} Updated ${colors.bold}coverage/history.json${colors.reset}`,
+    `${colors.green}✓${colors.reset} Updated ${colors.bold}README.md${colors.reset} badges`,
   ].join('\n');
 
   console.log(`\n${box}\n`);
