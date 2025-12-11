@@ -6,11 +6,14 @@ import { EditorContext, CharacterProfile } from '@/types';
 import { Persona, DEFAULT_PERSONAS } from '@/types/personas';
 import { clearSessionMemories } from '@/services/memory/sessionTracker';
 import { RateLimitError, AIError } from '@/services/gemini/errors';
+import { Chapter } from '@/types/schema';
+import * as memoryService from '@/services/memory';
 
 // Hoist mocks to be available in vi.mock
-const { mockSendMessage, mockInitialize } = vi.hoisted(() => ({
+const { mockSendMessage, mockInitialize, mockAgentConstructor } = vi.hoisted(() => ({
   mockSendMessage: vi.fn(),
   mockInitialize: vi.fn(),
+  mockAgentConstructor: vi.fn(),
 }));
 
 // Mock scrollIntoView
@@ -27,9 +30,23 @@ vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
+vi.mock('@/config/api', async (importOriginal) => {
+    const actual: any = await importOriginal();
+    return {
+        ...actual,
+        ApiDefaults: {
+            ...actual.ApiDefaults,
+            maxAnalysisLength: 100, // Small limit for testing truncation
+        },
+    };
+});
+
 vi.mock('@/services/gemini/agent', () => {
   return {
     QuillAgent: class {
+      constructor(params: any) {
+        mockAgentConstructor(params);
+      }
       initialize = mockInitialize;
       sendMessage = mockSendMessage;
     }
@@ -101,6 +118,7 @@ describe('ChatInterface', () => {
 
     mockInitialize.mockResolvedValue(undefined);
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -121,11 +139,19 @@ describe('ChatInterface', () => {
       expect(mockInitialize).toHaveBeenCalled();
     });
 
-    // CritiqueSelector is only visible when settings panel is open, not testing it here
     expect(clearSessionMemories).toHaveBeenCalled();
   });
 
   it('sends a message when user inputs text and clicks send', async () => {
+    // We delay the response to verify "Thinking" state
+    let resolveResponse: (value: any) => void;
+    mockSendMessage.mockImplementation(async (args) => {
+        if (isInitMessage(args)) return { text: 'Intro Ack' };
+        return new Promise(resolve => {
+            resolveResponse = resolve;
+        });
+    });
+
     render(
       <ChatInterface
         editorContext={mockEditorContext}
@@ -143,6 +169,13 @@ describe('ChatInterface', () => {
         fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     });
 
+    // Check for "Thinking" button state
+    expect(screen.getByRole('button', { name: 'Thinking' })).toBeInTheDocument();
+
+    await act(async () => {
+        resolveResponse({ text: 'Agent response' });
+    });
+
     await waitFor(() => {
       expect(mockSendMessage).toHaveBeenCalledWith(expect.objectContaining({
         message: expect.stringContaining('Hello agent'),
@@ -152,6 +185,9 @@ describe('ChatInterface', () => {
     await waitFor(() => {
         expect(screen.getByText('Agent response')).toBeInTheDocument();
     });
+
+    // Check for "Send" button state
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   });
 
   it('does not send empty message', async () => {
@@ -171,6 +207,37 @@ describe('ChatInterface', () => {
     // Should only have been called for init, not for empty message
     const nonInitCalls = mockSendMessage.mock.calls.filter(call => !isInitMessage(call[0]));
     expect(nonInitCalls.length).toBe(0);
+  });
+
+  it('caps message history', async () => {
+      render(
+        <ChatInterface
+          editorContext={mockEditorContext}
+          fullText="Full text content"
+          onAgentAction={vi.fn()}
+          maxMessages={2} // Very small limit
+        />
+      );
+
+      await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+
+      const input = screen.getByPlaceholderText(/Type \/ to use tools/);
+
+      // Send 3 messages
+      for (let i = 1; i <= 3; i++) {
+        fireEvent.change(input, { target: { value: `Message ${i}` } });
+        await act(async () => {
+          fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+        });
+        await waitFor(() => screen.getByText(`Message ${i}`));
+        await waitFor(() => screen.getByText('Agent response'));
+      }
+
+      await waitFor(() => {
+          expect(screen.queryByText('Message 1')).not.toBeInTheDocument();
+          expect(screen.queryByText('Message 2')).not.toBeInTheDocument();
+          expect(screen.getByText('Message 3')).toBeInTheDocument();
+      });
   });
 
   it('handles tool calls correctly', async () => {
@@ -312,7 +379,6 @@ describe('ChatInterface', () => {
 
     await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
 
-    // Use more specific selector to avoid matching the tooltip text
     const deepButton = screen.getByRole('button', { name: /Deep/ });
     await act(async () => {
         fireEvent.click(deepButton);
@@ -353,14 +419,12 @@ describe('ChatInterface', () => {
         fireEvent.click(personaButton);
     });
 
-    // Wait for the re-initialization to be triggered
     await waitFor(() => {
-        // Should be called more than once (initial + switch, potentially doubled by strict mode)
         expect(mockInitialize.mock.calls.length).toBeGreaterThan(1);
     });
   });
 
-  it('renders in interview mode', async () => {
+  it('renders in interview mode including character avatar', async () => {
     const interviewTarget: CharacterProfile = {
       id: 'char1',
       name: 'Sherlock',
@@ -384,6 +448,32 @@ describe('ChatInterface', () => {
 
     expect(screen.getByText('Sherlock')).toBeInTheDocument();
     expect(screen.getByText('Roleplay Active')).toBeInTheDocument();
+
+    // Send a message to get a response from "Sherlock"
+    const input = screen.getByPlaceholderText(/Type \/ to use tools/);
+    fireEvent.change(input, { target: { value: 'Who are you?' } });
+    await act(async () => {
+        fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    });
+
+    await waitFor(() => screen.getByText('Agent response'));
+
+    // Verify avatar is present
+    // The avatar has the first letter 'S'
+    // It's in a div with "w-9 h-9"
+    // We can verify by text content "S" in the message list area.
+    // screen.getByText('S') might match multiple things?
+    // The header also has an avatar "S".
+    // We need to check for MULTIPLE "S" avatars?
+
+    const avatars = screen.getAllByText('S', { selector: 'div' });
+    // Should be at least 2 (header and message)
+    expect(avatars.length).toBeGreaterThanOrEqual(2);
+
+    // Also verify the small name label under avatar
+    const nameLabels = screen.getAllByText('Sherlock');
+    // Header name + message avatar name label
+    expect(nameLabels.length).toBeGreaterThanOrEqual(2);
 
     const exitButton = screen.getByText('Exit Interview');
     fireEvent.click(exitButton);
@@ -431,11 +521,9 @@ describe('ChatInterface', () => {
       />
     );
 
-    // First need to open the agent settings panel
     const settingsButton = screen.getByTitle('Agent Settings');
     fireEvent.click(settingsButton);
 
-    // Now find and click the proactive suggestions toggle
     const toggleButton = screen.getByText('Proactive Suggestions');
     fireEvent.click(toggleButton);
 
@@ -539,5 +627,168 @@ describe('ChatInterface', () => {
       );
 
       await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+  });
+
+  it('handles memory context fetching failure gracefully', async () => {
+    vi.mocked(memoryService.getMemoriesForContext).mockRejectedValueOnce(new Error('Fetch failed'));
+
+    render(
+      <ChatInterface
+        editorContext={mockEditorContext}
+        fullText="Full text content"
+        onAgentAction={vi.fn()}
+        projectId="test-project-fail"
+      />
+    );
+
+    await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+
+    expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to fetch memory context'),
+        expect.any(Error)
+    );
+  });
+
+  it('includes goals in memory context', async () => {
+    vi.mocked(memoryService.getMemoriesForContext).mockResolvedValue(['mem1']);
+    vi.mocked(memoryService.getActiveGoals).mockResolvedValue([{ id: 'g1', text: 'goal1' } as any]);
+    vi.mocked(memoryService.formatMemoriesForPrompt).mockReturnValue('Memory Section');
+    vi.mocked(memoryService.formatGoalsForPrompt).mockReturnValue('Goals Section');
+
+    render(
+      <ChatInterface
+        editorContext={mockEditorContext}
+        fullText="Full text content"
+        onAgentAction={vi.fn()}
+        projectId="test-project-goals"
+      />
+    );
+
+    await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+
+    expect(memoryService.getMemoriesForContext).toHaveBeenCalled();
+    expect(memoryService.getActiveGoals).toHaveBeenCalled();
+    expect(memoryService.formatGoalsForPrompt).toHaveBeenCalled();
+  });
+
+  it('truncates chapters when budget is exceeded', async () => {
+    const longText = 'x'.repeat(200);
+    const chapters: Chapter[] = [
+        { id: '1', title: 'Ch1', content: longText } as any,
+        { id: '2', title: 'Ch2', content: 'Small' } as any,
+    ];
+
+    render(
+        <ChatInterface
+            editorContext={mockEditorContext}
+            fullText="Full text content"
+            onAgentAction={vi.fn()}
+            chapters={chapters}
+            projectId="test-project"
+        />
+    );
+
+    await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+    expect(mockAgentConstructor).toHaveBeenCalled();
+    const params = mockAgentConstructor.mock.calls[mockAgentConstructor.mock.calls.length - 1][0];
+    const context = params.fullManuscriptContext;
+
+    expect(context.length).toBeLessThan(200);
+    expect(context).toContain('[CHAPTER: Ch1]');
+  });
+
+  it('covers budget exhausted case', async () => {
+    const longText = 'x'.repeat(100);
+    const chapters: Chapter[] = [
+        { id: '1', title: 'Ch1', content: longText } as any,
+        { id: '2', title: 'Ch2', content: 'Should Not Be Here' } as any,
+    ];
+
+    render(
+        <ChatInterface
+            editorContext={mockEditorContext}
+            fullText="Full text content"
+            onAgentAction={vi.fn()}
+            chapters={chapters}
+            projectId="test-project"
+        />
+    );
+
+    await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+    const params = mockAgentConstructor.mock.calls[mockAgentConstructor.mock.calls.length - 1][0];
+    const context = params.fullManuscriptContext;
+
+    expect(context).not.toContain('Should Not Be Here');
+  });
+
+  it('stops adding chapters when header size exceeds remaining budget', async () => {
+    const chapters: Chapter[] = [
+        { id: '1', title: 'Ch1', content: 'Short' } as any,
+        { id: '2', title: 'Ch2', content: 'Short' } as any,
+    ];
+
+    render(
+        <ChatInterface
+            editorContext={mockEditorContext}
+            fullText="Full text content"
+            onAgentAction={vi.fn()}
+            chapters={chapters}
+            projectId="test-project"
+        />
+    );
+
+    await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+    const params = mockAgentConstructor.mock.calls[mockAgentConstructor.mock.calls.length - 1][0];
+    const context = params.fullManuscriptContext;
+
+    expect(context).toContain('Ch1');
+    expect(context).not.toContain('Ch2');
+  });
+
+  it('handles "active chapter" detection', async () => {
+      const activeContent = "This is active";
+      const chapters: Chapter[] = [
+          { id: '1', title: 'ActiveChapter', content: activeContent } as any
+      ];
+
+      render(
+        <ChatInterface
+            editorContext={mockEditorContext}
+            fullText={activeContent}
+            onAgentAction={vi.fn()}
+            chapters={chapters}
+            projectId="test-project"
+        />
+      );
+
+      await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+      const params = mockAgentConstructor.mock.calls[mockAgentConstructor.mock.calls.length - 1][0];
+      const context = params.fullManuscriptContext;
+
+      expect(context).toContain('(ACTIVE - You can edit this)');
+  });
+
+  it('ignores sending message if initialization is incomplete', async () => {
+      // Mock initialization to take forever
+      mockInitialize.mockReturnValue(new Promise(() => {}));
+
+      render(
+        <ChatInterface
+            editorContext={mockEditorContext}
+            fullText="Full"
+            onAgentAction={vi.fn()}
+        />
+      );
+
+      const input = screen.getByPlaceholderText(/Type \/ to use tools/);
+      fireEvent.change(input, { target: { value: 'Early message' } });
+
+      // Attempt send
+      await act(async () => {
+        fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      });
+
+      // Should not call sendMessage because chatRef is null
+      expect(mockSendMessage).not.toHaveBeenCalled();
   });
 });
