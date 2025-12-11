@@ -306,16 +306,15 @@ export class ChunkManager {
     this.index.markProcessing(chunkId);
     
     try {
-      // Get the text for this chunk
-      const text = this.getChunkText(chunk);
-      if (!text) {
-        throw new Error('Could not get chunk text');
-      }
-      
       // Process based on level
       let analysis: ChunkAnalysis;
       
       if (chunk.level === 'scene' || chunk.level === 'chapter') {
+        // Get the text for this chunk
+        const text = this.getChunkText(chunk);
+        if (!text) {
+          throw new Error('Could not get chunk text');
+        }
         analysis = await this.analyzeTextChunk(text, chunkId);
       } else {
         // Higher levels aggregate from children
