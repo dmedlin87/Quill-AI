@@ -102,7 +102,24 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis, isLoadin
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col items-center justify-center h-full p-8 text-center"
         >
-          <p className="text-[var(--text-tertiary)] font-serif italic">Run an analysis to reveal insights.</p>
+          {currentText.trim().length === 0 ? (
+            <div className="space-y-3">
+               <div className="w-12 h-12 rounded-full bg-[var(--parchment-200)] flex items-center justify-center mx-auto mb-2 opacity-50">
+                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                   <path d="M12 4.5v15m7.5-7.5h-15" />
+                 </svg>
+               </div>
+               <p className="text-[var(--text-secondary)] font-medium">Ready to Analyze</p>
+               <p className="text-[var(--text-tertiary)] text-sm font-serif italic max-w-xs">
+                 Start writing in the editor. The muse will automatically analyze your text as you type.
+               </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="w-8 h-8 border-2 border-[var(--interactive-accent)] border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-[var(--text-tertiary)] font-serif italic">Analyzing your manuscript...</p>
+            </div>
+          )}
         </motion.div>
       ) : (
         <>

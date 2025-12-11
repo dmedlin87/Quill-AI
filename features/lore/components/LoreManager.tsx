@@ -457,12 +457,15 @@ export const LoreManager: React.FC<LoreManagerProps> = ({
                       <path d="M16 3.13a4 4 0 010 7.75"/>
                     </svg>
                   </div>
-                  <p className="text-[var(--ink-500)] mb-4">No characters in your Lore Bible yet.</p>
+                  <p className="text-[var(--ink-800)] font-medium mb-2">No characters yet</p>
+                  <p className="text-[var(--ink-500)] text-sm mb-6 max-w-xs mx-auto">
+                    Start writing in the editor to <span className="text-[var(--magic-600)]">auto-detect</span> them from your story, or add one manually below.
+                  </p>
                   <button
                     onClick={handleCreateNew}
                     className="px-4 py-2 bg-[var(--magic-500)] text-white rounded-lg text-sm font-medium hover:bg-[var(--magic-600)] transition-colors"
                   >
-                    Add Your First Character
+                    Add Character Manually
                   </button>
                 </div>
               ) : (

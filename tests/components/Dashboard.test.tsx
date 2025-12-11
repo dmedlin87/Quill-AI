@@ -44,7 +44,7 @@ describe('Dashboard', () => {
       />
     );
 
-    expect(screen.getByText('Run an analysis to reveal insights.')).toBeInTheDocument();
+    expect(screen.getByText('Ready to Analyze')).toBeInTheDocument();
   });
 
   it('renders populated state and passes navigation handler to child', async () => {
