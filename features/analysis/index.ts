@@ -25,6 +25,7 @@ export { PlotIssuesSection } from './components/PlotIssuesSection';
 export { SettingConsistencySection } from './components/SettingConsistencySection';
 export { StrengthsWeaknesses } from './components/StrengthsWeaknesses';
 export { AnalysisPanel } from './components/AnalysisPanel';
+export { ShadowReaderPanel } from './components/ShadowReaderPanel';
 
 // Reusable UI Components
 export { ScoreCard } from './components/ScoreCard';
