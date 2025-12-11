@@ -319,7 +319,13 @@ describe('Dual API Key Management', () => {
         delete process.env.VITE_GEMINI_API_KEY;
         process.env.TEST_API_KEY_OVERRIDE = ' '; // Force empty key even if real env vars exist
         resetWarningState();
-        Storage.prototype.getItem = vi.fn(() => JSON.stringify({ state: { freeApiKey: 'a'.repeat(25) }}));
+        const mockWithKey = vi.fn(() => JSON.stringify({ state: { freeApiKey: 'a'.repeat(25) }}));
+        Storage.prototype.getItem = mockWithKey;
+        Object.defineProperty(globalThis, 'localStorage', {
+            value: { getItem: mockWithKey },
+            writable: true,
+            configurable: true
+        });
         expect(isAnyApiKeyConfigured()).toBe(true);
     });
 });
