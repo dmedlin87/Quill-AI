@@ -152,6 +152,44 @@ describe('useManuscriptIntelligence', () => {
     expect(mocks.processDebounced).toHaveBeenCalledWith('second', 6);
   });
 
+  it('cancels background processing timer on new input', () => {
+    const { result } = renderHook(() =>
+      useManuscriptIntelligence({ chapterId: 'c1', initialText: '' })
+    );
+
+    act(() => {
+      result.current.updateText('first', 5);
+    });
+
+    // Advance past debounce but before background (150ms < t < 2000ms)
+    act(() => {
+        vi.advanceTimersByTime(500);
+    });
+    // Background should not have run yet
+    expect(mocks.processManuscript).not.toHaveBeenCalled();
+
+    // Update again
+    act(() => {
+        result.current.updateText('second', 6);
+    });
+
+    // Advance time that would have triggered the first background timer (total > 2000ms from start)
+    act(() => {
+        vi.advanceTimersByTime(1600); 
+    });
+    // 500 + 1600 = 2100ms. First background timer was at 2000ms.
+    // If not cancelled, it would run with 'first'.
+    expect(mocks.processManuscript).not.toHaveBeenCalled();
+
+    // Advance to trigger second background timer (2000ms after second update)
+    act(() => {
+        vi.advanceTimersByTime(500); // Total from second update: 1600 + 500 = 2100ms
+    });
+
+    expect(mocks.processManuscript).toHaveBeenCalledTimes(1);
+    expect(mocks.processManuscript).toHaveBeenCalledWith('second', expect.anything(), expect.anything(), expect.anything());
+  });
+
   it('resets processing state on error', async () => {
     // Mock processManuscript to throw
     mocks.processManuscript.mockImplementationOnce(() => {

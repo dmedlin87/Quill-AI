@@ -473,4 +473,22 @@ describe('KnowledgeGraph', () => {
 
     delete globalThis.ResizeObserver;
   });
+
+  it('handles ResizeObserver instantiation failure gracefully', () => {
+    // Mock ResizeObserver to throw
+    (globalThis as any).ResizeObserver = class {
+      constructor() {
+        throw new Error('Not supported');
+      }
+    };
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Suppress potential react errors if any (though catch block swallows it)
+
+    mockedUseProjectStore.mockReturnValue({
+      currentProject: { lore: { characters: [], worldRules: [] } },
+      chapters: [],
+    } as any);
+
+    expect(() => render(<KnowledgeGraph onSelectCharacter={vi.fn()} />)).not.toThrow();
+    consoleSpy.mockRestore();
+  });
 });

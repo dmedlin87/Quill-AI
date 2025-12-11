@@ -42,11 +42,13 @@ import {
   generateSuggestionsForChapter,
   getImportantReminders,
   createChapterSwitchHandler,
+  ProactiveSuggestion,
 } from '@/services/memory/proactive';
 import { db } from '@/services/db';
 import {
   getMemoriesCached,
   getGoalsCached,
+  getActiveGoals,
   searchMemoriesByTags,
 } from '@/services/memory/index';
 
@@ -309,6 +311,28 @@ describe('Proactive Memory Suggestions', () => {
       expect(goalSuggestions.length).toBe(0);
     });
 
+    it('assigns correct priority to goals based on progress', async () => {
+      vi.mocked(getActiveGoals).mockResolvedValue([
+        { id: 'g1', projectId: mockProjectId, title: 'Low Progress', status: 'active', progress: 10, createdAt: Date.now() },
+        { id: 'g2', projectId: mockProjectId, title: 'Mid Progress', status: 'active', progress: 50, createdAt: Date.now() },
+        { id: 'g3', projectId: mockProjectId, title: 'High Progress', status: 'active', progress: 80, createdAt: Date.now() },
+      ]);
+      
+      const suggestions = await generateSuggestionsForChapter(mockProjectId, {
+        chapterId: 'ch1',
+        chapterTitle: 'Progress Check',
+        content: '"Hi," said Low. "Hello," said Mid. "Hey," said High.', // Trigger relevance via dialogue extraction
+      });
+
+      const g1 = suggestions.find(s => s.id.includes('g1'));
+      const g2 = suggestions.find(s => s.id.includes('g2'));
+      const g3 = suggestions.find(s => s.id.includes('g3'));
+
+      expect(g1?.priority).toBe('high');
+      expect(g2?.priority).toBe('medium');
+      expect(g3?.priority).toBe('low');
+    });
+
     it('sorts suggestions by priority', async () => {
       vi.mocked(db.watchedEntities.toArray).mockResolvedValue([
         { id: 'w1', name: 'John', projectId: mockProjectId, priority: 'low', createdAt: Date.now() },
@@ -448,6 +472,21 @@ describe('Proactive Memory Suggestions', () => {
 
       const stalledGoals = reminders.filter(r => r.title.includes('Stalled goal'));
       expect(stalledGoals.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('does not remind about stalled goals if exactly on boundary or progress sufficient', async () => {
+      const now = Date.now();
+      const barelyNew = now - (24 * 60 * 60 * 1000) + 1000; // < 1 day old
+      const oldEnough = now - (24 * 60 * 60 * 1000) - 1000; // > 1 day old
+      
+      vi.mocked(getGoalsCached).mockResolvedValue([
+        { id: 'g1', projectId: mockProjectId, title: 'New Goal', status: 'active', progress: 0, createdAt: barelyNew },
+        { id: 'g2', projectId: mockProjectId, title: 'Progressing Goal', status: 'active', progress: 25, createdAt: oldEnough },
+      ]);
+
+      const reminders = await getImportantReminders(mockProjectId);
+      const goalReminders = reminders.filter(r => r.source.type === 'goal');
+      expect(goalReminders).toHaveLength(0);
     });
 
     it('returns empty when no issues or stalled goals qualify', async () => {

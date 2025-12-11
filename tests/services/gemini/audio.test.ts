@@ -422,15 +422,13 @@ describe('connectLiveSession', () => {
     vi.stubGlobal('AudioContext', undefined);
     vi.stubGlobal('webkitAudioContext', undefined);
     
-    // reset module to trigger check again if cached? 
-    // actually function is called every time. 
-    // We need to re-import or just call function if exported? 
-    // getAudioContextCtor is internal. 
-    // But generateSpeech calls it.
+    // Ensure generateContent returns data so it reaches AudioContext creation
+    const mockResponse = {
+        candidates: [{ content: { parts: [{ inlineData: { data: 'base64' } }] } }]
+    };
+    mockAi.models.generateContent.mockResolvedValue(mockResponse);
 
     await expect(generateSpeech('test')).resolves.toBeNull(); 
-    // actually generateSpeech catches error and returns null.
-    // So we can verify console.error was called?
     
     const consoleSpy = vi.spyOn(console, 'error');
     await generateSpeech('test');
@@ -457,6 +455,7 @@ describe('connectLiveSession', () => {
 
     const consoleSpy = vi.spyOn(console, 'warn');
     await generateSpeech('test');
+    // It seems safeCloseAudioContext catches and logs
     expect(consoleSpy).toHaveBeenCalledWith('Failed to close AudioContext', expect.any(Error));
   });
 
@@ -467,7 +466,7 @@ describe('connectLiveSession', () => {
 
       // Close context
       const ctx = lastCreatedAudioContext;
-      if (ctx) ctx.state = 'closed';
+      if (ctx) (ctx as any).state = 'closed'; // Force state
 
       const mockMessage = {
           serverContent: {
@@ -478,6 +477,7 @@ describe('connectLiveSession', () => {
       await onMessageCallback(mockMessage);
       
       const { decodeAudioData } = await import('@/features/voice');
+      // If closed, it returns early and does NOT call decodeAudioData
       expect(decodeAudioData).not.toHaveBeenCalled();
   });
 });

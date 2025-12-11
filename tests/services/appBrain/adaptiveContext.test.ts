@@ -7,6 +7,7 @@ import {
   DEEP_ANALYSIS_BUDGET,
   estimateTokens,
   selectContextProfile,
+  selectBudget,
   getContextBudgetForModel,
   PROFILE_ALLOCATIONS,
   // Smartness Upgrade: Scene-aware memory filtering
@@ -762,5 +763,115 @@ describe('adaptiveContext', () => {
       
       expect(result.context).toBeDefined();
     });
+  });
+  describe('Detailed Section Generation', () => {
+    it('includes surrounding text in manuscript section when budget permits', async () => {
+      const stateWithText = {
+        ...baseState,
+        manuscript: {
+          ...baseState.manuscript,
+          currentText: 'A'.repeat(100) + 'TARGET' + 'B'.repeat(100),
+        },
+        ui: {
+          ...baseState.ui,
+          cursor: { position: 103 }, // Middle of TARGET
+          selection: null,
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithText, 'p1', {
+        budget: { ...DEFAULT_BUDGET, totalTokens: 10000 }, // Generous budget
+      });
+
+      expect(result.context).toContain('Context around cursor:');
+      expect(result.context).toContain('TARGET');
+    });
+
+    it('includes intelligence details (entities, style alerts)', async () => {
+      const stateWithIntel = {
+        ...baseState,
+        intelligence: {
+          hud: {
+            ...baseState.intelligence.hud,
+            context: {
+              activeEntities: [{ name: 'Hero', type: 'Protagonist', mentionCount: 10 }],
+            },
+            styleAlerts: ['Too many adverbs'],
+          },
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithIntel, 'p1', {
+        budget: DEFAULT_BUDGET,
+      });
+
+      expect(result.context).toContain('Hero (Protagonist)');
+      expect(result.context).toContain('Style Alerts: Too many adverbs');
+    });
+
+    it('includes analysis breakdown', async () => {
+      const stateWithAnalysis = {
+        ...baseState,
+        analysis: {
+          result: {
+            summary: 'A great story',
+            strengths: ['Pacing'],
+            weaknesses: ['Dialogue'],
+            plotIssues: [{ issue: 'Hole 1' }],
+          },
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithAnalysis, 'p1', {
+        budget: DEFAULT_BUDGET,
+      });
+
+      expect(result.context).toContain('[ANALYSIS INSIGHTS]');
+      expect(result.context).toContain('Strengths: Pacing');
+      expect(result.context).toContain('Weaknesses: Dialogue');
+      expect(result.context).toContain('Hole 1');
+    });
+
+    it('includes lore characters and rules', async () => {
+      const stateWithLore = {
+        ...baseState,
+        lore: {
+          characters: [{ name: 'Gandalf', bio: 'Wizard' }],
+          worldRules: ['Magic is dangerous'],
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithLore, 'p1', {
+        budget: DEFAULT_BUDGET,
+      });
+
+      expect(result.context).toContain('[LORE BIBLE]');
+      expect(result.context).toContain('Gandalf: Wizard');
+      expect(result.context).toContain('Magic is dangerous');
+    });
+
+    it('includes history and last action', async () => {
+      const stateWithAction = {
+        ...baseState,
+        session: {
+          lastAgentAction: { type: 'edit', description: 'Fixed typo', success: true },
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithAction, 'p1', {
+        budget: DEFAULT_BUDGET,
+      });
+
+      expect(result.context).toContain('[RECENT ACTIVITY]');
+      expect(result.context).toContain('Last Action: edit - Fixed typo');
+      expect(result.context).toContain('Result: Success');
+    });
+  });
+
+  describe('selectBudget', () => {
+      it('reduces budget for long conversations', () => {
+          const budget = selectBudget(15, false, false, 'general');
+          expect(budget.totalTokens).toBe(DEFAULT_BUDGET.totalTokens * 0.7);
+      });
   });
 });

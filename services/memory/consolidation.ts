@@ -263,7 +263,7 @@ async function findMergeCandidates(
 /**
  * Merge similar memories into consolidated notes
  */
-export async function mergeSimikarMemories(
+export async function mergeSimilarMemories(
   options: ConsolidationOptions
 ): Promise<{ merged: number; errors: string[] }> {
   const {
@@ -462,7 +462,7 @@ export async function runConsolidation(
   result.errors.push(...decayResult.errors);
 
   // 2. Merge similar memories
-  const mergeResult = await mergeSimikarMemories(options);
+  const mergeResult = await mergeSimilarMemories(options);
   result.merged = mergeResult.merged;
   result.errors.push(...mergeResult.errors);
 

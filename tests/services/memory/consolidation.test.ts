@@ -27,7 +27,7 @@ vi.mock('@/services/memory/index', () => ({
 
 import { 
   applyImportanceDecay,
-  mergeSimikarMemories,
+  mergeSimilarMemories,
   archiveStaleMemories,
   reinforceMemory,
   reinforceMemories,
@@ -112,7 +112,7 @@ describe('Memory Consolidation', () => {
     });
   });
 
-  describe('mergeSimikarMemories', () => {
+  describe('mergeSimilarMemories', () => {
     it('merges similar memories with high text overlap', async () => {
       const memory1 = {
         id: 'mem-1',
@@ -138,13 +138,45 @@ describe('Memory Consolidation', () => {
       vi.mocked(getMemories).mockResolvedValue([memory1, memory2]);
       vi.mocked(updateMemory).mockResolvedValue({ ...memory1, importance: 0.85 });
 
-      const result = await mergeSimikarMemories({ 
+      const result = await mergeSimilarMemories({ 
         projectId: mockProjectId,
         mergeThreshold: 0.6,
       });
 
-      expect(result.merged).toBeGreaterThanOrEqual(0);
+      expect(result.merged).toBeGreaterThanOrEqual(1);
       expect(result.errors).toHaveLength(0);
+    });
+
+    it('handles database errors gracefully during merge', async () => {
+        const memory1 = {
+          id: 'mem-1',
+          text: 'Shared text',
+          type: 'observation' as const,
+          scope: 'project' as const,
+          projectId: mockProjectId,
+          topicTags: ['tag'],
+          importance: 0.8,
+          createdAt: now,
+        };
+        const memory2 = {
+          id: 'mem-2',
+          text: 'Shared text',
+          type: 'observation' as const,
+          scope: 'project' as const,
+          projectId: mockProjectId,
+          topicTags: ['tag'],
+          importance: 0.6,
+          createdAt: now,
+        };
+  
+        vi.mocked(getMemories).mockResolvedValue([memory1, memory2]);
+        vi.mocked(updateMemory).mockRejectedValue(new Error('DB Error'));
+  
+        const result = await mergeSimilarMemories({ projectId: mockProjectId });
+  
+        expect(result.merged).toBe(0);
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toContain('DB Error');
     });
 
     it('does not merge memories with different types', async () => {
@@ -171,7 +203,7 @@ describe('Memory Consolidation', () => {
 
       vi.mocked(getMemories).mockResolvedValue([memory1, memory2]);
 
-      const result = await mergeSimikarMemories({ projectId: mockProjectId });
+      const result = await mergeSimilarMemories({ projectId: mockProjectId });
 
       expect(result.merged).toBe(0);
     });
@@ -200,7 +232,7 @@ describe('Memory Consolidation', () => {
 
       vi.mocked(getMemories).mockResolvedValue([memory1, memory2]);
 
-      const result = await mergeSimikarMemories({
+      const result = await mergeSimilarMemories({
         projectId: mockProjectId,
         mergeThreshold: 0.6,
         dryRun: true,
