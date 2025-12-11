@@ -123,6 +123,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
       <div className="px-4 py-3 border-b border-gray-100">
         <button
           onClick={() => onSwitchBranch(null)}
+          aria-label="Switch to Main branch"
           className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${
             isOnMain
               ? 'bg-indigo-50 border-2 border-indigo-300'
@@ -197,13 +198,13 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
                   {/* Diff Stats */}
                   <div className="flex items-center gap-1.5 text-xs">
                     {stats.additions > 0 && (
-                      <span className="text-green-600">+{stats.additions}</span>
+                      <span className="text-green-600" aria-label={`${stats.additions} additions`}>+{stats.additions}</span>
                     )}
                     {stats.deletions > 0 && (
-                      <span className="text-red-500">-{stats.deletions}</span>
+                      <span className="text-red-500" aria-label={`${stats.deletions} deletions`}>-{stats.deletions}</span>
                     )}
                     {stats.changed > 0 && (
-                      <span className="text-amber-500">~{stats.changed}</span>
+                      <span className="text-amber-500" aria-label={`${stats.changed} changes`}>~{stats.changed}</span>
                     )}
                   </div>
                 </div>
@@ -213,6 +214,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
                   {!isActive && (
                     <button
                       onClick={() => onSwitchBranch(branch.id)}
+                      aria-label={`Switch to branch ${branch.name}`}
                       className="text-xs px-2 py-1 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
                     >
                       Switch
@@ -220,18 +222,21 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
                   )}
                   <button
                     onClick={() => setShowMergePreview(showPreview ? null : branch.id)}
+                    aria-label={showPreview ? `Hide preview for branch ${branch.name}` : `Merge branch ${branch.name}`}
                     className="text-xs px-2 py-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
                   >
                     {showPreview ? 'Hide Preview' : 'Merge'}
                   </button>
                   <button
                     onClick={() => handleStartEdit(branch)}
+                    aria-label={`Rename branch ${branch.name}`}
                     className="text-xs px-2 py-1 text-gray-500 hover:bg-gray-100 rounded transition-colors"
                   >
                     Rename
                   </button>
                   <button
                     onClick={() => onDeleteBranch(branch.id)}
+                    aria-label={`Delete branch ${branch.name}`}
                     className="text-xs px-2 py-1 text-red-500 hover:bg-red-50 rounded transition-colors"
                   >
                     Delete
@@ -287,6 +292,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
           <div className="space-y-2">
             <input
               type="text"
+              aria-label="New branch name"
               value={newBranchName}
               onChange={e => setNewBranchName(e.target.value)}
               placeholder="Branch name (e.g., 'Darker Ending')"
