@@ -146,14 +146,14 @@ describe('LoreManager', () => {
   describe('Character CRUD', () => {
     it('opens the create character form', () => {
       renderLoreManager();
-      fireEvent.click(screen.getByRole('button', { name: /add your first character/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add character manually/i }));
       expect(screen.getByText('New Character')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /save character/i })).toBeInTheDocument();
     });
 
     it('creates a new character with all fields', () => {
       renderLoreManager();
-      fireEvent.click(screen.getByRole('button', { name: /add your first character/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add character manually/i }));
 
       // Fill basic fields
       fireEvent.change(findInputByLabel('Name'), { target: { value: 'Bob' } });
@@ -302,12 +302,12 @@ describe('LoreManager', () => {
   describe('Navigation', () => {
     it('cancels creating a new character', () => {
       renderLoreManager();
-      fireEvent.click(screen.getByRole('button', { name: /add your first character/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add character manually/i }));
       
       fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
       
       expect(screen.queryByText('New Character')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /add your first character/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add character manually/i })).toBeInTheDocument();
     });
 
     it('cancels editing a character', () => {

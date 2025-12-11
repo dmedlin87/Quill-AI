@@ -72,8 +72,9 @@ describe('ProjectDashboard', () => {
 
     render(<ProjectDashboard />);
 
-    // Library header and primary actions are still available
-    expect(screen.getByText('Quill AI Library')).toBeInTheDocument();
+    // Welcome header and primary actions are available
+    expect(screen.getByText('Welcome to Quill')).toBeInTheDocument();
+    expect(screen.getByText('Start your first project')).toBeInTheDocument();
     expect(screen.getByText('New Novel')).toBeInTheDocument();
     expect(screen.getByText('Import Draft')).toBeInTheDocument();
     // No existing project cards rendered
@@ -88,12 +89,14 @@ describe('ProjectDashboard', () => {
 
     fireEvent.click(screen.getByText('New Novel'));
     const titleInput = await screen.findByPlaceholderText('e.g. The Winds of Winter');
+    const authorInput = screen.getByPlaceholderText('e.g. George R.R. Martin');
 
     fireEvent.change(titleInput, { target: { value: 'New Saga' } });
+    fireEvent.change(authorInput, { target: { value: 'Test Author' } });
     fireEvent.click(screen.getByText('Create Project'));
 
     await waitFor(() => {
-      expect(store.createProject).toHaveBeenCalledWith('New Saga', 'Me', undefined);
+      expect(store.createProject).toHaveBeenCalledWith('New Saga', 'Test Author', undefined);
     });
   });
 
