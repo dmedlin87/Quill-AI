@@ -217,6 +217,56 @@ describe('Proactive Memory Suggestions', () => {
       expect(suggestions[0].title).toContain('John');
     });
 
+    it('uses default description when watched entity has no reason (line 196)', async () => {
+      vi.mocked(db.watchedEntities.toArray).mockResolvedValue([
+        { 
+          id: 'w1', 
+          name: 'John', 
+          projectId: mockProjectId, 
+          priority: 'high', 
+          // No 'reason' field!
+          createdAt: Date.now() 
+        },
+      ]);
+
+      const suggestions = await generateSuggestionsForChapter(mockProjectId, {
+        chapterId: 'ch1',
+        chapterTitle: 'Chapter 1',
+        mentionedEntities: ['john'],
+      });
+
+      const watchedSuggestion = suggestions.find(s => s.type === 'watched_entity');
+      expect(watchedSuggestion).toBeDefined();
+      expect(watchedSuggestion?.description).toContain("You're watching");
+    });
+
+    it('truncates memory description when text exceeds 150 characters (lines 220-222)', async () => {
+      const longText = 'This is a very long memory text that definitely exceeds the one hundred and fifty character limit and should be truncated with an ellipsis at the end to keep suggestions concise.';
+      vi.mocked(searchMemoriesByTags).mockResolvedValue([
+        {
+          id: 'mem1',
+          text: longText,
+          type: 'fact' as const,
+          scope: 'project' as const,
+          projectId: mockProjectId,
+          topicTags: ['character:john'],
+          importance: 0.8,
+          createdAt: Date.now(),
+        },
+      ]);
+
+      const suggestions = await generateSuggestionsForChapter(mockProjectId, {
+        chapterId: 'ch1',
+        chapterTitle: 'Chapter 1',
+        content: 'John walked alone. John was there. John waited.',
+      });
+
+      const memorySuggestion = suggestions.find(s => s.type === 'related_memory');
+      expect(memorySuggestion).toBeDefined();
+      expect(memorySuggestion?.description).toContain('...');
+      expect(memorySuggestion?.description.length).toBeLessThanOrEqual(153); // 150 + "..."
+    });
+
     it('generates suggestions for related memories', async () => {
       vi.mocked(searchMemoriesByTags).mockResolvedValue([
         {

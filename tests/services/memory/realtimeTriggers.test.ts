@@ -409,6 +409,61 @@ describe('realtimeTriggers', () => {
       const physDesc = results.find(r => r.triggerId === 'physical_description');
       expect(physDesc).toBeUndefined();
     });
+
+    it('relationship trigger returns empty when no memory has relationship tag (line 104)', async () => {
+      const { checkTriggers } = await import('@/services/memory/realtimeTriggers');
+
+      memoryMocks.searchMemoriesByTags.mockResolvedValue([
+        {
+          id: 'rel1',
+          projectId,
+          text: 'Sarah and John are mentioned together',
+          topicTags: ['character:sarah', 'character:john'], // No 'relationship' tag
+          type: 'lore',
+        },
+      ]);
+
+      const results = await checkTriggers('Sarah and John met', projectId);
+      // Should return empty because formatSuggestion returns '' when no relationship tag
+      const relResult = results.find(r => r.triggerId === 'relationship');
+      expect(relResult).toBeUndefined();
+    });
+
+    it('contradiction_risk returns empty when no inconsistency/contradiction tags (line 159)', async () => {
+      const { checkImmediateTriggers } = await import('@/services/memory/realtimeTriggers');
+
+      memoryMocks.getMemoriesCached.mockResolvedValue([
+        {
+          id: 'issue1',
+          projectId,
+          text: 'Some issue content',
+          topicTags: ['plot'], // No 'inconsistency' or 'contradiction' tag
+          type: 'issue',
+        },
+      ]);
+
+      const results = await checkImmediateTriggers('She was always there', projectId);
+      const contradictionResult = results.find(r => r.triggerId === 'contradiction_risk');
+      expect(contradictionResult).toBeUndefined();
+    });
+
+    it('plot_thread returns empty when all memories are resolved (line 177)', async () => {
+      const { checkTriggers } = await import('@/services/memory/realtimeTriggers');
+
+      memoryMocks.searchMemoriesByTags.mockResolvedValue([
+        {
+          id: 'plot1',
+          projectId,
+          text: 'The secret was revealed',
+          topicTags: ['plot', 'thread', 'resolved'], // Has 'resolved' tag
+          type: 'lore',
+        },
+      ]);
+
+      const results = await checkTriggers('He kept her secret', projectId);
+      const plotResult = results.find(r => r.triggerId === 'plot_thread');
+      expect(plotResult).toBeUndefined();
+    });
   });
 
   describe('result ordering', () => {

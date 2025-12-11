@@ -442,7 +442,10 @@ describe('IntelligenceWorkerPool', () => {
       pool.submitJob({ type: 'PROCESS_FULL', chapterId: 'ch-2', text: 'test', priority: 'normal' }, callback2);
 
       // Wait for both to complete
-      await new Promise((r) => setTimeout(r, 100));
+      await vi.waitUntil(() => callback1.mock.calls.length > 0 && callback2.mock.calls.length > 0, {
+        timeout: 1000,
+        interval: 10,
+      });
 
       expect(callback1).toHaveBeenCalled();
       expect(callback2).toHaveBeenCalled();
