@@ -194,7 +194,16 @@ async function main() {
       path.basename(s.path, path.extname(s.path)) === basename
     );
     
-    if (!hasMatchingSource && !testFile.includes('setup') && !testFile.includes('integration')) {
+    const WHITELIST = [
+      'tests/App.test.tsx',
+      'tests/config/index.test.ts',
+      'tests/features/index.test.ts',
+      'tests/services/intelligence/index.test.ts',
+      'tests/services/memory/index.test.ts',
+      'tests/public/audio-processor.test.ts'
+    ];
+
+    if (!hasMatchingSource && !testFile.includes('setup') && !testFile.includes('integration') && !WHITELIST.includes(testFile)) {
       staleTests.push({
         testFile,
         expectedSource: `*/${basename}.ts(x)`,
@@ -283,8 +292,7 @@ These test files don't have an obvious matching source file. They may be:
 
 | Test File | Expected Source |
 |-----------|-----------------|
-${staleTests.slice(0, 20).map(s => `| \`${s.testFile}\` | \`${s.expectedSource}\` |`).join('\n')}
-${staleTests.length > 20 ? `\n> ...and ${staleTests.length - 20} more\n` : ''}
+${staleTests.map(s => `| \`${s.testFile}\` | \`${s.expectedSource}\` |`).join('\n')}
 `;
   }
 

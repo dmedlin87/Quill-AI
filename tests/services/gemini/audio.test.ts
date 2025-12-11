@@ -444,7 +444,7 @@ describe('connectLiveSession', () => {
     vi.mocked(decodeAudioData).mockResolvedValue(mockAudioBuffer);
 
     // Mock close to fail
-    MockAudioContextConstructor.mockImplementationOnce(() => {
+    MockAudioContextConstructor.mockImplementationOnce(function() {
         return {
             state: 'running',
             close: vi.fn().mockRejectedValue(new Error('Close failed')),

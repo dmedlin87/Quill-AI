@@ -3,8 +3,18 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { AnalysisPanel } from '@/features/analysis/components/AnalysisPanel';
 import { AnalysisResult } from '@/types';
+
+// Mock config/api
+vi.mock('@/config/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/config/api')>();
+  return {
+    ...actual,
+    isApiConfigured: vi.fn().mockReturnValue(true), // Default to true
+  };
+});
 import { Contradiction } from '@/types/schema';
 import * as sharedFeatures from '@/features/shared';
+import * as keyConfig from '@/config/api';
 
 // Mock dependencies
 vi.mock('framer-motion', () => ({
@@ -268,5 +278,27 @@ describe('AnalysisPanel', () => {
 
        expect(screen.getByText('Intelligence HUD')).toBeInTheDocument();
        expect(screen.getByText('Run the intelligence pass to surface contradictions and derived lore.')).toBeInTheDocument();
-   });
+   
+    });
+   
+    it('handles interactions when no API key is configured', () => {
+        // Mock API key as missing
+        vi.mocked(keyConfig.isApiConfigured).mockReturnValue(false);
+
+        render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} />);
+
+        // Verify "API Key Missing" warning is displayed
+        expect(screen.getByText('API Key Missing')).toBeInTheDocument();
+        expect(screen.getByText(/Gemini API key is not configured/)).toBeInTheDocument();
+    });
+
+    it('does not show API key warning when configured', () => {
+        // Mock API key as present
+        vi.mocked(keyConfig.isApiConfigured).mockReturnValue(true);
+
+        render(<AnalysisPanel {...defaultProps} analysis={mockAnalysisResult} />);
+
+        expect(screen.queryByText('API Key Missing')).not.toBeInTheDocument();
+    });
 });
+

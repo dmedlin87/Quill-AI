@@ -109,19 +109,20 @@ describe('getApiKey', () => {
 
   beforeEach(() => {
     vi.resetModules();
-    // Start from a clean env to avoid leaking real keys into tests
-    for (const key of Object.keys(process.env)) {
-      delete (process.env as any)[key];
-    }
-    delete (process.env as any).TEST_API_KEY_OVERRIDE;
+    delete process.env.API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.VITE_GEMINI_API_KEY;
+    delete process.env.TEST_API_KEY_OVERRIDE;
     (globalThis as any).import = { meta: { env: {} } };
     resetWarningState();
   });
 
   afterEach(() => {
-    for (const key of Object.keys(process.env)) {
-      delete (process.env as any)[key];
-    }
+    delete process.env.API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.VITE_GEMINI_API_KEY;
+    delete process.env.TEST_API_KEY_OVERRIDE;
+    
     Object.assign(process.env, originalEnv);
     if (originalImportMeta) {
       (globalThis as any).import = { meta: { ...originalImportMeta } };
@@ -131,9 +132,10 @@ describe('getApiKey', () => {
   });
 
   it('returns key from environment when available', () => {
-    process.env.API_KEY = 'from-env';
+    const validKey = 'a'.repeat(30);
+    process.env.API_KEY = validKey;
     const key = getApiKey();
-    expect(key).toBe('from-env');
+    expect(key).toBe(validKey);
   });
 
   it('logs warning only once for missing key', () => {
@@ -151,31 +153,35 @@ describe('getApiKey', () => {
   });
 
   it('prefers API_KEY over GEMINI_API_KEY and trims whitespace', () => {
-    process.env.API_KEY = '  primary-key  ';
-    process.env.GEMINI_API_KEY = 'secondary-key';
+    const primary = 'a'.repeat(30);
+    const secondary = 'b'.repeat(30);
+    process.env.API_KEY = `  ${primary}  `;
+    process.env.GEMINI_API_KEY = secondary;
 
     const key = getApiKey();
 
-    expect(key).toBe('primary-key');
+    expect(key).toBe(primary);
   });
 
   it('falls back to GEMINI_API_KEY without warning when API_KEY missing', () => {
     delete process.env.API_KEY;
-    process.env.GEMINI_API_KEY = 'gem-key';
+    const validKey = 'b'.repeat(30);
+    process.env.GEMINI_API_KEY = validKey;
     const warnSpy = vi.spyOn(console, 'warn');
 
     const key = getApiKey();
 
-    expect(key).toBe('gem-key');
+    expect(key).toBe(validKey);
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('uses VITE_GEMINI_API_KEY when other env keys are missing', () => {
-    process.env.VITE_GEMINI_API_KEY = 'vite-key';
+    const validKey = 'c'.repeat(30);
+    process.env.VITE_GEMINI_API_KEY = validKey;
 
     const key = getApiKey();
 
-    expect(key).toBe('vite-key');
+    expect(key).toBe(validKey);
   });
 
   it('warns once and returns empty string when no keys are set', () => {
@@ -221,20 +227,24 @@ describe('Dual API Key Management', () => {
     });
 
     it('returns env key when no store keys configured', () => {
-        process.env.API_KEY = 'env-key';
-        expect(getActiveApiKey()).toBe('env-key');
+        delete process.env.GEMINI_API_KEY;
+        delete process.env.VITE_GEMINI_API_KEY;
+        const validKey = 'a'.repeat(30);
+        process.env.API_KEY = validKey;
+        expect(getActiveApiKey()).toBe(validKey);
         expect(isUsingPaidKey()).toBe(false);
         expect(isAnyApiKeyConfigured()).toBe(true);
     });
 
     it('prioritizes free key when valid', () => {
         process.env.API_KEY = 'env-key';
+        const freeKey = 'a'.repeat(30);
         const mockState = JSON.stringify({
-            state: { freeApiKey: 'a'.repeat(30), paidApiKey: '' }
+            state: { freeApiKey: freeKey, paidApiKey: '' }
         });
         Storage.prototype.getItem = vi.fn(() => mockState);
 
-        expect(getActiveApiKey()).toBe('a'.repeat(30));
+        expect(getActiveApiKey()).toBe(freeKey);
         expect(isUsingPaidKey()).toBe(false);
     });
 
@@ -269,24 +279,30 @@ describe('Dual API Key Management', () => {
     });
 
     it('falls back to env key if both store keys missing', () => {
-         process.env.API_KEY = 'env-key';
+         const validKey = 'a'.repeat(30);
+         process.env.API_KEY = validKey;
          const mockState = JSON.stringify({
             state: { freeApiKey: '', paidApiKey: '' }
         });
         Storage.prototype.getItem = vi.fn(() => mockState);
         
-        expect(getActiveApiKey()).toBe('env-key');
+        expect(getActiveApiKey()).toBe(validKey);
     });
 
     it('correctly identifies if any key is configured', () => {
         Storage.prototype.getItem = vi.fn(() => null);
         delete process.env.API_KEY;
+        delete process.env.GEMINI_API_KEY;
+        delete process.env.VITE_GEMINI_API_KEY;
         expect(isAnyApiKeyConfigured()).toBe(false);
 
-        process.env.API_KEY = 'env-key';
+        const validKey = 'a'.repeat(30);
+        process.env.API_KEY = validKey;
         expect(isAnyApiKeyConfigured()).toBe(true);
 
         delete process.env.API_KEY;
+        delete process.env.GEMINI_API_KEY;
+        delete process.env.VITE_GEMINI_API_KEY;
         Storage.prototype.getItem = vi.fn(() => JSON.stringify({ state: { freeApiKey: 'a'.repeat(25) }}));
         expect(isAnyApiKeyConfigured()).toBe(true);
     });
