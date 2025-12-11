@@ -19,6 +19,7 @@ import {
   MoonIcon,
   SettingsIcon,
   HomeIcon,
+  VersionsIcon,
 } from '@/features/shared/components/Icons';
 
 interface NavigationRailProps {
@@ -31,6 +32,7 @@ interface NavigationRailProps {
 const NAV_ITEMS: Array<{ tab: SidebarTab; Icon: React.FC<{ className?: string }>; label: string; description: string }> = [
   { tab: SidebarTab.ANALYSIS, Icon: AnalysisIcon, label: 'Analysis', description: 'Deep analysis of your manuscript' },
   { tab: SidebarTab.HISTORY, Icon: HistoryIcon, label: 'History', description: 'View edit history and restore versions' },
+  { tab: SidebarTab.BRANCHES, Icon: VersionsIcon, label: 'Story Versions', description: 'Try alternate directions for your chapter' },
   { tab: SidebarTab.VOICE, Icon: MicIcon, label: 'Voice', description: 'Dictate and transcribe with AI' },
   { tab: SidebarTab.MEMORY, Icon: MemoryIcon, label: 'Memory', description: 'AI memory and context tracking' },
   { tab: SidebarTab.GRAPH, Icon: GraphIcon, label: 'Graph', description: 'Visualize character relationships' },

@@ -53,7 +53,7 @@ describe('DreamingService', () => {
 
     // Simulate CHAPTER_CHANGED to set projectId
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'CHAPTER_CHANGED', payload: { projectId: 'test-project' } });
+    callback({ type: 'CHAPTER_CHANGED', timestamp: Date.now(), payload: { projectId: 'test-project', chapterId: 'ch1', title: 'Test Chapter' } });
 
     // Fast-forward time to trigger idle
     await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100);
@@ -68,13 +68,13 @@ describe('DreamingService', () => {
 
     // Simulate CHAPTER_CHANGED to set projectId
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'CHAPTER_CHANGED', payload: { projectId: 'test-project' } });
+    callback({ type: 'CHAPTER_CHANGED', timestamp: Date.now(), payload: { projectId: 'test-project', chapterId: 'ch1', title: 'Test Chapter' } });
 
     // Advance time almost to the limit
     await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
 
     // Simulate TEXT_CHANGED
-    callback({ type: 'TEXT_CHANGED' });
+    callback({ type: 'TEXT_CHANGED', timestamp: Date.now(), payload: { length: 1000, delta: 10 } });
 
     // Advance past the original deadline
     await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
@@ -99,14 +99,14 @@ describe('DreamingService', () => {
 
     // Set project ID
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'CHAPTER_CHANGED', payload: { projectId: 'test-project' } });
+    callback({ type: 'CHAPTER_CHANGED', timestamp: Date.now(), payload: { projectId: 'test-project', chapterId: 'ch1', title: 'Test Chapter' } });
 
     // Trigger dreaming
     await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100);
     expect(emitDreamingStateChanged).toHaveBeenCalledWith(true);
 
     // Simulate interruption
-    callback({ type: 'TEXT_CHANGED' });
+    callback({ type: 'TEXT_CHANGED', timestamp: Date.now(), payload: { length: 1000, delta: 10 } });
 
     expect(emitDreamingStateChanged).toHaveBeenCalledWith(false);
     // The abort signal should have been triggered. We can verify if runDreamingCycle was called with a signal that is now aborted.
@@ -156,11 +156,42 @@ describe('DreamingService', () => {
     // For now, let's just emit a 'CHAPTER_CHANGED' with an empty string or something, assuming the check `if (!this.projectId)` handles empty string.
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'CHAPTER_CHANGED', payload: { projectId: '' } });
+    callback({ type: 'CHAPTER_CHANGED', timestamp: Date.now(), payload: { projectId: '', chapterId: '', title: '' } });
 
     await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
 
     expect(runDreamingCycle).not.toHaveBeenCalled();
+  });
+
+  it('should not start a new dreaming cycle if already active', async () => {
+    // Set up a long-running dreaming cycle
+    let resolveDreaming: () => void;
+    vi.mocked(runDreamingCycle).mockReturnValue(new Promise((resolve) => {
+      resolveDreaming = resolve as any;
+    }));
+
+    startDreamingService();
+
+    // Set project ID
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+    callback({ type: 'CHAPTER_CHANGED', timestamp: Date.now(), payload: { projectId: 'test-project', chapterId: 'ch1', title: 'Test Chapter' } });
+
+    // Trigger first dreaming
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100);
+    expect(runDreamingCycle).toHaveBeenCalledTimes(1);
+    expect(emitDreamingStateChanged).toHaveBeenCalledWith(true);
+
+    // Try to trigger again while still active (advance further time)
+    // This simulates the idle timer firing again, but beginDreaming should early-return
+    // because isActive is already true
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100); 
+
+    // Should still only have been called once (no concurrent cycles)
+    expect(runDreamingCycle).toHaveBeenCalledTimes(1);
+
+    // Now resolve the original dreaming cycle
+    resolveDreaming!();
+    await vi.waitFor(() => expect(emitDreamingStateChanged).toHaveBeenCalledWith(false));
   });
 
   it('should handle errors in runDreamingCycle gracefully', async () => {
@@ -170,7 +201,7 @@ describe('DreamingService', () => {
     startDreamingService();
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'CHAPTER_CHANGED', payload: { projectId: 'test-project' } });
+    callback({ type: 'CHAPTER_CHANGED', timestamp: Date.now(), payload: { projectId: 'test-project', chapterId: 'ch1', title: 'Test Chapter' } });
 
     await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100);
 

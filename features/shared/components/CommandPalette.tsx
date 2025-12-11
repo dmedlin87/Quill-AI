@@ -120,6 +120,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       category: 'navigation',
       action: () => { resetToProjectDashboard(); onClose(); },
     },
+    {
+      id: 'nav-versions',
+      label: 'Open Story Versions',
+      description: 'Try alternate story directions',
+      category: 'navigation',
+      action: () => { openTabWithPanel(SidebarTab.BRANCHES); onClose(); },
+    },
 
     // Editor
     {

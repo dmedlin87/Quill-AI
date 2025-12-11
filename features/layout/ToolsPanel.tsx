@@ -6,7 +6,8 @@ import { Dashboard } from '@/features/analysis';
 import { VoiceMode } from '@/features/voice';
 import { KnowledgeGraph, LoreManager } from '@/features/lore';
 import { MemoryManager } from '@/features/memory';
-import { Contradiction, Lore } from '@/types/schema';
+import { StoryVersionsPanel } from '@/features/editor';
+import { Branch, Contradiction, Lore } from '@/types/schema';
 import { useLayoutStore } from './store/useLayoutStore';
 import { DeveloperModeToggle, ThemeSelector } from '@/features/settings';
 import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
@@ -39,6 +40,15 @@ interface ToolsPanelProps {
   onAgentAction: (action: string, params: any) => Promise<string>;
   onNavigateToText?: (start: number, end: number) => void;
   onRestore: (item: any) => void;
+  // Branching/Story Versions
+  branches?: Branch[];
+  activeBranchId?: string | null;
+  chapterTitle?: string;
+  onCreateBranch?: (name: string) => void;
+  onSwitchBranch?: (branchId: string | null) => void;
+  onMergeBranch?: (branchId: string) => void;
+  onDeleteBranch?: (branchId: string) => void;
+  onRenameBranch?: (branchId: string, newName: string) => void;
 }
 
 /**
@@ -63,6 +73,15 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
   onAgentAction,
   onNavigateToText,
   onRestore,
+  // Branching/Story Versions
+  branches,
+  activeBranchId,
+  chapterTitle,
+  onCreateBranch,
+  onSwitchBranch,
+  onMergeBranch,
+  onDeleteBranch,
+  onRenameBranch,
 }) => {
   const {
     activeTab,
@@ -248,6 +267,20 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
                 onInterviewCharacter={handleInterviewCharacter}
                 draftCharacter={loreDraftCharacter}
                 onDraftConsumed={consumeLoreDraft}
+              />
+            )}
+
+            {activeTab === SidebarTab.BRANCHES && (
+              <StoryVersionsPanel
+                branches={branches || []}
+                activeBranchId={activeBranchId ?? null}
+                mainContent={currentText}
+                chapterTitle={chapterTitle}
+                onCreateBranch={onCreateBranch || (() => {})}
+                onSwitchBranch={onSwitchBranch || (() => {})}
+                onMergeBranch={onMergeBranch || (() => {})}
+                onDeleteBranch={onDeleteBranch || (() => {})}
+                onRenameBranch={onRenameBranch || (() => {})}
               />
             )}
 

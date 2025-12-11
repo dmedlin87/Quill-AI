@@ -13,6 +13,7 @@ export { DiffViewer } from './components/DiffViewer';
 export { EditorWorkspace } from './components/EditorWorkspace';
 export { CommentCard } from './components/CommentCard';
 export { VersionControlPanel } from './components/VersionControlPanel';
+export { StoryVersionsPanel } from './components/StoryVersionsPanel';
 
 // Hooks
 export { useMagicEditor } from './hooks/useMagicEditor';

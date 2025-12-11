@@ -105,6 +105,17 @@ describe('AppBrainLogger', () => {
 
       errorSpy.mockRestore();
     });
+
+    it('unsubscribe handles missing handler gracefully', () => {
+      const handler = vi.fn();
+      const unsubscribe = appBrainLogger.addHandler(handler);
+
+      // Manually remove handler from internal list to simulate edge case
+      appBrainLogger.clearHandlers();
+
+      // Unsubscribe should not throw even if handler was already removed
+      expect(() => unsubscribe()).not.toThrow();
+    });
   });
 
   describe('log methods', () => {
@@ -144,6 +155,19 @@ describe('AppBrainLogger', () => {
       appBrainLogger.error('TestService', 'Error message', { error: testError });
 
       expect(errorSpy).toHaveBeenCalled();
+
+      errorSpy.mockRestore();
+    });
+
+    it('error logs message without error object', () => {
+      const errorSpy = vi.spyOn(console, 'error');
+
+      // Log error without error object
+      appBrainLogger.error('TestService', 'Error message without object');
+
+      expect(errorSpy).toHaveBeenCalled();
+      // Should only have message and context, not error object
+      expect(errorSpy.mock.calls[0].length).toBe(2); // message, context (empty string)
 
       errorSpy.mockRestore();
     });

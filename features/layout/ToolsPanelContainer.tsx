@@ -17,9 +17,28 @@ export const ToolsPanelContainer: React.FC<ToolsPanelContainerProps> = ({ isZenM
   }));
   const activeChapter = getActiveChapter();
 
-  // 2. Editor State
-  const { currentText, selectionRange, history, editor } = useEditorState();
-  const { restore, handleNavigateToIssue } = useEditorActions();
+  // 2. Editor State (including branching)
+  const { 
+    currentText, 
+    selectionRange, 
+    history, 
+    editor,
+    // Branching state
+    branches,
+    activeBranchId,
+    isOnMain,
+  } = useEditorState();
+  
+  const { 
+    restore, 
+    handleNavigateToIssue,
+    // Branching actions
+    createBranch,
+    switchBranch,
+    mergeBranch,
+    deleteBranch,
+    renameBranch,
+  } = useEditorActions();
 
   // 3. Engine State
   const { state: engineState, actions: engineActions, contradictions } = useEngine();
@@ -52,6 +71,15 @@ export const ToolsPanelContainer: React.FC<ToolsPanelContainerProps> = ({ isZenM
       onAgentAction={engineActions.handleAgentAction}
       onNavigateToText={handleNavigateToIssue}
       onRestore={restore}
+      // Story Versions / Branching
+      branches={branches}
+      activeBranchId={activeBranchId}
+      chapterTitle={activeChapter?.title}
+      onCreateBranch={createBranch}
+      onSwitchBranch={switchBranch}
+      onMergeBranch={mergeBranch}
+      onDeleteBranch={deleteBranch}
+      onRenameBranch={renameBranch}
     />
   );
 };

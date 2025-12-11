@@ -133,6 +133,23 @@ export const SettingsIcon: React.FC<{ className?: string }> = ({ className }) =>
   </svg>
 );
 
+export const VersionsIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    {/* Main vertical line (trunk) */}
+    <path d="M6 3v18"/>
+    {/* Branch point circle */}
+    <circle cx="6" cy="9" r="2"/>
+    {/* Branch line going to the right */}
+    <path d="M8 9h6c2 0 3 1 3 3v6"/>
+    {/* Branch endpoint circle */}
+    <circle cx="17" cy="18" r="2"/>
+    {/* Top commit point */}
+    <circle cx="6" cy="4" r="1.5" fill="currentColor"/>
+    {/* Bottom commit point */}
+    <circle cx="6" cy="20" r="1.5" fill="currentColor"/>
+  </svg>
+);
+
 // Convenience export for all icons as a namespace
 export const Icons = {
   Zen: ZenIcon,
@@ -150,6 +167,7 @@ export const Icons = {
   Sun: SunIcon,
   Moon: MoonIcon,
   Settings: SettingsIcon,
+  Versions: VersionsIcon,
 };
 
 export type IconName = keyof typeof Icons;

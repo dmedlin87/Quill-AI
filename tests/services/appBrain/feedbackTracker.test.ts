@@ -129,4 +129,26 @@ describe('FeedbackTracker', () => {
     // Should start from the implicit default 1.0 and apply decay
     expect(newWeight).toBeCloseTo(1 * 0.95, 3);
   });
+
+  it('stops safely even when not started', () => {
+    // Call stop multiple times to ensure null check works
+    feedbackTracker.stop();
+    feedbackTracker.stop(); // Should not throw
+    expect(() => feedbackTracker.stop()).not.toThrow();
+  });
+
+  it('event type guard prevents processing wrong event types', () => {
+    const category: SuggestionCategory = 'plot';
+    const initialWeight = useSettingsStore.getState().suggestionWeights[category];
+
+    // Emit a different event type (simulating the subscribeAll behavior)
+    // The type guard should return early and not modify weights
+    eventBus.emit({
+      type: 'TEXT_CHANGED',
+      payload: { length: 100, delta: 10 },
+    });
+
+    const weight = useSettingsStore.getState().suggestionWeights[category];
+    expect(weight).toBe(initialWeight); // Unchanged
+  });
 });

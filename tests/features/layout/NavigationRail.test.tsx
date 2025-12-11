@@ -46,6 +46,7 @@ vi.mock('@/features/shared/components/Icons', () => ({
   MoonIcon: () => <span>MoonIcon</span>,
   SettingsIcon: () => <span>SettingsIcon</span>,
   HomeIcon: () => <span>HomeIcon</span>,
+  VersionsIcon: () => <span>VersionsIcon</span>,
 }));
 
 vi.mock('framer-motion', () => ({

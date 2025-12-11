@@ -115,4 +115,30 @@ describe('runNarrativeAlignmentCheck', () => {
     await runNarrativeAlignmentCheck(projectId, chapterId);
     expect(memory.evolveBedsideNote).not.toHaveBeenCalled();
   });
+
+  it('does nothing if bedside note has no structured content', async () => {
+    vi.mocked(db.chapters.get).mockResolvedValue({
+      id: chapterId,
+      projectId,
+      content: chapterContent,
+    } as any);
+
+    // Bedside note with NO structured content
+    vi.mocked(memory.getOrCreateBedsideNote).mockResolvedValue({
+      id: 'note-1',
+      text: 'Plain text note without structure',
+      structuredContent: undefined,
+    } as any);
+
+    vi.mocked(intelligence.processManuscript).mockReturnValue({
+      structural: { stats: { avgTension: 0.5 } },
+      entities: { nodes: [] },
+      timeline: { promises: [] },
+    } as any);
+
+    await runNarrativeAlignmentCheck(projectId, chapterId);
+
+    // Should not call evolveBedsideNote because there's no plan to compare against
+    expect(memory.evolveBedsideNote).not.toHaveBeenCalled();
+  });
 });
