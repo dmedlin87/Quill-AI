@@ -104,7 +104,7 @@ describe('ProactiveThinker', () => {
     const entitiesMock = { nodes: [] };
 
     mockGetState.mockReturnValue({
-        manuscript: { projectId: mockProjectId, currentText: '' },
+        manuscript: { projectId: mockProjectId, currentText: '', chapters: [] },
         intelligence: {
             full: { entities: entitiesMock },
             entities: entitiesMock,
@@ -855,5 +855,69 @@ describe('ProactiveThinker', () => {
 
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
     expect(await thinker.forceThink()).toBeNull();
+  });
+
+  it('should evolve bedside note on significant edit after cooldown', async () => {
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+    // Trigger significant edits
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+
+    // Initial state: not past cooldown (lastEditEvolveAt = 0) but cooldown check depends on (now - 0) > 5 mins
+    // Wait, lastEditEvolveAt is 0 initially.
+    // SIGNIFICANT_EDIT_COOLDOWN_MS is 5 * 60 * 1000.
+    // If now is small (Date.now() defaults to near 0 with fake timers?), then now - 0 might be small.
+    // Actually, Date.now() starts at some value.
+    // Let's advance time to ensure we are past cooldown.
+
+    // Force time to be large enough initially or advance it.
+    // By default, lastEditEvolveAt is 0.
+    // So if Date.now() is > 300,000, the first check passes.
+
+    vi.setSystemTime(new Date().getTime() + 400_000); // Ensure we are past the initial cooldown relative to 0
+
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+
+    expect(evolveBedsideNote).toHaveBeenCalledWith(
+      mockProjectId,
+      expect.stringContaining('Significant edits detected'),
+      expect.objectContaining({ changeReason: 'significant_edit' })
+    );
+  });
+
+  it('should check timeline conflicts on significant edit after cooldown', async () => {
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    // Setup state to pass checks
+    const mockState = {
+        manuscript: {
+            projectId: mockProjectId,
+            activeChapterId: 'ch1',
+            currentText: 'New text',
+            chapters: []
+        },
+        intelligence: {
+            timeline: { events: [] },
+            full: { entities: { nodes: [] } },
+            hud: { context: { activeEntities: [] }, situational: {} }
+        },
+    };
+    mockGetState.mockReturnValue(mockState);
+
+    vi.mocked(extractTemporalMarkers).mockReturnValue([{
+        category: 'day', normalized: 'new', marker: 'new', offset: 0, sentence: 's'
+    }]);
+
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+    // Ensure past cooldown
+    vi.setSystemTime(new Date().getTime() + 40_000);
+
+    await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+
+    // Just verifying that it ran without error and updated lastTimelineCheckAt
+    // We can check if it called extractTemporalMarkers
+    expect(extractTemporalMarkers).toHaveBeenCalledWith('New text');
   });
 });
