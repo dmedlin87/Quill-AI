@@ -119,4 +119,52 @@ describe('useSettingsStore', () => {
     // Ensure other weights are untouched
     expect(useSettingsStore.getState().suggestionWeights.plot).toBeDefined();
   });
+
+  describe('Simple Setters', () => {
+    it('updates critique intensity', () => {
+      useSettingsStore.getState().setCritiqueIntensity('intensive');
+      expect(useSettingsStore.getState().critiqueIntensity).toBe('intensive');
+      
+      // Equality check
+      const stateBefore = useSettingsStore.getState();
+      useSettingsStore.getState().setCritiqueIntensity('intensive');
+      const stateAfter = useSettingsStore.getState();
+      expect(stateBefore).toBe(stateAfter); // Reference equality should be preserved
+    });
+
+    it('updates autonomy mode', () => {
+      useSettingsStore.getState().setAutonomyMode('copilot');
+      expect(useSettingsStore.getState().autonomyMode).toBe('copilot');
+    });
+
+    it('updates budget threshold', () => {
+      useSettingsStore.getState().setBudgetThreshold(5.0);
+      expect(useSettingsStore.getState().budgetThreshold).toBe(5.0);
+    });
+
+    it('updates native spellcheck enabled', () => {
+      useSettingsStore.getState().setNativeSpellcheckEnabled(false);
+      expect(useSettingsStore.getState().nativeSpellcheckEnabled).toBe(false);
+    });
+
+    it('updates developer mode enabled', () => {
+      useSettingsStore.getState().setDeveloperModeEnabled(true);
+      expect(useSettingsStore.getState().developerModeEnabled).toBe(true);
+    });
+
+    it('updates model build', () => {
+      useSettingsStore.getState().setModelBuild('cheap');
+      expect(useSettingsStore.getState().modelBuild).toBe('cheap');
+    });
+
+    it('updates free api key', () => {
+      useSettingsStore.getState().setFreeApiKey('test-free-key');
+      expect(useSettingsStore.getState().freeApiKey).toBe('test-free-key');
+    });
+
+    it('updates paid api key', () => {
+      useSettingsStore.getState().setPaidApiKey('test-paid-key');
+      expect(useSettingsStore.getState().paidApiKey).toBe('test-paid-key');
+    });
+  });
 });

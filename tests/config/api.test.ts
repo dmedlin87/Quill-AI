@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { validateApiKey, estimateTokens, ApiDefaults } from '@/config/api';
+import { 
+  validateApiKey, 
+  estimateTokens, 
+  ApiDefaults,
+  getActiveApiKey, 
+  markFreeQuotaExhausted, 
+  resetQuotaState, 
+  isUsingPaidKey, 
+  isAnyApiKeyConfigured,
+  getApiKey,
+  resetWarningState
+} from '@/config/api';
 
 describe('validateApiKey', () => {
   it('returns error for empty key', () => {
@@ -104,6 +115,7 @@ describe('getApiKey', () => {
     }
     delete (process.env as any).TEST_API_KEY_OVERRIDE;
     (globalThis as any).import = { meta: { env: {} } };
+    resetWarningState();
   });
 
   afterEach(() => {
@@ -120,67 +132,162 @@ describe('getApiKey', () => {
 
   it('returns key from environment when available', () => {
     process.env.API_KEY = 'from-env';
-    return import('@/config/api').then(({ getApiKey }) => {
-      const key = getApiKey();
-      expect(key).toBe('from-env');
-    });
+    const key = getApiKey();
+    expect(key).toBe('from-env');
   });
 
   it('logs warning only once for missing key', () => {
     const consoleSpy = vi.spyOn(console, 'warn');
     process.env.TEST_API_KEY_OVERRIDE = ' '; // trigger warning path
 
-    return import('@/config/api').then(({ getApiKey }) => {
-      getApiKey();
-      getApiKey();
+    getApiKey();
+    getApiKey();
 
-      const warningCalls = consoleSpy.mock.calls.filter(c =>
-        String(c[0]).includes('No API key configured')
-      );
-      expect(warningCalls.length).toBeLessThanOrEqual(1);
-      consoleSpy.mockRestore();
-    });
+    const warningCalls = consoleSpy.mock.calls.filter(c =>
+      String(c[0]).includes('No API key configured')
+    );
+    expect(warningCalls.length).toBeLessThanOrEqual(1);
+    consoleSpy.mockRestore();
   });
 
-  it('prefers API_KEY over GEMINI_API_KEY and trims whitespace', async () => {
+  it('prefers API_KEY over GEMINI_API_KEY and trims whitespace', () => {
     process.env.API_KEY = '  primary-key  ';
     process.env.GEMINI_API_KEY = 'secondary-key';
 
-    const { getApiKey } = await import('@/config/api');
     const key = getApiKey();
 
     expect(key).toBe('primary-key');
   });
 
-  it('falls back to GEMINI_API_KEY without warning when API_KEY missing', async () => {
+  it('falls back to GEMINI_API_KEY without warning when API_KEY missing', () => {
     delete process.env.API_KEY;
     process.env.GEMINI_API_KEY = 'gem-key';
     const warnSpy = vi.spyOn(console, 'warn');
 
-    const { getApiKey: freshGetApiKey } = await import('@/config/api');
-    const key = freshGetApiKey();
+    const key = getApiKey();
 
     expect(key).toBe('gem-key');
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('uses VITE_GEMINI_API_KEY when other env keys are missing', async () => {
+  it('uses VITE_GEMINI_API_KEY when other env keys are missing', () => {
     process.env.VITE_GEMINI_API_KEY = 'vite-key';
 
-    const { getApiKey } = await import('@/config/api');
     const key = getApiKey();
 
     expect(key).toBe('vite-key');
   });
 
-  it('warns once and returns empty string when no keys are set', async () => {
+  it('warns once and returns empty string when no keys are set', () => {
     process.env.TEST_API_KEY_OVERRIDE = ' ';
     const warnSpy = vi.spyOn(console, 'warn');
 
-    const { getApiKey } = await import('@/config/api');
     const key = getApiKey();
     expect(key).toBe('');
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(String(warnSpy.mock.calls[0][0])).toContain('No API key configured');
   });
+});
+
+describe('Dual API Key Management', () => {
+    // We need to reload module to reset module-level state (freeQuotaExhausted) if possible,
+    // or we just test the public API side effects.
+    // Since `freeQuotaExhausted` is a module-level variable, we might need to use `resetQuotaState` if available,
+    // or rely on isolation.
+    // `resetQuotaState` is exported, so we should use it in beforeEach.
+
+    const originalGetItem = Storage.prototype.getItem;
+    const originalImportMeta = (globalThis as any).import?.meta;
+
+    beforeEach(() => {
+        vi.resetModules();
+        resetQuotaState();
+        resetWarningState();
+        delete process.env.API_KEY;
+        delete process.env.GEMINI_API_KEY;
+        delete process.env.VITE_GEMINI_API_KEY;
+        delete process.env.TEST_API_KEY_OVERRIDE;
+        Storage.prototype.getItem = vi.fn(() => null);
+        (globalThis as any).import = { meta: { env: {} } };
+    });
+
+    afterEach(() => {
+        Storage.prototype.getItem = originalGetItem;
+        if (originalImportMeta) {
+          (globalThis as any).import = { meta: { ...originalImportMeta } };
+        } else {
+          delete (globalThis as any).import;
+        }
+    });
+
+    it('returns env key when no store keys configured', () => {
+        process.env.API_KEY = 'env-key';
+        expect(getActiveApiKey()).toBe('env-key');
+        expect(isUsingPaidKey()).toBe(false);
+        expect(isAnyApiKeyConfigured()).toBe(true);
+    });
+
+    it('prioritizes free key when valid', () => {
+        process.env.API_KEY = 'env-key';
+        const mockState = JSON.stringify({
+            state: { freeApiKey: 'a'.repeat(30), paidApiKey: '' }
+        });
+        Storage.prototype.getItem = vi.fn(() => mockState);
+
+        expect(getActiveApiKey()).toBe('a'.repeat(30));
+        expect(isUsingPaidKey()).toBe(false);
+    });
+
+    it('falls back to paid key if free key invalid/missing', () => {
+        const mockState = JSON.stringify({
+            state: { freeApiKey: '', paidApiKey: 'b'.repeat(30) }
+        });
+        Storage.prototype.getItem = vi.fn(() => mockState);
+
+        expect(getActiveApiKey()).toBe('b'.repeat(30));
+        expect(isUsingPaidKey()).toBe(true);
+    });
+
+    it('switches to paid key if free quota exhausted', () => {
+        const freeKey = 'a'.repeat(30);
+        const paidKey = 'b'.repeat(30);
+        const mockState = JSON.stringify({
+            state: { freeApiKey: freeKey, paidApiKey: paidKey }
+        });
+        Storage.prototype.getItem = vi.fn(() => mockState);
+
+        // Initially uses free key
+        expect(getActiveApiKey()).toBe(freeKey);
+        expect(isUsingPaidKey()).toBe(false);
+
+        // Exhaust quota
+        markFreeQuotaExhausted();
+
+        // Should switch to paid key
+        expect(getActiveApiKey()).toBe(paidKey);
+        expect(isUsingPaidKey()).toBe(true);
+    });
+
+    it('falls back to env key if both store keys missing', () => {
+         process.env.API_KEY = 'env-key';
+         const mockState = JSON.stringify({
+            state: { freeApiKey: '', paidApiKey: '' }
+        });
+        Storage.prototype.getItem = vi.fn(() => mockState);
+        
+        expect(getActiveApiKey()).toBe('env-key');
+    });
+
+    it('correctly identifies if any key is configured', () => {
+        Storage.prototype.getItem = vi.fn(() => null);
+        delete process.env.API_KEY;
+        expect(isAnyApiKeyConfigured()).toBe(false);
+
+        process.env.API_KEY = 'env-key';
+        expect(isAnyApiKeyConfigured()).toBe(true);
+
+        delete process.env.API_KEY;
+        Storage.prototype.getItem = vi.fn(() => JSON.stringify({ state: { freeApiKey: 'a'.repeat(25) }}));
+        expect(isAnyApiKeyConfigured()).toBe(true);
+    });
 });

@@ -413,7 +413,71 @@ describe('connectLiveSession', () => {
 
     await expect(client.sendAudio(audioData)).rejects.toThrow('Network timeout');
 
+
     const { createBlob } = await import('@/features/voice');
     expect(createBlob).toHaveBeenCalledWith(audioData);
+  });
+
+  it('throws error if Web Audio API not supported', async () => {
+    vi.stubGlobal('AudioContext', undefined);
+    vi.stubGlobal('webkitAudioContext', undefined);
+    
+    // reset module to trigger check again if cached? 
+    // actually function is called every time. 
+    // We need to re-import or just call function if exported? 
+    // getAudioContextCtor is internal. 
+    // But generateSpeech calls it.
+
+    await expect(generateSpeech('test')).resolves.toBeNull(); 
+    // actually generateSpeech catches error and returns null.
+    // So we can verify console.error was called?
+    
+    const consoleSpy = vi.spyOn(console, 'error');
+    await generateSpeech('test');
+    expect(consoleSpy).toHaveBeenCalled();
+  });
+
+  it('logs warning if closing context fails', async () => {
+    const mockResponse = {
+        candidates: [{ content: { parts: [{ inlineData: { data: 'base64' } }] } }]
+    };
+    mockAi.models.generateContent.mockResolvedValue(mockResponse);
+    const { decodeAudioData } = await import('@/features/voice');
+    vi.mocked(decodeAudioData).mockResolvedValue(mockAudioBuffer);
+
+    // Mock close to fail
+    MockAudioContextConstructor.mockImplementationOnce(() => {
+        return {
+            state: 'running',
+            close: vi.fn().mockRejectedValue(new Error('Close failed')),
+            decodeAudioData: vi.fn(),
+            createBuffer: vi.fn(),
+        } as any;
+    });
+
+    const consoleSpy = vi.spyOn(console, 'warn');
+    await generateSpeech('test');
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to close AudioContext', expect.any(Error));
+  });
+
+  it('ignores onmessage if context is closed', async () => {
+      const client = await connectLiveSession(mockOnAudioData, mockOnClose);
+      const connectCall = mockAi.live.connect.mock.calls[0];
+      const onMessageCallback = connectCall[0].callbacks.onmessage;
+
+      // Close context
+      const ctx = lastCreatedAudioContext;
+      if (ctx) ctx.state = 'closed';
+
+      const mockMessage = {
+          serverContent: {
+              modelTurn: { parts: [{ inlineData: { data: 'base64' } }] }
+          }
+      };
+
+      await onMessageCallback(mockMessage);
+      
+      const { decodeAudioData } = await import('@/features/voice');
+      expect(decodeAudioData).not.toHaveBeenCalled();
   });
 });

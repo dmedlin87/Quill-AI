@@ -12,6 +12,13 @@
 
 let hasWarnedMissingKey = false;
 
+/**
+ * Reset the warning state for testing purposes.
+ */
+export function resetWarningState(): void {
+  hasWarnedMissingKey = false;
+}
+
 function getEnvVar(name: string): string | undefined {
   if (typeof process !== 'undefined' && process.env?.[name]) {
     return process.env[name];

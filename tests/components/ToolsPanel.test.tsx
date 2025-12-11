@@ -82,6 +82,8 @@ vi.mock('@/features/memory', () => ({
 vi.mock('@/features/settings', () => ({
   DeveloperModeToggle: () => <div data-testid="developer-mode-toggle">Dev Mode</div>,
   ThemeSelector: () => <div data-testid="theme-selector">Theme Selector</div>,
+  ModelBuildSelector: () => <div data-testid="model-build-selector">Model Build Selector</div>,
+  ApiKeyManager: () => <div data-testid="api-key-manager">API Key Manager</div>,
 }));
 
 vi.mock('@/features/settings/components/RelevanceTuning', () => ({

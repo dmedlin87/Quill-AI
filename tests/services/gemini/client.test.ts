@@ -16,6 +16,7 @@ const mockGoogleGenAI = vi.hoisted(() => vi.fn().mockImplementation(() => ({
 // Mock the config module before importing client
 vi.mock('@/config/api', () => ({
   getApiKey: mockGetApiKey,
+  getActiveApiKey: mockGetApiKey, // Same as getApiKey for testing
   validateApiKey: mockValidateApiKey,
 }));
 

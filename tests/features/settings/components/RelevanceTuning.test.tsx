@@ -119,4 +119,17 @@ describe('RelevanceTuning', () => {
 
     expect(plotInput.value).toBe('1.50');
   });
+
+  it('blurs input on Enter key press', () => {
+    render(<RelevanceTuning />);
+    const inputs = screen.getAllByRole('spinbutton');
+    const plotInput = inputs[0];
+
+    // Mock blur
+    const blurSpy = vi.spyOn(plotInput, 'blur');
+
+    fireEvent.keyDown(plotInput, { key: 'Enter', code: 'Enter' });
+
+    expect(blurSpy).toHaveBeenCalled();
+  });
 });

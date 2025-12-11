@@ -130,7 +130,7 @@ describe('Icons', () => {
     });
 
     it('has correct number of icons', () => {
-      expect(Object.keys(Icons)).toHaveLength(15);
+      expect(Object.keys(Icons)).toHaveLength(16);
     });
   });
 
