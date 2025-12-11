@@ -11,7 +11,7 @@ import {
 } from '@/types/experienceSettings';
 
 /** Model build options - matches config/models.ts */
-export type ModelBuildKey = 'default' | 'cheap';
+export type ModelBuildKey = 'default' | 'cheap' | 'free';
 
 interface SettingsState {
   critiqueIntensity: CritiqueIntensity;
