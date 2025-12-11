@@ -139,6 +139,31 @@ describe('useVoiceSession', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('ignores duplicate start requests when already connected', async () => {
+    const { result } = renderHook(() => useVoiceSession());
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(true);
+    });
+
+    // Reset call counts to detect unintended reinitialization
+    mockAudioContextImpl.audioWorklet.addModule.mockClear();
+    audioContextCreateCount = 0;
+    workletCreateCount = 0;
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    expect(mockAudioContextImpl.audioWorklet.addModule).not.toHaveBeenCalled();
+    expect(audioContextCreateCount).toBe(0);
+    expect(workletCreateCount).toBe(0);
+  });
+
   it('handles start session errors', async () => {
     (navigator.mediaDevices.getUserMedia as any).mockRejectedValue(new Error('Permission denied'));
     const { result } = renderHook(() => useVoiceSession());
@@ -152,6 +177,19 @@ describe('useVoiceSession', () => {
     });
 
     expect(result.current.isConnected).toBe(false);
+  });
+
+  it('uses generic error message for non-Error rejections', async () => {
+    (navigator.mediaDevices.getUserMedia as any).mockRejectedValue('nope');
+    const { result } = renderHook(() => useVoiceSession());
+
+    await act(async () => {
+      await result.current.startSession();
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('Failed to start voice session');
+    });
   });
 
   it('stops session and cleans up resources', async () => {
