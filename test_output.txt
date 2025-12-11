@@ -1,0 +1,153 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.15 [39m[90mC:/Users/dmedl/Projects/Quill AI[39m
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Configuration & Initialization > isApiConfigured returns true when API key is valid
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Configuration & Initialization > getApiStatus returns configured status when valid
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Configuration & Initialization > exports ai client instance
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Configuration & Initialization > recreates client when API key changes
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Invalid Configuration > reports invalid configuration via status API when API key is missing
+[Quill AI API] API key is required
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Invalid Configuration > creates a proxy that throws on access if key is invalid
+[Quill AI API] Invalid format
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > proxies normal requests successfully
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > handles string requests by wrapping them
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > passes through other properties (e.g., chats)
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > rethrows non-quota errors
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Normal/Cheap Mode (Paid Key Switch) > switches to paid key on 429 error if not already using paid key
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+[90mstdout[2m | tests/services/gemini/client.test.ts[2m > [22m[2mGemini Client[2m > [22m[2mSmart Generate Content (The "ai" Proxy)[2m > [22m[2mQuota Exhaustion Handling[2m > [22m[2mNormal/Cheap Mode (Paid Key Switch)[2m > [22m[2mswitches to paid key on 429 error if not already using paid key
+[22m[39m[Quill AI] Switching to Paid Key for normal mode.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Normal/Cheap Mode (Paid Key Switch) > switches to paid key on 429 error if not already using paid key
+[Quill AI] Quota exhausted (normal mode). Attempting recovery...
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Normal/Cheap Mode (Paid Key Switch) > rethrows 429 if already using paid key
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Normal/Cheap Mode (Paid Key Switch) > rethrows 429 if already using paid key
+[Quill AI] Quota exhausted (normal mode). Attempting recovery...
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Normal/Cheap Mode (Paid Key Switch) > rethrows if retry also fails
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+[90mstdout[2m | tests/services/gemini/client.test.ts[2m > [22m[2mGemini Client[2m > [22m[2mSmart Generate Content (The "ai" Proxy)[2m > [22m[2mQuota Exhaustion Handling[2m > [22m[2mNormal/Cheap Mode (Paid Key Switch)[2m > [22m[2mrethrows if retry also fails
+[22m[39m[Quill AI] Switching to Paid Key for normal mode.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Normal/Cheap Mode (Paid Key Switch) > rethrows if retry also fails
+[Quill AI] Quota exhausted (normal mode). Attempting recovery...
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > falls back to Flash model when Pro model hits 429
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+[90mstdout[2m | tests/services/gemini/client.test.ts[2m > [22m[2mGemini Client[2m > [22m[2mSmart Generate Content (The "ai" Proxy)[2m > [22m[2mQuota Exhaustion Handling[2m > [22m[2mFree Mode (Model Fallback)[2m > [22m[2mfalls back to Flash model when Pro model hits 429
+[22m[39m[Quill AI] Free Pro quota exhausted. Falling back to Flash.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > falls back to Flash model when Pro model hits 429
+[Quill AI] Quota exhausted (free mode). Attempting recovery...
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > falls back to Flash model when Pro model hits 429 (string request)
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+[90mstdout[2m | tests/services/gemini/client.test.ts[2m > [22m[2mGemini Client[2m > [22m[2mSmart Generate Content (The "ai" Proxy)[2m > [22m[2mQuota Exhaustion Handling[2m > [22m[2mFree Mode (Model Fallback)[2m > [22m[2mfalls back to Flash model when Pro model hits 429 (string request)
+[22m[39m[Quill AI] Free Pro quota exhausted. Falling back to Flash.
+
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > falls back to Flash model when Pro model hits 429 (string request)
+[Quill AI] Quota exhausted (free mode). Attempting recovery...
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > emits QUOTA_EXHAUSTED and throws specific error if Flash also fails
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+[90mstdout[2m | tests/services/gemini/client.test.ts[2m > [22m[2mGemini Client[2m > [22m[2mSmart Generate Content (The "ai" Proxy)[2m > [22m[2mQuota Exhaustion Handling[2m > [22m[2mFree Mode (Model Fallback)[2m > [22m[2memits QUOTA_EXHAUSTED and throws specific error if Flash also fails
+[22m[39m[Quill AI] Free Pro quota exhausted. Falling back to Flash.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > emits QUOTA_EXHAUSTED and throws specific error if Flash also fails
+[Quill AI] Quota exhausted (free mode). Attempting recovery...
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > emits QUOTA_EXHAUSTED and throws specific error if Flash also fails
+[Quill AI] Free mode fully exhausted.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > throws original error if fallback fails with non-429
+[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation, see https://vitest.dev/api/vi#vi-spyon for examples.
+
+[90mstdout[2m | tests/services/gemini/client.test.ts[2m > [22m[2mGemini Client[2m > [22m[2mSmart Generate Content (The "ai" Proxy)[2m > [22m[2mQuota Exhaustion Handling[2m > [22m[2mFree Mode (Model Fallback)[2m > [22m[2mthrows original error if fallback fails with non-429
+[22m[39m[Quill AI] Free Pro quota exhausted. Falling back to Flash.
+
+stderr | tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > throws original error if fallback fails with non-429
+[Quill AI] Quota exhausted (free mode). Attempting recovery...
+
+ [31mΓ¥»[39m tests/services/gemini/client.test.ts [2m([22m[2m18 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 87[2mms[22m[39m
+       [32mΓ£ô[39m isApiConfigured returns true when API key is valid[32m 68[2mms[22m[39m
+       [32mΓ£ô[39m getApiStatus returns configured status when valid[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m exports ai client instance[32m 1[2mms[22m[39m
+[31m       [31m├ù[31m recreates client when API key changes[39m[32m 3[2mms[22m[39m
+       [32mΓ£ô[39m reports invalid configuration via status API when API key is missing[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m logs warning to console when validation fails on init[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m creates a proxy that throws on access if key is invalid[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m proxies normal requests successfully[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m handles string requests by wrapping them[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m passes through other properties (e.g., chats)[32m 1[2mms[22m[39m
+         [32mΓ£ô[39m rethrows non-quota errors[32m 1[2mms[22m[39m
+           [32mΓ£ô[39m switches to paid key on 429 error if not already using paid key[32m 1[2mms[22m[39m
+           [32mΓ£ô[39m rethrows 429 if already using paid key[32m 1[2mms[22m[39m
+           [32mΓ£ô[39m rethrows if retry also fails[32m 1[2mms[22m[39m
+[31m           [31m├ù[31m falls back to Flash model when Pro model hits 429[39m[32m 2[2mms[22m[39m
+           [32mΓ£ô[39m falls back to Flash model when Pro model hits 429 (string request)[32m 1[2mms[22m[39m
+           [32mΓ£ô[39m emits QUOTA_EXHAUSTED and throws specific error if Flash also fails[32m 1[2mms[22m[39m
+           [32mΓ£ô[39m throws original error if fallback fails with non-429[32m 1[2mms[22m[39m
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 2 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  tests/services/gemini/client.test.ts > Gemini Client > Configuration & Initialization > recreates client when API key changes
+AssertionError: expected "vi.fn()" to be called 1 times, but got 2 times
+ Γ¥» tests/services/gemini/client.test.ts:105:31
+    103|       // First call
+    104|       clientModule.getAiClient();
+    105|       expect(mockGoogleGenAI).toHaveBeenCalledTimes(1); // Initial loaΓÇª
+       |                               ^
+    106| 
+    107|       // Change key
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/2]ΓÄ»
+
+ FAIL  tests/services/gemini/client.test.ts > Gemini Client > Smart Generate Content (The "ai" Proxy) > Quota Exhaustion Handling > Free Mode (Model Fallback) > falls back to Flash model when Pro model hits 429
+AssertionError: expected 'gemini-pro' to be 'gemini-flash' // Object.is equality
+
+Expected: "gemini-flash"
+Received: "gemini-pro"
+
+ Γ¥» tests/services/gemini/client.test.ts:253:40
+    251|           // Verify second call used flash model
+    252|           const secondCallArgs = mockGenerateContent.mock.calls[1][0];
+    253|           expect(secondCallArgs.model).toBe('gemini-flash');
+       |                                        ^
+    254|         });
+    255|         
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/2]ΓÄ»
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m16 passed[39m[22m[90m (18)[39m
+[2m   Start at [22m 14:24:44
+[2m   Duration [22m 1.41s[2m (transform 134ms, setup 437ms, import 32ms, tests 87ms, environment 679ms)[22m
+
+JSON report written to C:/Users/dmedl/Projects/Quill AI/coverage/vitest-report.json

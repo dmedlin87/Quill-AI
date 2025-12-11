@@ -73,9 +73,20 @@ describe('AnalysisStatusContext', () => {
       });
 
       it('throws error when used outside provider', () => {
-        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        expect(() => renderHook(() => useAnalysisStatusContext())).toThrow('useAnalysisStatusContext must be used within an AnalysisStatusProvider');
-        spy.mockRestore();
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        
+        // Prevent jsdom from catching the error and failing the test
+        const preventDefault = (e: ErrorEvent) => e.preventDefault();
+        window.addEventListener('error', preventDefault);
+        
+        try {
+          expect(() => renderHook(() => useAnalysisStatusContext())).toThrow(
+            'useAnalysisStatusContext must be used within an AnalysisStatusProvider'
+          );
+        } finally {
+          window.removeEventListener('error', preventDefault);
+          consoleSpy.mockRestore();
+        }
       });
     });
 

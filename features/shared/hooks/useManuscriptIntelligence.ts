@@ -19,6 +19,7 @@ import {
   createEmptyIntelligence,
   ChangeHistory,
 } from '../../../services/intelligence';
+import { WorkerResponse } from '../../../services/intelligence/worker';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURATION
@@ -27,7 +28,10 @@ import {
 const DEBOUNCE_DELAY = 150;       // ms after typing stops for debounced processing
 const BACKGROUND_DELAY = 2000;    // ms after typing stops for full processing
 const INSTANT_THROTTLE = 50;      // ms minimum between instant updates
-const USE_WEB_WORKER = (import.meta as any).env?.MODE !== 'test';      // Disable Web Worker in Vitest to avoid worker-related OOM
+
+export const WORKER_CONFIG = {
+  enabled: (import.meta as any).env?.MODE !== 'test'
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOOK INTERFACE
@@ -140,8 +144,9 @@ export const useManuscriptIntelligence = (
     setProcessingProgress(0);
     
     // Try to use Web Worker for true parallelism
-    if (USE_WEB_WORKER && workerRef.current) {
+    if (WORKER_CONFIG.enabled && workerRef.current) {
       const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      workerRequestIdRef.current = requestId;
       workerRequestIdRef.current = requestId;
       
       workerRef.current.postMessage({
@@ -294,7 +299,7 @@ export const useManuscriptIntelligence = (
   
   // Initialize Web Worker
   useEffect(() => {
-    if (!USE_WEB_WORKER) return;
+    if (!WORKER_CONFIG.enabled) return;
     
     try {
       // Create worker - Vite handles bundling with this syntax
@@ -304,8 +309,8 @@ export const useManuscriptIntelligence = (
       );
       
       // Handle worker messages
-      workerRef.current.onmessage = (event) => {
-        const { type, id, payload, progress, error } = event.data;
+      workerRef.current.onmessage = (e: MessageEvent<WorkerResponse>) => {
+        const { type, id, payload, progress, error } = e.data;
         
         // Ignore messages from old requests
         if (id !== workerRequestIdRef.current && type !== 'READY') {
@@ -355,6 +360,7 @@ export const useManuscriptIntelligence = (
       };
       
     } catch (err) {
+      console.error('[Intelligence] Worker init failed:', err);
       console.warn('[Intelligence] Web Worker not available, using main thread');
       workerRef.current = null;
     }

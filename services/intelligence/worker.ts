@@ -43,6 +43,7 @@ export interface WorkerRequest {
 }
 
 export type WorkerResponseType = 
+  | 'READY'
   | 'RESULT'
   | 'PARTIAL'
   | 'ERROR'

@@ -120,7 +120,7 @@ describe('ChunkManager coverage', () => {
 
         const chunk = manager.getChunk(chunkId);
         expect(chunk?.status).toBe('error');
-        expect(chunk?.errorMessage).toBe('Could not get chunk text');
+        expect(chunk?.errorMessage).toBe('Could not retrieve chunk text (invalid range or missing chapter)');
     });
 
     it('getChunkText should return null for invalid scene indices', async () => {
@@ -130,7 +130,7 @@ describe('ChunkManager coverage', () => {
         await manager.reprocessChunk('scene-bad');
         const chunk = manager.getChunk('scene-bad');
         expect(chunk?.status).toBe('error');
-        expect(chunk?.errorMessage).toBe('Could not get chunk text');
+        expect(chunk?.errorMessage).toBe('Could not retrieve chunk text (invalid range or missing chapter)');
     });
 
     it('aggregateFromChildren returns empty analysis if no children', async () => {

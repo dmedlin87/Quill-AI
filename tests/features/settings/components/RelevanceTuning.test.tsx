@@ -132,4 +132,45 @@ describe('RelevanceTuning', () => {
 
     expect(blurSpy).toHaveBeenCalled();
   });
+
+  describe('Edge Cases', () => {
+    it('renders fallback label for unknown category', () => {
+        // Inject an unknown category into the weights
+        const mixedWeights = { ...suggestionWeights, 'alien_logic': 0.5 };
+        (useSettingsStore as any).mockReturnValue({
+            suggestionWeights: mixedWeights,
+            updateSuggestionWeight,
+            resetSuggestionWeights,
+        });
+
+        render(<RelevanceTuning />);
+        
+        // Should show the raw key as label since it's not in mapping
+        expect(screen.getByText('alien_logic')).toBeInTheDocument();
+    });
+
+    it('uses default value (1.0) for undefined weights', () => {
+        // Inject a category with undefined/null value
+        const partialWeights = { plot: undefined }; 
+        (useSettingsStore as any).mockReturnValue({
+            suggestionWeights: partialWeights,
+            updateSuggestionWeight,
+            resetSuggestionWeights,
+        });
+
+        const { container } = render(<RelevanceTuning />);
+        
+        // Find input for plot - it should default to 1.00
+        // We can find by label "Plot Suggestions"
+        const inputs = screen.getAllByRole('spinbutton');
+        const plotInput = inputs[0] as HTMLInputElement;
+        
+        // Since we only have plot, index 0 is correct
+        expect(plotInput.value).toBe('1.00');
+
+        // Check slider value too
+        const slider = container.querySelector('input[type="range"]') as HTMLInputElement;
+        expect(slider.value).toBe('1');
+    });
+  });
 });
