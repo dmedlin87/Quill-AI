@@ -65,6 +65,22 @@ const RELATIONSHIP_PATTERNS: Array<{ pattern: RegExp; type: RelationshipType }> 
   { pattern: /(\w+)\s+(?:trusted|believed|followed)\s+(\w+)/gi, type: 'allied_with' },
 ];
 
+// Pre-compiled regex patterns for optimization
+// Combine titles into one regex: \b(Mr|Mrs|...)\.?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b
+const TITLES_REGEX = new RegExp(`\\b(${TITLES.join('|')})\\.?\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)\\b`, 'gi');
+
+// Combine location prepositions: \b(in|at|...)\s+(?:the\s+)?([A-Za-z][A-Za-z]*(?:\\s+[A-Za-z][A-Za-z]*)*)\b
+const LOCATIONS_PREPOSITIONS_REGEX = new RegExp(`\\b(${LOCATION_PREPOSITIONS.join('|')})\\s+(?:the\\s+)?([A-Za-z][A-Za-z]*(?:\\s+[A-Za-z][A-Za-z]*)*)\\b`, 'gi');
+
+const SIGNIFICANT_OBJECTS = ['sword', 'crown', 'ring', 'staff', 'wand', 'book',
+  'scroll', 'key', 'gem', 'stone', 'amulet', 'pendant', 'necklace', 'bracelet',
+  'shield', 'armor', 'cloak', 'robe', 'dagger', 'bow', 'arrow', 'spear', 'axe',
+  'hammer', 'chalice', 'goblet', 'mirror', 'orb', 'crystal', 'map', 'letter'];
+
+// Combine objects: the\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+(sword|crown|...)|the\s+(sword|crown|...)\\s+of\\s+([A-Z][a-z]+)
+const OBJECTS_REGEX = new RegExp(`the\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+(${SIGNIFICANT_OBJECTS.join('|')})|the\\s+(${SIGNIFICANT_OBJECTS.join('|')})\\s+of\\s+([A-Z][a-z]+)`, 'gi');
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILITY FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,19 +173,21 @@ const extractCharactersFromText = (text: string): RawEntity[] => {
     }
   }
   
-  // Pattern 2: Names after titles
-  for (const title of TITLES) {
-    const titlePattern = new RegExp(`\\b${title}\\.?\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)\\b`, 'gi');
-    while ((match = titlePattern.exec(text)) !== null) {
-      const name = normalizeEntityName(match[1]);
-      if (isValidEntityName(name)) {
-        entities.push({
-          name: `${title.charAt(0).toUpperCase() + title.slice(1)} ${name}`,
-          type: 'character',
-          offset: match.index,
-          context: text.slice(Math.max(0, match.index - 30), match.index + 50),
-        });
-      }
+  // Pattern 2: Names after titles (OPTIMIZED)
+  // Reset lastIndex for reusable global regex
+  TITLES_REGEX.lastIndex = 0;
+  while ((match = TITLES_REGEX.exec(text)) !== null) {
+    // match[1] is title, match[2] is name
+    const title = match[1];
+    const namePart = match[2];
+    const name = normalizeEntityName(namePart);
+    if (isValidEntityName(name)) {
+      entities.push({
+        name: `${title.charAt(0).toUpperCase() + title.slice(1)} ${name}`,
+        type: 'character',
+        offset: match.index,
+        context: text.slice(Math.max(0, match.index - 30), match.index + 50),
+      });
     }
   }
   
@@ -211,19 +229,19 @@ const extractCharactersFromText = (text: string): RawEntity[] => {
 const extractLocations = (text: string): RawEntity[] => {
   const entities: RawEntity[] = [];
   
-  for (const prep of LOCATION_PREPOSITIONS) {
-    const pattern = new RegExp(`\\b${prep}\\s+(?:the\\s+)?([A-Za-z][A-Za-z]*(?:\\s+[A-Za-z][A-Za-z]*)*)\\b`, 'g');
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      const name = normalizeEntityName(match[1]);
-      if (isValidEntityName(name) && name.length > 2) {
-        entities.push({
-          name,
-          type: 'location',
-          offset: match.index,
-          context: text.slice(Math.max(0, match.index - 30), match.index + 50),
-        });
-      }
+  // Optimized: Single pass for all prepositions
+  LOCATIONS_PREPOSITIONS_REGEX.lastIndex = 0;
+  let match;
+  while ((match = LOCATIONS_PREPOSITIONS_REGEX.exec(text)) !== null) {
+    // match[1] is preposition, match[2] is location
+    const name = normalizeEntityName(match[2]);
+    if (isValidEntityName(name) && name.length > 2) {
+      entities.push({
+        name,
+        type: 'location',
+        offset: match.index,
+        context: text.slice(Math.max(0, match.index - 30), match.index + 50),
+      });
     }
   }
   
@@ -273,26 +291,29 @@ const extractLocations = (text: string): RawEntity[] => {
 const extractObjects = (text: string): RawEntity[] => {
   const entities: RawEntity[] = [];
   
-  // Pattern: Significant objects (often named)
-  const significantObjects = ['sword', 'crown', 'ring', 'staff', 'wand', 'book', 
-    'scroll', 'key', 'gem', 'stone', 'amulet', 'pendant', 'necklace', 'bracelet',
-    'shield', 'armor', 'cloak', 'robe', 'dagger', 'bow', 'arrow', 'spear', 'axe',
-    'hammer', 'chalice', 'goblet', 'mirror', 'orb', 'crystal', 'map', 'letter'];
-  
-  for (const obj of significantObjects) {
-    // Named objects: "the X of Y" or "Y's X"
-    const namedPattern = new RegExp(`the\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+${obj}|the\\s+${obj}\\s+of\\s+([A-Z][a-z]+)`, 'gi');
-    let match;
-    while ((match = namedPattern.exec(text)) !== null) {
-      const name = match[1] || match[2];
-      if (name && isValidEntityName(name)) {
-        entities.push({
+  // Optimized: Single pass for all significant objects
+  OBJECTS_REGEX.lastIndex = 0;
+  let match;
+  while ((match = OBJECTS_REGEX.exec(text)) !== null) {
+    // Group 1: Name (before object), Group 2: Object
+    // Group 3: Object (before name), Group 4: Name
+
+    const nameBefore = match[1];
+    const objectAfter = match[2];
+
+    const objectBefore = match[3];
+    const nameAfter = match[4];
+
+    const name = nameBefore || nameAfter;
+    const obj = objectAfter || objectBefore;
+
+    if (name && obj && isValidEntityName(name)) {
+       entities.push({
           name: `The ${name} ${obj.charAt(0).toUpperCase() + obj.slice(1)}`,
           type: 'object',
           offset: match.index,
           context: text.slice(Math.max(0, match.index - 30), match.index + 50),
         });
-      }
     }
   }
   
