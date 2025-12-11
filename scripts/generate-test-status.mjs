@@ -43,6 +43,9 @@ const THRESHOLDS = {
   lines: 90,
 };
 
+// Test count rounding threshold for badge display
+const TEST_COUNT_ROUNDING_THRESHOLD = 1000;
+
 // Determine the reference date for this report.
 // Priority:
 // 1. QUILL_COVERAGE_DATE env var (ISO string or YYYY-MM-DD)
@@ -358,13 +361,13 @@ The full HTML coverage report is available at \`coverage/index.html\` after runn
       const endIdx = readmeContent.indexOf(endMarker);
       
       if (startIdx !== -1 && endIdx !== -1) {
-        // Format test count badge (show exact number if < 1000, otherwise use 1000+, 2000+, etc.)
+        // Format test count badge (show exact number if < threshold, otherwise use 1000+, 2000+, etc.)
         let testBadgeText;
         if (testCounts?.totalTests) {
-          if (testCounts.totalTests < 1000) {
+          if (testCounts.totalTests < TEST_COUNT_ROUNDING_THRESHOLD) {
             testBadgeText = testCounts.totalTests.toString();
           } else {
-            const rounded = Math.floor(testCounts.totalTests / 1000) * 1000;
+            const rounded = Math.floor(testCounts.totalTests / TEST_COUNT_ROUNDING_THRESHOLD) * TEST_COUNT_ROUNDING_THRESHOLD;
             testBadgeText = `${rounded}+`;
           }
         } else {
@@ -378,11 +381,11 @@ The full HTML coverage report is available at \`coverage/index.html\` after runn
         const testColor = testCounts?.failedTests > 0 ? 'red' : 'brightgreen';
         const coverageColor = coveragePct >= 90 ? 'brightgreen' : coveragePct >= 80 ? 'yellow' : 'red';
         
-        // Build new badge section
+        // Build new badge section (URL encode both test and coverage values for consistency)
         const newBadges = `${startMarker}
 <!-- Badges are updated by npm run test:status -->
 ![Tests](https://img.shields.io/badge/tests-${encodeURIComponent(testBadgeText)}-${testColor})
-![Coverage](https://img.shields.io/badge/coverage-${coveragePct}%25-${coverageColor})
+![Coverage](https://img.shields.io/badge/coverage-${encodeURIComponent(coveragePct + '%')}-${coverageColor})
 ${endMarker}`;
         
         // Replace the old badge section with the new one
@@ -392,7 +395,7 @@ ${endMarker}`;
         
         await writeFile(readmePath, readmeContent, 'utf-8');
       } else {
-        console.warn(`${colors.yellow}[test-status] Could not find badge markers in README.md${colors.reset}`);
+        console.warn(`${colors.yellow}[test-status] Could not find badge markers (TEST_HEALTH_BADGES:START and TEST_HEALTH_BADGES:END) in README.md${colors.reset}`);
       }
     }
   } catch (err) {
