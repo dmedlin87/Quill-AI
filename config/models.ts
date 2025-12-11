@@ -21,7 +21,7 @@ interface ModelDefinition {
   outputPrice?: number;
 }
 
-type ModelBuildKey = 'default' | 'cheap' | 'deepThinking';
+export type ModelBuildKey = 'default' | 'cheap' | 'deepThinking';
 
 type ModelBuild = Record<ModelRole, ModelDefinition>;
 
@@ -221,9 +221,44 @@ export const getModelPricing = (
   return ModelPricing[modelId] ?? null;
 };
 
+/**
+ * Get the active model build key from settings or environment.
+ */
+export function getActiveModelBuild(): ModelBuildKey {
+  // First check environment override
+  if (MODEL_BUILD_ENV && MODEL_BUILD_ENV in ModelBuilds) {
+    return MODEL_BUILD_ENV;
+  }
+  
+  // Try to read from settings store in localStorage
+  try {
+    const stored = localStorage.getItem('quill-settings');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      const modelBuild = parsed?.state?.modelBuild;
+      if (modelBuild && modelBuild in ModelBuilds) {
+        return modelBuild as ModelBuildKey;
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  
+  return 'default';
+}
+
 const ACTIVE_BUILD_KEY: ModelBuildKey =
   MODEL_BUILD_ENV && MODEL_BUILD_ENV in ModelBuilds ? MODEL_BUILD_ENV : 'default';
 
+/**
+ * Get the active models based on current settings.
+ * This is a function to allow dynamic switching.
+ */
+export function getActiveModels(): ModelBuild {
+  return ModelBuilds[getActiveModelBuild()];
+}
+
+// For backwards compatibility - static reference
 export const ActiveModels: ModelBuild = ModelBuilds[ACTIVE_BUILD_KEY];
 
 export const ModelConfig = {

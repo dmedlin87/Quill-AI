@@ -82,6 +82,101 @@ export function isApiConfigured(): boolean {
   return !!getApiKey();
 }
 
+// ============================================================================
+// Dual API Key Management
+// ============================================================================
+
+/** Track whether free quota has been exhausted this session */
+let freeQuotaExhausted = false;
+
+/**
+ * Get API keys from settings store (if available) or fall back to env.
+ * This is a lazy accessor to avoid circular dependencies.
+ */
+function getStoredApiKeys(): { freeKey: string; paidKey: string } {
+  try {
+    // Access localStorage directly to avoid importing the store (circular dep)
+    const stored = localStorage.getItem('quill-settings');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        freeKey: parsed?.state?.freeApiKey || '',
+        paidKey: parsed?.state?.paidApiKey || '',
+      };
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return { freeKey: '', paidKey: '' };
+}
+
+/**
+ * Get the currently active API key.
+ * Priority: Free tier key (if configured and not exhausted) > Paid tier key > Environment key
+ */
+export function getActiveApiKey(): string {
+  const { freeKey, paidKey } = getStoredApiKeys();
+  
+  // If free key is configured and not exhausted, use it
+  if (freeKey && !freeQuotaExhausted && !validateApiKey(freeKey)) {
+    return freeKey;
+  }
+  
+  // If paid key is configured, use it
+  if (paidKey && !validateApiKey(paidKey)) {
+    return paidKey;
+  }
+  
+  // Fall back to environment key
+  return getApiKey();
+}
+
+/**
+ * Mark the free tier quota as exhausted.
+ * Call this when a 429 error is received on the free key.
+ */
+export function markFreeQuotaExhausted(): void {
+  freeQuotaExhausted = true;
+  console.info('[Quill AI] Free tier quota exhausted, switching to paid tier.');
+}
+
+/**
+ * Reset the quota state (e.g., on page refresh or manual reset).
+ */
+export function resetQuotaState(): void {
+  freeQuotaExhausted = false;
+}
+
+/**
+ * Check if currently using the paid tier key.
+ */
+export function isUsingPaidKey(): boolean {
+  const { freeKey, paidKey } = getStoredApiKeys();
+  
+  // Using paid if: free is exhausted, or free not configured but paid is
+  if (freeQuotaExhausted && paidKey && !validateApiKey(paidKey)) {
+    return true;
+  }
+  if (!freeKey && paidKey && !validateApiKey(paidKey)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Check if any API key is configured (stored or environment).
+ */
+export function isAnyApiKeyConfigured(): boolean {
+  const { freeKey, paidKey } = getStoredApiKeys();
+  const envKey = getApiKey();
+  
+  return !!(
+    (freeKey && !validateApiKey(freeKey)) ||
+    (paidKey && !validateApiKey(paidKey)) ||
+    (envKey && !validateApiKey(envKey))
+  );
+}
+
 /**
  * API request configuration defaults
  */

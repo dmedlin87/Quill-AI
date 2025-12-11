@@ -8,13 +8,13 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
-import { getApiKey, validateApiKey } from "../../config/api";
+import { getApiKey, validateApiKey, getActiveApiKey } from "../../config/api";
 
-// Initialize with environment key
-const apiKey = getApiKey();
+// Initialize with environment key (for initial load)
+const initialApiKey = getApiKey();
 
 // Validate on initialization - log but DO NOT throw, so the UI can still load
-const validationError = validateApiKey(apiKey);
+const validationError = validateApiKey(initialApiKey);
 if (validationError) {
   // Log for debugging context
   console.warn(`[Quill AI API] ${validationError}`);
@@ -37,36 +37,61 @@ const createClient = (Ctor: any, options: { apiKey: string }): GoogleGenAI => {
   }
 };
 
-const buildClient = (): GoogleGenAI => {
-  if (validationError) {
-    const error = new Error(`[Quill AI API] ${validationError}`);
+const buildClient = (apiKey?: string): GoogleGenAI => {
+  const key = apiKey ?? getActiveApiKey();
+  const error = validateApiKey(key);
+  
+  if (error) {
+    const errorObj = new Error(`[Quill AI API] ${error}`);
     return new Proxy(
       {},
       {
         get() {
-          throw error;
+          throw errorObj;
         },
       },
     ) as GoogleGenAI;
   }
 
-  return createClient(GoogleGenAI as any, { apiKey });
+  return createClient(GoogleGenAI as any, { apiKey: key });
 };
 
-export const ai = buildClient();
+// Track the current API key to detect changes
+let currentApiKey = getActiveApiKey();
+let aiClient = buildClient(currentApiKey);
+
+/**
+ * Get the AI client, rebuilding if the API key has changed.
+ * This enables dynamic switching between free/paid keys.
+ */
+export function getAiClient(): GoogleGenAI {
+  const activeKey = getActiveApiKey();
+  if (activeKey !== currentApiKey) {
+    currentApiKey = activeKey;
+    aiClient = buildClient(activeKey);
+  }
+  return aiClient;
+}
+
+// Export for backwards compatibility - but prefer getAiClient() for dynamic key support
+export const ai = new Proxy({} as GoogleGenAI, {
+  get(_, prop) {
+    return (getAiClient() as any)[prop];
+  },
+});
 
 /**
  * Check if the API is properly configured.
  */
 export function isApiConfigured(): boolean {
-  return !validateApiKey(apiKey);
+  return !validateApiKey(getActiveApiKey());
 }
 
 /**
  * Get API configuration status for UI display.
  */
 export function getApiStatus(): { configured: boolean; error?: string } {
-  const error = validateApiKey(apiKey);
+  const error = validateApiKey(getActiveApiKey());
   return {
     configured: !error,
     error: error ?? undefined,

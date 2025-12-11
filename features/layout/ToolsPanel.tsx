@@ -9,7 +9,7 @@ import { MemoryManager } from '@/features/memory';
 import { StoryVersionsPanel } from '@/features/editor';
 import { Branch, Contradiction, Lore } from '@/types/schema';
 import { useLayoutStore } from './store/useLayoutStore';
-import { DeveloperModeToggle, ThemeSelector } from '@/features/settings';
+import { DeveloperModeToggle, ThemeSelector, ModelBuildSelector, ApiKeyManager } from '@/features/settings';
 import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
 import { DesignSystemKitchenSink } from '@/features/shared/components/DesignSystemKitchenSink';
 import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
@@ -294,6 +294,14 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
 
                   <section>
                     <ThemeSelector />
+                  </section>
+
+                  <section className="pt-6 border-t border-[var(--border-secondary)]">
+                    <ModelBuildSelector />
+                  </section>
+
+                  <section className="pt-6 border-t border-[var(--border-secondary)]">
+                    <ApiKeyManager />
                   </section>
                   
                   {isDeveloperMode && (

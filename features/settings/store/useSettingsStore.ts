@@ -10,6 +10,9 @@ import {
   DEFAULT_SUGGESTION_WEIGHTS,
 } from '@/types/experienceSettings';
 
+/** Model build options - matches config/models.ts */
+export type ModelBuildKey = 'default' | 'cheap';
+
 interface SettingsState {
   critiqueIntensity: CritiqueIntensity;
   setCritiqueIntensity: (intensity: CritiqueIntensity) => void;
@@ -26,6 +29,13 @@ interface SettingsState {
   suggestionWeights: SuggestionWeights;
   updateSuggestionWeight: (category: string, weight: number) => void;
   resetSuggestionWeights: () => void;
+  // Model and API key settings
+  modelBuild: ModelBuildKey;
+  setModelBuild: (build: ModelBuildKey) => void;
+  freeApiKey: string;
+  setFreeApiKey: (key: string) => void;
+  paidApiKey: string;
+  setPaidApiKey: (key: string) => void;
 }
 
 const initialState: Omit<SettingsState, keyof SettingsActions> = {
@@ -36,6 +46,10 @@ const initialState: Omit<SettingsState, keyof SettingsActions> = {
   nativeSpellcheckEnabled: true,
   developerModeEnabled: false,
   suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
+  // Model and API key defaults
+  modelBuild: 'default',
+  freeApiKey: '',
+  paidApiKey: '',
 };
 
 type SettingsActions = Pick<
@@ -48,6 +62,9 @@ type SettingsActions = Pick<
   | 'setDeveloperModeEnabled'
   | 'updateSuggestionWeight'
   | 'resetSuggestionWeights'
+  | 'setModelBuild'
+  | 'setFreeApiKey'
+  | 'setPaidApiKey'
 >;
 
 // Custom storage wrapper to handle quota errors gracefully
@@ -115,6 +132,13 @@ export const useSettingsStore = create<SettingsState>()(
         set(() => ({
           suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
         })),
+      // Model and API key setters
+      setModelBuild: (build) =>
+        set((state) => (state.modelBuild === build ? state : { ...state, modelBuild: build })),
+      setFreeApiKey: (key) =>
+        set((state) => (state.freeApiKey === key ? state : { ...state, freeApiKey: key })),
+      setPaidApiKey: (key) =>
+        set((state) => (state.paidApiKey === key ? state : { ...state, paidApiKey: key })),
     }),
     {
       name: 'quill-settings',
