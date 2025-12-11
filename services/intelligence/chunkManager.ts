@@ -19,7 +19,7 @@ import {
 } from '../../types/intelligence';
 import { ChunkIndex, createChunkIndex, createChunkId } from './chunkIndex';
 import { processManuscriptCached, parseStructure } from './index';
-import { hashContent } from './deltaTracker';
+import { getWorkerPool, IntelligenceWorkerPool } from './workerPool';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURATION
@@ -46,7 +46,7 @@ const DEFAULT_CONFIG: ChunkManagerConfig = {
   editDebounceMs: 500,
   processingIntervalMs: 100,
   maxBatchSize: 3,
-  useWorker: false, // Worker integration can be added later
+  useWorker: false,
   idleThresholdMs: 1000,
 };
 
@@ -71,6 +71,9 @@ export class ChunkManager {
   
   // Pending edit range for coalescing multiple edits during debounce
   private pendingEditRange: { chapterId: string; start: number; end: number } | null = null;
+
+  // Worker pool reference
+  private workerPool: IntelligenceWorkerPool | null = null;
   
   // Callbacks
   private onProcessingStart?: () => void;
@@ -106,6 +109,17 @@ export class ChunkManager {
       onChunkDirty: () => this.scheduleProcessing(),
       onQueueUpdated: (queue) => this.onQueueChange?.(queue.length),
     });
+
+    if (this.config.useWorker) {
+      this.workerPool = getWorkerPool();
+      // Initialize asynchronously
+      this.workerPool.initialize().catch(err => {
+        console.error('Failed to initialize worker pool:', err);
+        // Fallback to main thread if workers fail to init
+        this.config.useWorker = false;
+        this.workerPool = null;
+      });
+    }
     
     // Initialize the book root chunk
     this.initializeBookChunk();
@@ -137,6 +151,11 @@ export class ChunkManager {
     if (this.processingTimer) {
       clearTimeout(this.processingTimer);
       this.processingTimer = null;
+    }
+
+    // If using worker, cancel pending jobs for this chapter to avoid wasted work
+    if (this.config.useWorker && this.workerPool) {
+      this.workerPool.cancelChapterJobs(chapterId);
     }
     
     // Store the latest text pending debounce; don't commit until indices update
@@ -233,6 +252,11 @@ export class ChunkManager {
     this.chapterTexts.delete(chapterId);
     const chapterChunkId = createChunkId('chapter', chapterId);
     this.index.removeChunk(chapterChunkId);
+
+    // Cancel any pending worker jobs for this chapter
+    if (this.config.useWorker && this.workerPool) {
+      this.workerPool.cancelChapterJobs(chapterId);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -269,7 +293,7 @@ export class ChunkManager {
       let processed = 0;
       
       while (processed < this.config.maxBatchSize && this.index.hasDirtyChunks()) {
-        // Check if user has started editing again
+        // Check if user has started editing again (interrupt batch)
         if (Date.now() - this.lastEditTime < this.config.idleThresholdMs) {
           break;
         }
@@ -280,11 +304,14 @@ export class ChunkManager {
         await this.processChunk(chunkId);
         processed++;
         
-        // Small delay between chunks
+        // Small delay between chunks to allow UI render cycles if on main thread
         if (processed < this.config.maxBatchSize) {
           await new Promise(r => setTimeout(r, this.config.processingIntervalMs));
         }
       }
+    } catch (error) {
+      // Catch unexpected errors in the batch loop itself
+      console.error('[ChunkManager] Error in processNextBatch:', error);
     } finally {
       this.isProcessing = false;
       this.onProcessingEnd?.();
@@ -312,9 +339,12 @@ export class ChunkManager {
       if (chunk.level === 'scene' || chunk.level === 'chapter') {
         // Get the text for this chunk
         const text = this.getChunkText(chunk);
-        if (!text) {
-          throw new Error('Could not get chunk text');
+        if (text === null) {
+          // If text is null, it might be due to a sync issue or invalid range.
+          // We'll mark it as error but not throw, so it can be retried or fixed.
+          throw new Error('Could not retrieve chunk text (invalid range or missing chapter)');
         }
+
         analysis = await this.analyzeTextChunk(text, chunkId);
       } else {
         // Higher levels aggregate from children
@@ -326,6 +356,7 @@ export class ChunkManager {
       
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
+      console.warn(`[ChunkManager] Error processing ${chunkId}:`, message);
       this.index.markError(chunkId, message);
       this.onError?.(chunkId, message);
     }
@@ -339,7 +370,7 @@ export class ChunkManager {
       // Get from cache
       const chapterId = chunk.id.replace('chapter-', '');
       const text = this.chapterTexts.get(chapterId);
-      if (!text) return null;
+      if (text === undefined) return null;
       if (chunk.startIndex < 0 || chunk.endIndex > text.length) {
         return null;
       }
@@ -353,7 +384,7 @@ export class ChunkManager {
       
       const chapterId = parentChunk.id.replace('chapter-', '');
       const chapterText = this.chapterTexts.get(chapterId);
-      if (!chapterText) return null;
+      if (chapterText === undefined) return null;
       if (
         chunk.startIndex < 0 ||
         chunk.endIndex > chapterText.length ||
@@ -369,11 +400,39 @@ export class ChunkManager {
   }
 
   /**
-   * Analyze a text chunk using the intelligence layer
+   * Analyze a text chunk using the intelligence layer (or worker)
    */
   private async analyzeTextChunk(text: string, chunkId: ChunkId): Promise<ChunkAnalysis> {
-    // Use the existing cached processing
-    const intelligence = processManuscriptCached(text, chunkId);
+    let intelligence: ManuscriptIntelligence;
+
+    // Use worker if enabled and available
+    if (this.config.useWorker && this.workerPool) {
+      const result = await new Promise<{ intelligence?: ManuscriptIntelligence; error?: string }>((resolve) => {
+        // Ensure pool is initialized
+        if (!this.workerPool) {
+          resolve({ error: 'Worker pool not initialized' });
+          return;
+        }
+
+        this.workerPool.submitJob(
+          {
+            type: 'PROCESS_FULL',
+            chapterId: chunkId,
+            text: text,
+            priority: 'normal',
+          },
+          (res) => resolve(res)
+        );
+      });
+
+      if (result.error || !result.intelligence) {
+        throw new Error(result.error || 'Worker returned no intelligence');
+      }
+      intelligence = result.intelligence;
+    } else {
+      // Main thread fallback
+      intelligence = processManuscriptCached(text, chunkId);
+    }
     
     // Extract the analysis summary
     return this.intelligenceToChunkAnalysis(intelligence);
@@ -475,11 +534,32 @@ export class ChunkManager {
     
     const totalWords = analyses.reduce((sum, a) => sum + a.wordCount, 0);
     const avgDialogue = analyses.reduce((sum, a) => sum + a.dialogueRatio, 0) / analyses.length;
-    const avgTension = analyses.reduce((sum, a) => sum + a.avgTension, 0) / analyses.length;
-    const avgRisk = analyses.reduce((sum, a) => sum + a.riskScore, 0) / analyses.length;
     
+    // Enhanced aggregation: Tension
+    const tensions = analyses.map(a => a.avgTension);
+    const hasData = tensions.length > 0;
+    const avgTension = hasData
+      ? tensions.reduce((a, b) => a + b, 0) / tensions.length
+      : 0.5; // Default neutral tension
+    const maxTension = hasData ? Math.max(...tensions) : 0.5;
+    // const minTension = hasData ? Math.min(...tensions) : 0.5; // Not currently used in summary but good to have if needed
+
+    const avgRisk = hasData
+      ? analyses.reduce((sum, a) => sum + a.riskScore, 0) / analyses.length
+      : 0;
+
+    // Aggregate style flags by frequency
+    const styleCounts = new Map<string, number>();
+    analyses.flatMap(a => a.styleFlags).forEach(flag => {
+      styleCounts.set(flag, (styleCounts.get(flag) || 0) + 1);
+    });
+    // Keep flags that appear in at least 30% of children
+    const dominantStyleFlags = Array.from(styleCounts.entries())
+      .filter(([_, count]) => count >= analyses.length * 0.3)
+      .map(([flag]) => flag);
+
     return {
-      summary: `${totalWords} words across ${children.length} sections`,
+      summary: `${totalWords} words across ${children.length} sections. Tension: ${(avgTension * 10).toFixed(1)}/10 (Peak: ${(maxTension * 10).toFixed(1)})`,
       wordCount: totalWords,
       dialogueRatio: avgDialogue,
       avgTension,
@@ -487,7 +567,7 @@ export class ChunkManager {
       locationNames: [...new Set(analyses.flatMap(a => a.locationNames))],
       timeMarkers: [...new Set(analyses.flatMap(a => a.timeMarkers))],
       openPromises: [...new Set(analyses.flatMap(a => a.openPromises))],
-      styleFlags: [...new Set(analyses.flatMap(a => a.styleFlags))],
+      styleFlags: dominantStyleFlags,
       riskScore: avgRisk,
       processedAt: Date.now(),
     };
@@ -555,6 +635,7 @@ export class ChunkManager {
       ...this.index.getStats(),
       isProcessing: this.isProcessing,
       chapterCount: this.chapterTexts.size,
+      workerEnabled: !!(this.config.useWorker && this.workerPool),
     };
   }
 
@@ -674,6 +755,12 @@ export class ChunkManager {
     if (this.editDebounceTimer) {
       clearTimeout(this.editDebounceTimer);
       this.editDebounceTimer = null;
+    }
+    if (this.workerPool) {
+        // We don't necessarily terminate the pool here as it might be shared,
+        // but if we created it locally or ownership is clear, we could.
+        // For now, we'll just null the reference.
+        this.workerPool = null;
     }
     this.clear();
   }
