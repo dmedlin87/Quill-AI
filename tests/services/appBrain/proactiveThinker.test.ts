@@ -9,8 +9,6 @@ import { getImportantReminders } from '../../../services/memory/proactive';
 import { searchBedsideHistory } from '../../../services/memory/bedsideHistorySearch';
 import { extractTemporalMarkers } from '../../../services/intelligence/timelineTracker';
 import { generateVoiceProfile } from '../../../services/intelligence/voiceProfiler';
-import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
-import { buildCompressedContext } from '../../../services/appBrain/contextBuilder';
 import { VoiceMetrics } from '../../../types/intelligence';
 
 // Hoist mocks to avoid initialization errors
@@ -558,7 +556,6 @@ describe('ProactiveThinker', () => {
   });
 
   it('should prioritize suggestions based on configured weights', async () => {
-    // 1. ARRANGE: Configure the world (Inputs)
     setProactiveThinkerSettingsAdapter({
         getSuggestionWeights: () => ({
             plot: 0.1,      // Should mute
@@ -572,13 +569,12 @@ describe('ProactiveThinker', () => {
 
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
 
-    // Mock the AI returning raw suggestions with equal/different priorities
     vi.mocked(ai.models.generateContent).mockResolvedValue({
         text: JSON.stringify({
             significant: true,
             suggestions: [
-                { title: 'Plot Item', type: 'plot', priority: 'high' },    // Should be downgraded
-                { title: 'Style Item', type: 'style', priority: 'low' },   // Should be boosted
+                { title: 'Plot Item', type: 'plot', priority: 'high' },
+                { title: 'Style Item', type: 'style', priority: 'low' },
             ],
         }),
     } as any);
@@ -586,15 +582,8 @@ describe('ProactiveThinker', () => {
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
     callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
 
-    // 2. ACT: Run the public logic
     await thinker.forceThink();
 
-    // 3. ASSERT: Verify the Output (Behavior)
-    // We check the calls to the public callback.
-    // 'Style Item' should be boosted to high/medium and appear first or have high priority
-    // 'Plot Item' should be muted or lowered.
-
-    // Check calls to onSuggestion
     const calls = mockOnSuggestion.mock.calls;
     const styleCall = calls.find(c => c[0].title === 'Style Item');
     const plotCall = calls.find(c => c[0].title === 'Plot Item');
@@ -602,8 +591,6 @@ describe('ProactiveThinker', () => {
     expect(styleCall).toBeDefined();
     expect(plotCall).toBeDefined();
 
-    // Verify the Logic applied: Style should be boosted, Plot muted
-    // Using loose matching because precise boosting depends on internal math
     expect(styleCall[0].priority).toMatch(/high|medium/);
     expect(plotCall[0].priority).toMatch(/low|medium/);
   });
