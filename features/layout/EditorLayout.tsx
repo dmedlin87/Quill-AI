@@ -272,7 +272,7 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="glass-strong border-l-0 flex flex-col z-30 shrink-0 overflow-hidden"
           >
-            <div className="h-14 border-b border-[var(--glass-border)] flex items-center px-5 shrink-0">
+            <div className="h-14 border-b border-[var(--glass-border)] flex items-center justify-between px-5 shrink-0">
               <h3 className="text-[var(--text-sm)] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
                 {activeTab}
               </h3>

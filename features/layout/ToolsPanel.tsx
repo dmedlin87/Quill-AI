@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SidebarTab, AnalysisWarning } from '@/types';
 import { ChatInterface, ActivityFeed } from '@/features/agent';
-import { Dashboard } from '@/features/analysis';
+import { Dashboard, ShadowReaderPanel } from '@/features/analysis';
 import { VoiceMode } from '@/features/voice';
 import { KnowledgeGraph, LoreManager } from '@/features/lore';
 import { MemoryManager } from '@/features/memory';
@@ -121,6 +121,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
+  // Local state for Analysis Mode (Standard vs Reader)
+  const [analysisMode, setAnalysisMode] = useState<'standard' | 'reader'>('standard');
+
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
@@ -180,6 +183,30 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
               {activeTab}
             </h3>
             <div className="flex items-center gap-2">
+              {activeTab === SidebarTab.ANALYSIS && (
+                <div className="flex bg-[var(--surface-secondary)] rounded-lg p-0.5 mr-2">
+                  <button
+                    onClick={() => setAnalysisMode('standard')}
+                    className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-all ${
+                      analysisMode === 'standard'
+                        ? 'bg-[var(--surface-elevated)] shadow-sm text-[var(--text-primary)]'
+                        : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    Analysis
+                  </button>
+                  <button
+                    onClick={() => setAnalysisMode('reader')}
+                    className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-all ${
+                      analysisMode === 'reader'
+                        ? 'bg-[var(--surface-elevated)] shadow-sm text-[var(--text-primary)]'
+                        : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    Reader
+                  </button>
+                </div>
+              )}
               {/* Expand/Collapse Button */}
               <button
                 onClick={toggleToolsPanelExpanded}
@@ -204,18 +231,22 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
           {/* Panel Content */}
           <div className="flex-1 overflow-hidden relative">
             {activeTab === SidebarTab.ANALYSIS && (
-              <Dashboard
-                isLoading={isAnalyzing}
-                analysis={analysis}
-                currentText={currentText}
-                onFixRequest={handleFixRequest}
-                warning={analysisWarning}
-                onAnalyzeSelection={onAnalyzeSelection}
-                hasSelection={hasSelection}
-                contradictions={contradictions}
-                derivedLore={derivedLore}
-                onNavigateToText={onNavigateToText}
-              />
+              analysisMode === 'reader' ? (
+                <ShadowReaderPanel />
+              ) : (
+                <Dashboard
+                  isLoading={isAnalyzing}
+                  analysis={analysis}
+                  currentText={currentText}
+                  onFixRequest={handleFixRequest}
+                  warning={analysisWarning}
+                  onAnalyzeSelection={onAnalyzeSelection}
+                  hasSelection={hasSelection}
+                  contradictions={contradictions}
+                  derivedLore={derivedLore}
+                  onNavigateToText={onNavigateToText}
+                />
+              )
             )}
 
             {activeTab === SidebarTab.CHAT && (
