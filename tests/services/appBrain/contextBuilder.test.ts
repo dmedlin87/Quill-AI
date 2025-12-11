@@ -236,6 +236,95 @@ describe('contextBuilder - buildAgentContext', () => {
   });
 });
 
+describe('contextBuilder - coverage gaps', () => {
+  it('handles alternate UI states (zen mode off, no scene, no transcript, zen off)', () => {
+     const state: AppBrainState = {
+        ...baseState,
+        manuscript: {
+           ...baseState.manuscript,
+           activeChapterId: 'non-existent', // Active chapter not found
+           activeBranchId: null, // On main
+        },
+        ui: {
+           ...baseState.ui,
+           isZenMode: false,
+           cursor: { position: 5, scene: null as any, paragraph: null as any },
+           microphone: { status: 'listening', lastTranscript: null, mode: 'voice', error: null },
+           selection: null, // No selection
+        },
+        intelligence: {
+           ...baseState.intelligence,
+           hud: {
+              ...baseState.intelligence.hud,
+              prioritizedIssues: [
+                 { id: 'i2', description: 'Med', severity: 0.5 } as any,
+                 { id: 'i3', description: 'Low', severity: 0.2 } as any
+              ],
+              situational: {
+                 ...baseState.intelligence.hud!.situational,
+                 currentScene: null, // No scene info in HUD
+              },
+              context: {
+                 activeEntities: [],
+                 activeRelationships: [],
+                 openPromises: [],
+                 recentEvents: [],
+              },
+              styleAlerts: [],
+           }
+        }
+     };
+
+     const ctx = buildAgentContext(state);
+     
+     expect(ctx).not.toContain('Active Chapter: "'); // Chapter active but not found in list?
+     expect(ctx).toContain('(on main)');
+     expect(ctx).not.toContain('(Zen Mode)');
+     expect(ctx).not.toContain('scene)'); // Cursor scene
+     expect(ctx).not.toContain('(heard:');
+     expect(ctx).toContain('Selection: None');
+     
+     expect(ctx).toContain('🟡 Med');
+     expect(ctx).toContain('🟢 Low');
+  });
+
+  it('handles partial analysis results', () => {
+     const state: AppBrainState = {
+        ...baseState,
+        analysis: {
+           ...baseState.analysis,
+           result: {
+              summary: null,
+              strengths: [],
+              weaknesses: [],
+              plotIssues: [],
+           } as any
+        }
+     };
+     
+     const ctx = buildAgentContext(state);
+     expect(ctx).not.toContain('[ANALYSIS INSIGHTS]');
+     // Section omitted because all fields are empty
+     expect(ctx).not.toContain('Summary:');
+     expect(ctx).not.toContain('Strengths:');
+  });
+
+  it('handles lore inconsistencies', () => {
+     const state: AppBrainState = {
+        ...baseState,
+        lore: {
+           ...baseState.lore,
+           characters: [
+              { name: 'Bob', bio: 'Bio', inconsistencies: ['Age mismatch'] } as any
+           ]
+        }
+     };
+     
+     const ctx = buildAgentContext(state);
+     expect(ctx).toContain('⚠️ Has 1 inconsistencies');
+  });
+});
+
 describe('contextBuilder - buildAgentContextWithMemory', () => {
   it('returns base context unchanged when projectId is null', async () => {
     const baseCtx = buildAgentContext(baseState);

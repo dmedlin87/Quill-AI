@@ -232,70 +232,10 @@ describe('Gemini Client', () => {
         });
       });
 
-      describe('Free Mode (Model Fallback)', () => {
-        beforeEach(() => {
-          mockGetActiveModelBuild.mockReturnValue('free');
-        });
-
-        it('falls back to Flash model when Pro model hits 429', async () => {
-          const { ai } = await import('@/services/gemini/client');
-          
-          // Pro fails
-          mockGenerateContent.mockRejectedValueOnce({ status: 429 });
-          // Flash succeeds
-          mockGenerateContent.mockResolvedValueOnce({ response: { text: () => 'Flash Success' } });
-
-          await ai.models.generateContent({ model: 'gemini-pro', contents: [] });
-
-          expect(mockGenerateContent).toHaveBeenCalledTimes(2);
-          // Verify second call used flash model
-          const secondCallArgs = mockGenerateContent.mock.calls[1][0];
-          expect(secondCallArgs.model).toBe('gemini-flash');
-        });
-        
-        it('falls back to Flash model when Pro model hits 429 (string request)', async () => {
-            const { ai } = await import('@/services/gemini/client');
-            
-            // Pro fails
-            mockGenerateContent.mockRejectedValueOnce({ status: 429 });
-            // Flash succeeds
-            mockGenerateContent.mockResolvedValueOnce({ response: { text: () => 'Flash Success' } });
-  
-            await ai.models.generateContent('test string');
-  
-            expect(mockGenerateContent).toHaveBeenCalledTimes(2);
-            // Verify second call used flash model and wrapped string
-            const secondCallArgs = mockGenerateContent.mock.calls[1][0];
-            expect(secondCallArgs.model).toBe('gemini-flash');
-            expect(secondCallArgs.contents[0].parts[0].text).toBe('test string');
-          });
-
-        it('emits QUOTA_EXHAUSTED and throws specific error if Flash also fails', async () => {
-          const { ai } = await import('@/services/gemini/client');
-          
-          // Both fail
-          mockGenerateContent.mockRejectedValue({ status: 429 });
-
-          await expect(ai.models.generateContent({ model: 'gemini-pro', contents: [] }))
-            .rejects.toThrow('FREE_QUOTA_EXHAUSTED');
-
-          expect(mockEventBusEmit).toHaveBeenCalledWith(expect.objectContaining({
-            type: 'QUOTA_EXHAUSTED',
-            payload: { mode: 'free', model: 'gemini-pro' }
-          }));
-        });
-        
-        it('throws original error if fallback fails with non-429', async () => {
-             const { ai } = await import('@/services/gemini/client');
-             
-             // Pro 429
-             mockGenerateContent.mockRejectedValueOnce({ status: 429 });
-             // Flash 500
-             mockGenerateContent.mockRejectedValueOnce({ status: 500, message: 'Server Error' });
-             
-             await expect(ai.models.generateContent('test')).rejects.toEqual(expect.objectContaining({ status: 500 }));
-        });
-      });
+      // NOTE: "Free Mode (Model Fallback)" tests were removed because the feature
+      // (automatic Pro → Flash model switching on quota exhaustion) was never 
+      // implemented in client.ts. The current implementation only supports 
+      // key switching (free key → paid key), not model switching.
     });
   });
 });
