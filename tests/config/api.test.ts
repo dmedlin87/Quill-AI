@@ -218,6 +218,11 @@ describe('Dual API Key Management', () => {
     });
 
     afterEach(() => {
+        delete process.env.API_KEY;
+        delete process.env.GEMINI_API_KEY;
+        delete process.env.VITE_GEMINI_API_KEY;
+        delete process.env.TEST_API_KEY_OVERRIDE;
+        
         Storage.prototype.getItem = originalGetItem;
         if (originalImportMeta) {
           (globalThis as any).import = { meta: { ...originalImportMeta } };
@@ -290,19 +295,30 @@ describe('Dual API Key Management', () => {
     });
 
     it('correctly identifies if any key is configured', () => {
-        Storage.prototype.getItem = vi.fn(() => null);
+        const mockGetItem = vi.fn(() => null);
+        Storage.prototype.getItem = mockGetItem;
+        Object.defineProperty(globalThis, 'localStorage', {
+            value: { getItem: mockGetItem },
+            writable: true,
+            configurable: true
+        });
         delete process.env.API_KEY;
         delete process.env.GEMINI_API_KEY;
         delete process.env.VITE_GEMINI_API_KEY;
+        process.env.TEST_API_KEY_OVERRIDE = ' '; // Force empty key even if real env vars exist
+        (globalThis as any).import = { meta: { env: {} } };
+        resetWarningState(); // Reset warning state to prevent warnings from previous calls
         expect(isAnyApiKeyConfigured()).toBe(false);
 
         const validKey = 'a'.repeat(30);
-        process.env.API_KEY = validKey;
+        process.env.TEST_API_KEY_OVERRIDE = validKey; // Use override to ensure isolation
         expect(isAnyApiKeyConfigured()).toBe(true);
 
         delete process.env.API_KEY;
         delete process.env.GEMINI_API_KEY;
         delete process.env.VITE_GEMINI_API_KEY;
+        process.env.TEST_API_KEY_OVERRIDE = ' '; // Force empty key even if real env vars exist
+        resetWarningState();
         Storage.prototype.getItem = vi.fn(() => JSON.stringify({ state: { freeApiKey: 'a'.repeat(25) }}));
         expect(isAnyApiKeyConfigured()).toBe(true);
     });
