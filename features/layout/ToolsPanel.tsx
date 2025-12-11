@@ -293,6 +293,28 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
                   </header>
 
                   <section>
+                    <div className="mb-4">
+                      <label className="block text-[var(--text-xs)] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                        Author Profile
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Your Pen Name"
+                        defaultValue={typeof localStorage !== 'undefined' ? localStorage.getItem('quill_author_name') || '' : ''}
+                        onChange={(e) => {
+                          if (typeof localStorage !== 'undefined') {
+                            localStorage.setItem('quill_author_name', e.target.value);
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-[var(--surface-primary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-sm)] focus:outline-none focus:ring-2 focus:ring-[var(--interactive-accent)] focus:border-transparent transition-all"
+                      />
+                      <p className="mt-1.5 text-[var(--text-xs)] text-[var(--text-tertiary)]">
+                        Used for manuscript metadata and AI interactions.
+                      </p>
+                    </div>
+                  </section>
+
+                  <section className="pt-6 border-t border-[var(--border-secondary)]">
                     <ThemeSelector />
                   </section>
 

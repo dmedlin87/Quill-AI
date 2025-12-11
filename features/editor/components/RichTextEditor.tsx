@@ -55,6 +55,7 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
   isZenMode = false
 }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(false);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const pluginsInstalledRef = useRef(false);
   const nativeSpellcheckEnabled = useSettingsStore((state) => state.nativeSpellcheckEnabled);
@@ -96,6 +97,7 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
     onBlur: () => setIsFocused(false),
     onUpdate: ({ editor }) => {
       const markdown = (editor.storage as any).markdown.getMarkdown();
+      setIsEmpty(editor.isEmpty);
       debouncedOnUpdate(markdown);
     },
     onSelectionUpdate: ({ editor }) => {
@@ -153,6 +155,8 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
   // Sync external content changes (when not focused)
   useEffect(() => {
     if (!editor || content === undefined) return;
+
+    setIsEmpty(editor.isEmpty);
 
     const rawIsFocused = (editor as any).isFocused;
     // Only treat an explicit boolean value as indicating focus. This allows
@@ -237,7 +241,13 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
             backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3Cfilter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`
           }}
         />
+
         <div className="relative z-10 p-16">
+           {isEmpty && (
+             <div className="absolute top-16 left-16 pointer-events-none text-[var(--ink-300)] font-serif italic text-lg select-none">
+                Once upon a time...
+             </div>
+           )}
            <EditorContent editor={editor} />
         </div>
     </div>

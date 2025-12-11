@@ -141,6 +141,12 @@ export const ProjectDashboard: React.FC = () => {
   
   // Form State
   const [newTitle, setNewTitle] = useState('');
+  const [authorName, setAuthorName] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('quill_author_name') || '';
+    }
+    return '';
+  });
   const [newTime, setNewTime] = useState('');
   const [newLocation, setNewLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -177,10 +183,15 @@ export const ProjectDashboard: React.FC = () => {
         location: newLocation || 'General'
     } : undefined;
 
+    const finalAuthor = authorName.trim() || 'Me';
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('quill_author_name', finalAuthor);
+    }
+
     try {
       setIsProcessing(true);
       setError(null);
-      await createProject(newTitle, 'Me', setting);
+      await createProject(newTitle, finalAuthor, setting);
       resetForm();
     } catch (err) {
       setError('Unable to create project. Please try again.');
@@ -194,10 +205,15 @@ export const ProjectDashboard: React.FC = () => {
           location: newLocation || 'General'
       } : undefined;
 
+      const finalAuthor = authorName.trim() || 'Me';
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('quill_author_name', finalAuthor);
+      }
+
       try {
         setIsProcessing(true);
         setError(null);
-        await importProject(newTitle, finalChapters, 'Me', setting);
+        await importProject(newTitle, finalChapters, finalAuthor, setting);
         resetForm();
       } catch (err) {
         setError('Unable to import draft. Please try again.');
@@ -267,6 +283,16 @@ export const ProjectDashboard: React.FC = () => {
                             autoFocus
                           />
                       </div>
+
+                      <div>
+                          <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Author Name</label>
+                          <input
+                            className="w-full bg-gray-800 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none placeholder-gray-500"
+                            placeholder="e.g. George R.R. Martin"
+                            value={authorName}
+                            onChange={e => setAuthorName(e.target.value)}
+                          />
+                      </div>
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -314,17 +340,37 @@ export const ProjectDashboard: React.FC = () => {
         <div className="max-w-5xl w-full">
           {/* Header */}
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-3 mb-4">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-indigo-400">
-                <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-              </svg>
-              <h1 className="text-4xl md:text-5xl font-serif font-bold text-white">
-                Quill AI Library
-              </h1>
-            </div>
-            <p className="text-lg text-gray-400 font-light">
-              Select a novel to continue writing or start a new masterpiece.
-            </p>
+            {projects.length === 0 ? (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-indigo-500/10 mb-6 ring-1 ring-indigo-500/30">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-indigo-400">
+                    <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/>
+                    <path d="M12 7v5l3 3"/>
+                  </svg>
+                </div>
+                <h1 className="text-5xl md:text-6xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-indigo-200 mb-4">
+                  Welcome to Quill
+                </h1>
+                <p className="text-xl text-gray-400 font-light max-w-2xl mx-auto leading-relaxed">
+                  Your intelligent creative partner awaits.<br/>
+                  <span className="text-indigo-300">Start your first project</span> to begin the journey.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="inline-flex items-center gap-3 mb-4">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-indigo-400">
+                    <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                  </svg>
+                  <h1 className="text-4xl md:text-5xl font-serif font-bold text-white">
+                    Quill AI Library
+                  </h1>
+                </div>
+                <p className="text-lg text-gray-400 font-light">
+                  Select a novel to continue writing or start a new masterpiece.
+                </p>
+              </>
+            )}
           </div>
 
           {/* Book Shelf Grid */}
