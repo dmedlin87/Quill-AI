@@ -52,6 +52,8 @@ describe('KnowledgeGraph', () => {
     vi.clearAllMocks();
     mockContext = createMockContext();
     HTMLCanvasElement.prototype.getContext = vi.fn(() => mockContext) as any;
+
+    // Default dimensions: 500x400. Center is (250, 200).
     HTMLElement.prototype.getBoundingClientRect = vi.fn(() => ({
       width: 500,
       height: 400,
@@ -66,6 +68,8 @@ describe('KnowledgeGraph', () => {
 
     vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1 as any);
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    // Mock random to return 0.5, so nodes are placed exactly at center (250, 200)
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
   });
 
@@ -151,6 +155,9 @@ describe('KnowledgeGraph', () => {
     const canvas = document.querySelector('canvas');
     expect(canvas).toBeTruthy();
 
+    await waitFor(() => expect(mockContext.fillRect).toHaveBeenCalled());
+
+    // Node is at (250, 200). Click exactly there.
     fireEvent.click(canvas as HTMLCanvasElement, { clientX: 250, clientY: 200 });
 
     await waitFor(() => expect(onSelectCharacter).toHaveBeenCalled());
@@ -181,21 +188,15 @@ describe('KnowledgeGraph', () => {
 
     const canvas = document.querySelector('canvas') as HTMLCanvasElement;
     await waitFor(() => expect(canvas).toBeInstanceOf(HTMLCanvasElement));
+    await waitFor(() => expect(mockContext.fillRect).toHaveBeenCalled());
 
-    // First click to select
+    // First click to select (250, 200)
     fireEvent.click(canvas, { clientX: 250, clientY: 200 });
     await waitFor(() => expect(onSelectCharacter).toHaveBeenCalled());
 
-    // Second click on empty space
-    // Assuming node radius is <= 30, and pos is 250,200. Click at 10,10.
+    // Second click on empty space (10, 10)
     fireEvent.click(canvas, { clientX: 10, clientY: 10 });
 
-    // Component logic: if (node) set selectedNodeRef and call onSelectCharacter
-    // else set selectedNodeRef = null.
-    // It doesn't trigger onSelectCharacter(null).
-    // So we can only verify it doesn't crash or trigger select again?
-    // Or maybe we can verify internal state via some side effect?
-    // Since we can't inspect refs easily, let's just verify it DOES NOT call onSelectCharacter again.
     onSelectCharacter.mockClear();
     fireEvent.click(canvas, { clientX: 10, clientY: 10 });
     expect(onSelectCharacter).not.toHaveBeenCalled();
@@ -224,12 +225,13 @@ describe('KnowledgeGraph', () => {
 
     const canvas = document.querySelector('canvas') as HTMLCanvasElement;
     await waitFor(() => expect(canvas).toBeInstanceOf(HTMLCanvasElement));
+    await waitFor(() => expect(mockContext.fillRect).toHaveBeenCalled());
 
-    // Mouse Down on node
-    fireEvent.mouseDown(canvas, { clientX: 400, clientY: 300 });
+    // Mouse Down on node at (250, 200)
+    fireEvent.mouseDown(canvas, { clientX: 250, clientY: 200 });
 
-    // Mouse Move
-    fireEvent.mouseMove(canvas, { clientX: 450, clientY: 350 });
+    // Mouse Move to (300, 250)
+    fireEvent.mouseMove(canvas, { clientX: 300, clientY: 250 });
 
     // Mouse Up
     fireEvent.mouseUp(canvas);
@@ -268,10 +270,13 @@ describe('KnowledgeGraph', () => {
 
     const canvas = document.querySelector('canvas') as HTMLCanvasElement;
     await waitFor(() => expect(canvas).toBeInstanceOf(HTMLCanvasElement));
+    await waitFor(() => expect(mockContext.fillRect).toHaveBeenCalled());
 
+    // Move over node at (250, 200)
     fireEvent.mouseMove(canvas, { clientX: 250, clientY: 200 });
     expect(canvas.style.cursor).toBe('pointer');
 
+    // Move away to (10, 10)
     fireEvent.mouseMove(canvas, { clientX: 10, clientY: 10 });
     expect(canvas.style.cursor).toBe('default');
   });
@@ -354,9 +359,8 @@ describe('KnowledgeGraph', () => {
   });
 
   it('deduplicates lore and chapter characters and allows selecting from combined set', async () => {
-    // vary first random call so nodes are separated spatially
-    const randomSpy = vi.spyOn(Math, 'random');
-    randomSpy.mockReturnValueOnce(0.4).mockReturnValue(0.5);
+    // Both nodes at center (250, 200)
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
 
     const loreCharacters: CharacterProfile[] = [
       {
@@ -404,12 +408,14 @@ describe('KnowledgeGraph', () => {
 
     const canvas = document.querySelector('canvas') as HTMLCanvasElement;
     await waitFor(() => expect(canvas).toBeInstanceOf(HTMLCanvasElement));
+    await waitFor(() => expect(mockContext.fillRect).toHaveBeenCalled());
 
+    // Both overlap at (250, 200). Alice is first.
     fireEvent.click(canvas, { clientX: 250, clientY: 200 });
 
     await waitFor(() => expect(onSelect).toHaveBeenCalled());
     const selected = onSelect.mock.calls[0][0] as CharacterProfile;
-    expect(['Alice', 'Bob']).toContain(selected.name);
+    expect(selected.name).toBe('Alice');
   });
 
   it('renders legend and truncates if too many items', async () => {
@@ -471,7 +477,7 @@ describe('KnowledgeGraph', () => {
     expect(removeEventListenerSpy).toHaveBeenCalledWith('mouseup', expect.any(Function));
     expect(disconnectSpy).toHaveBeenCalled();
 
-    delete globalThis.ResizeObserver;
+    delete (globalThis as any).ResizeObserver;
   });
 
   it('handles ResizeObserver instantiation failure gracefully', () => {
@@ -481,7 +487,7 @@ describe('KnowledgeGraph', () => {
         throw new Error('Not supported');
       }
     };
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Suppress potential react errors if any (though catch block swallows it)
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     mockedUseProjectStore.mockReturnValue({
       currentProject: { lore: { characters: [], worldRules: [] } },
