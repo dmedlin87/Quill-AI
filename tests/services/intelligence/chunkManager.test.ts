@@ -429,7 +429,7 @@ describe('ChunkManager processing and persistence flows', () => {
     await manager.processAllDirty();
 
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].error).toBe('Could not get chunk text');
+    expect(errors[0].error).toBe('Could not retrieve chunk text (invalid range or missing chapter)');
     expect(processManuscriptCachedMock).not.toHaveBeenCalled();
   });
 
