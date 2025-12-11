@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { render, screen, act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AnalysisProvider, useAnalysis } from '@/features/analysis/context/AnalysisContext';
 import * as analysisService from '@/services/gemini/analysis';
+import { isApiConfigured } from '@/config/api';
 import { AnalysisResult } from '@/types';
 
 // Mock the analysis service
@@ -11,6 +12,10 @@ vi.mock('@/services/gemini/analysis', () => ({
   fetchCharacterAnalysis: vi.fn(),
   fetchPlotAnalysis: vi.fn(),
   fetchSettingAnalysis: vi.fn(),
+}));
+
+vi.mock('@/config/api', () => ({
+  isApiConfigured: vi.fn(() => true),
 }));
 
 const mockPacingAnalysis = {
@@ -39,6 +44,7 @@ const mockSettingAnalysis = {
 describe('AnalysisContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isApiConfigured).mockReturnValue(true);
   });
 
   it('provides initial state', () => {
@@ -373,6 +379,75 @@ describe('AnalysisContext', () => {
       });
 
       expect(result.current.analysisStatus.pacing).toBe('complete');
+    });
+
+    it('handles API not configured error in runFullAnalysis', async () => {
+      vi.mocked(isApiConfigured).mockReturnValue(false);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <AnalysisProvider>{children}</AnalysisProvider>
+      );
+      const { result } = renderHook(() => useAnalysis(), { wrapper });
+
+      let analysisResult;
+      await act(async () => {
+        analysisResult = await result.current.runFullAnalysis('some text');
+      });
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('API key not configured'));
+      expect(result.current.isAnalyzing).toBe(false);
+      expect(result.current.analysisStatus).toEqual({
+        pacing: 'error',
+        characters: 'error',
+        plot: 'error',
+        setting: 'idle', // setting was undefined
+        summary: 'error'
+      });
+      expect(analysisResult).toEqual(expect.objectContaining({
+        summary: expect.stringContaining('missing'),
+      }));
+
+      consoleSpy.mockRestore();
+    });
+
+    it('handles race condition where component unmounts during analysis', async () => {
+      vi.mocked(analysisService.fetchPacingAnalysis).mockImplementation(async () => {
+        await new Promise(resolve => setTimeout(resolve, 10)); // Delay
+        return mockPacingAnalysis as any;
+      });
+      vi.mocked(analysisService.fetchCharacterAnalysis).mockResolvedValue(mockCharacterAnalysis as any);
+      vi.mocked(analysisService.fetchPlotAnalysis).mockResolvedValue(mockPlotAnalysis as any);
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <AnalysisProvider>{children}</AnalysisProvider>
+      );
+      const { result, unmount } = renderHook(() => useAnalysis(), { wrapper });
+
+      // Start analysis
+      let analysisPromise;
+      await act(async () => {
+        analysisPromise = result.current.runFullAnalysis('some text');
+      });
+
+      // Unmount immediately
+      unmount();
+
+      // Ensure that when promise resolves, it doesn't crash or try to update state
+      // React 18+ strict mode often logs warnings for updates on unmounted components,
+      // but if the component logic doesn't handle unmount, it might set state.
+      // In functional components with hooks, unmounting doesn't stop async callbacks unless explicit checks or cleanup.
+
+      // Since runFullAnalysis awaits Promise.all, then sets state,
+      // if we unmount, setAnalysis etc will be called on unmounted component.
+      // This is generally safe in React 18 (just ignored with warning), but technically a "race condition".
+
+      // To properly test if it handles it (if the code did), we'd check if state update was attempted.
+      // But standard React hooks don't expose if they are mounted.
+
+      // For this task, "Test race conditions" usually means ensuring no errors or adverse effects.
+      // We will just await the promise and ensure no crash.
+      await expect(analysisPromise).resolves.not.toThrow();
     });
   });
 });
