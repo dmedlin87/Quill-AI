@@ -79,9 +79,11 @@ interface ChatInterfaceProps {
   /** Optional precomputed voice fingerprint from intelligence layer */
   voiceFingerprint?: VoiceFingerprint;
 
+  /** Maximum number of messages to keep in history */
+  maxMessages?: number;
 }
 
-const MAX_CHAT_MESSAGES = 200;
+const DEFAULT_MAX_MESSAGES = 200;
 const MAX_FULL_MANUSCRIPT_CHARS = ApiDefaults.maxAnalysisLength;
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
@@ -111,6 +113,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   projectId,
 
   voiceFingerprint,
+
+  maxMessages = DEFAULT_MAX_MESSAGES,
 
 }) => {
 
@@ -266,14 +270,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (
       initialMessage &&
       !initialMessageSentRef.current &&
-      chatRef.current &&
       !isLoading
     ) {
       initialMessageSentRef.current = true;
       setInput(initialMessage);
-      if (initialMessageTimerRef.current) {
-        clearTimeout(initialMessageTimerRef.current);
-      }
+      // Timer will be null here as we only enter this block once
       initialMessageTimerRef.current = setTimeout(() => {
         sendMessageWithText(initialMessage);
         onInitialMessageProcessed?.();
@@ -311,15 +312,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, agentState]);
 
   // Cap message history length to avoid unbounded DOM and memory growth
   useEffect(() => {
-    if (messages.length > MAX_CHAT_MESSAGES) {
-      setMessages(prev => prev.slice(-MAX_CHAT_MESSAGES));
+    if (messages.length > maxMessages) {
+      setMessages(prev => prev.slice(-maxMessages));
     }
-  }, [messages]);
+  }, [messages, maxMessages]);
 
   useEffect(() => {
     return () => {
@@ -640,7 +643,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </motion.div>
           )}
         </AnimatePresence>
-        <div ref={messagesEndRef} />
+        {messages.length > 0 && <div ref={messagesEndRef} />}
       </div>
 
       <div className="p-4 border-t border-[var(--border-secondary)] bg-[var(--surface-primary)]">
