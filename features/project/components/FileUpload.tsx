@@ -6,6 +6,9 @@ interface FileUploadProps {
   recentFiles?: RecentFile[];
 }
 
+// 10MB limit to prevent browser crash/DoS
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
 export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFiles = [] }) => {
 
   const [pastedText, setPastedText] = useState('');
@@ -15,6 +18,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
     if (!file) return;
 
     try {
+      if (file.size > MAX_FILE_SIZE) {
+        alert("File too large. Please upload a file smaller than 10MB.");
+        event.target.value = '';
+        return;
+      }
+
       if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
         const text = await file.text();
         onTextLoaded(text, file.name);
@@ -34,7 +43,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
         {/* Header */}
         <div className="text-center">
             <h3 className="text-2xl font-serif font-bold text-gray-900">Upload Manuscript</h3>
-            <p className="text-gray-500 mt-2 text-sm">Supported formats: .txt, .md</p>
+            <p className="text-gray-500 mt-2 text-sm">Supported formats: .txt, .md (Max 10MB)</p>
         </div>
 
         {/* Upload Box */}
@@ -46,7 +55,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
                     </svg>
                 </div>
                 <p className="mb-1 text-sm text-gray-700 font-medium">Click to upload draft</p>
-                <p className="text-xs text-gray-400">TXT, MD</p>
+                <p className="text-xs text-gray-400">TXT, MD (Max 10MB)</p>
             </div>
             <input 
                 type="file" 
