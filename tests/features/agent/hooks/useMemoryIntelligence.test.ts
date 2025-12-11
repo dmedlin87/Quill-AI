@@ -111,6 +111,39 @@ describe('useMemoryIntelligence', () => {
         expect(result.current.lastObservation).toBeDefined();
     });
 
+    it('handles Bedside Note serialization failure during analysis observation', async () => {
+        // serializeBedsideNote returns null if content invalid
+        (serializeBedsideNote as any).mockReturnValue({ text: '' });
+
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
+        const mockAnalysis = { summary: 'Sum' } as any;
+
+        await act(async () => {
+            await result.current.observeAnalysis(mockAnalysis);
+        });
+
+        expect(observeAnalysisResults).toHaveBeenCalled();
+        // Since text is empty, buildBedsidePlan returns null, so evolveBedsideNote is NOT called
+        expect(evolveBedsideNote).not.toHaveBeenCalled();
+    });
+
+    it('handles errors when evolving bedside note', async () => {
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        (evolveBedsideNote as any).mockRejectedValue(new Error('Evolve failed'));
+
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
+        const mockAnalysis = { summary: 'Sum' } as any;
+
+        await act(async () => {
+            await result.current.observeAnalysis(mockAnalysis);
+        });
+
+        // It should catch the error and log a warning
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to evolve'), expect.any(Error));
+        expect(result.current.isObserving).toBe(false); // Should clear loading state
+        consoleSpy.mockRestore();
+    });
+
     it('observes intelligence results', async () => {
         const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
 
@@ -151,9 +184,10 @@ describe('useMemoryIntelligence', () => {
          });
 
          await p1;
-         await p2;
+         const res2 = await p2;
 
          expect(runConsolidation).toHaveBeenCalledTimes(1);
+         expect(res2.errors).toContain('Consolidation already in progress');
     });
 
     it('reinforces used memory', async () => {
@@ -186,6 +220,20 @@ describe('useMemoryIntelligence', () => {
 
         expect(getMemoryHealthStats).toHaveBeenCalled();
         expect(result.current.healthStats?.totalMemories).toBe(10);
+    });
+
+    it('handles error when refreshing health stats', async () => {
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        (getMemoryHealthStats as any).mockRejectedValue(new Error('Stats failed'));
+
+        const { result } = renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
+
+        await act(async () => {
+             await result.current.refreshHealthStats();
+        });
+
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to get health stats'), expect.any(Error));
+        consoleSpy.mockRestore();
     });
 
     it('returns an error when observing intelligence with no project ID', async () => {
@@ -254,5 +302,45 @@ describe('useMemoryIntelligence', () => {
 
         expect(clearSpy).toHaveBeenCalled();
         clearSpy.mockRestore();
+    });
+
+    it('responds to ANALYSIS_COMPLETED events', async () => {
+        const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        let callback: (event: any) => void = () => {};
+
+        (eventBus.subscribe as any).mockImplementation((event: string, cb: any) => {
+            if (event === 'ANALYSIS_COMPLETED') {
+                callback = cb;
+            }
+            return vi.fn();
+        });
+
+        renderHook(() => useMemoryIntelligence({ projectId: mockProjectId }));
+
+        await act(async () => {
+            callback({ type: 'ANALYSIS_COMPLETED', payload: 'Section' });
+        });
+
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Analysis completed'), 'Section');
+        consoleSpy.mockRestore();
+    });
+
+    it('does not respond to ANALYSIS_COMPLETED if autoObserve is disabled', async () => {
+        let callback: (event: any) => void = () => {};
+
+        (eventBus.subscribe as any).mockImplementation((event: string, cb: any) => {
+            if (event === 'ANALYSIS_COMPLETED') {
+                callback = cb;
+            }
+            return vi.fn();
+        });
+
+        renderHook(() => useMemoryIntelligence({ projectId: mockProjectId, autoObserveEnabled: false }));
+
+        // The hook returns early if not enabled, so subscription might not even happen.
+        // But if it does (e.g. implementation details), callback shouldn't fire logic.
+        // Actually the implementation doesn't subscribe if autoObserveEnabled is false.
+
+        expect(eventBus.subscribe).not.toHaveBeenCalledWith('ANALYSIS_COMPLETED', expect.any(Function));
     });
 });
