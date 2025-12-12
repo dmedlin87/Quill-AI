@@ -146,12 +146,11 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
     event.preventDefault();
     setError(null);
 
-    /* v8 ignore start */
+    // v8 ignore next 4
     if (memoryForm.scope === 'project' && !projectId) {
       setError('Select a project to save project-scoped memories.');
       return;
     }
-    /* v8 ignore stop */
 
     const sanitizedText = memoryForm.text.trim();
     if (!sanitizedText) {
@@ -214,12 +213,11 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
   const handleGoalSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    /* v8 ignore start */
+    // v8 ignore next 4
     if (!projectId) {
       setError('Select a project to manage goals.');
       return;
     }
-    /* v8 ignore stop */
 
     const payload: CreateGoalInput = {
       projectId,
@@ -268,12 +266,11 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
   const handleEntitySubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    /* v8 ignore start */
+    // v8 ignore next 4
     if (!projectId) {
       setError('Select a project to watch entities.');
       return;
     }
-    /* v8 ignore stop */
 
     const payload: Omit<WatchedEntity, 'id' | 'createdAt'> = {
       projectId,
@@ -327,11 +324,10 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ projectId }) => {
   }, [refreshData]);
 
   useEffect(() => {
-    /* v8 ignore start */
+    // v8 ignore next 3
     if (entityForm.monitoringEnabled === undefined) {
       setEntityForm((prev) => ({ ...prev, monitoringEnabled: true }));
     }
-    /* v8 ignore stop */
   }, [entityForm.monitoringEnabled]);
 
   if (projectGuard) {
