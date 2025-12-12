@@ -1,5 +1,3 @@
-# Palette's Journal
-
-## 2024-05-22 - Initial Setup
-**Learning:** This is the first entry.
-**Action:** Will document critical UX/a11y learnings here.
+## 2024-12-12 - Form Accessibility Patterns
+**Learning:** Adding explicit visual indicators for required fields (like a red asterisk) is better than relying on the browser's default validation UI or `required` attribute alone, as it sets expectations before interaction. Also, using `aria-describedby` to link helper text to inputs is crucial for screen readers, as the "placeholder" attribute is often not announced or confused with the label.
+**Action:** In future form components, always include a `helperText` prop and a `required` visual indicator prop/check, and ensure they are programmatically associated with the input.
