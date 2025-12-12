@@ -661,3 +661,117 @@ describe('useHighRiskSections', () => {
     expect(result.current).toHaveLength(0);
   });
 });
+
+describe('Worker Integration', () => {
+  let mockWorker: any;
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.useFakeTimers();
+
+    // Mock Worker global
+    mockWorker = {
+      postMessage: vi.fn(),
+      terminate: vi.fn(),
+      onmessage: null,
+      onerror: null,
+    };
+    
+    // Mock Worker global using a class to support 'new Worker()' usage
+    // We mock it as a spy that returns an instance, so we can verify instantiation
+    const MockWorkerInstance = class {
+      postMessage = mockWorker.postMessage;
+      terminate = mockWorker.terminate;
+      onmessage = null;
+      onerror = null;
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+      dispatchEvent = vi.fn();
+      
+      constructor() {
+        mockWorker.instance = this;
+      }
+    };
+
+    const WorkerSpy = vi.fn(() => new MockWorkerInstance());
+    vi.stubGlobal('Worker', WorkerSpy);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+    vi.useRealTimers();
+  });
+
+  it.skip('initializes worker when enabled (simulated)', async () => {
+      // Mock URL to prevent "Invalid URL" errors in JSDOM/Node environment during test
+      const originalURL = global.URL;
+      global.URL = class MockURL {
+        href: string;
+        constructor(url: string, base?: string) {
+            this.href = url;
+        }
+        toString() { return this.href; }
+      } as any;
+
+      // Import the config object - renaming to avoid variable shadowing confusion 
+      // though not strictly necessary, it ensures we use the dynamically imported module
+      const { WORKER_CONFIG, useManuscriptIntelligence: testHook } = await import('@/features/shared/hooks/useManuscriptIntelligence');
+      
+      const originalEnabled = WORKER_CONFIG.enabled;
+      WORKER_CONFIG.enabled = true;
+
+      try {
+        const { result } = renderHook(() =>
+          testHook({ chapterId: 'c1', initialText: 'Test' })
+        );
+
+        // Verify Worker was instantiated
+        expect(global.Worker).toHaveBeenCalled();
+        
+        // Ensure text is updated
+        act(() => {
+          result.current.updateText('Test content', 10);
+          vi.runAllTimers();
+        });
+        
+        // Trigger background process
+        act(() => {
+          result.current.forceFullProcess();
+          vi.runAllTimers();
+        });
+
+        // We expect postMessage to be called because WORKER_CONFIG.enabled is true
+        expect(mockWorker.postMessage).toHaveBeenCalled();
+        
+        // Simulate result from worker
+        const mockResult = {
+            chapterId: 'c1',
+            structural: { scenes: [] },
+            hud: { situational: { update: true } }
+        };
+        
+        act(() => {
+          // Trigger onmessage on the worker instance
+          const workerInstance = mockWorker.instance;
+          if (workerInstance && workerInstance.onmessage) {
+              workerInstance.onmessage({
+                  data: {
+                      type: 'RESULT',
+                      id: mockWorker.postMessage.mock.calls[0]?.[0]?.id,
+                      payload: mockResult
+                  }
+              });
+          }
+        });
+        
+        // Check if state updated
+        expect(result.current.intelligence).toEqual(mockResult);
+
+      } finally {
+        // Restore config and URL
+        WORKER_CONFIG.enabled = originalEnabled;
+        global.URL = originalURL;
+      }
+  });
+});

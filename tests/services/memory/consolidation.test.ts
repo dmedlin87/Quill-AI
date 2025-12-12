@@ -33,6 +33,7 @@ import {
   reinforceMemories,
   runConsolidation,
   getMemoryHealthStats,
+  archiveOldGoals,
 } from '@/services/memory/consolidation';
 import { getMemories, getMemoriesForConsolidation, countProjectMemories, updateMemory, deleteMemory } from '@/services/memory/index';
 import { db } from '@/services/db';
@@ -110,9 +111,82 @@ describe('Memory Consolidation', () => {
       expect(result.decayed).toBe(1);
       expect(updateMemory).not.toHaveBeenCalled();
     });
+    it('recovers from update errors during decay', async () => {
+      vi.mocked(getMemoriesForConsolidation).mockResolvedValue([
+        { id: 'm1', importance: 0.8, createdAt: oneWeekAgo, text: 't', type: 'fact', scope: 'project', projectId: mockProjectId, topicTags: [] }
+      ]);
+      vi.mocked(updateMemory).mockRejectedValue(new Error('Update Failed'));
+
+      const result = await applyImportanceDecay({ projectId: mockProjectId });
+      
+      expect(result.decayed).toBe(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('Update Failed');
+    });
+    it('skips update if importance change is insignificant', async () => {
+       const mem = { id: 'm1', importance: 0.8, createdAt: now - (1000 * 60 * 60 * 24), text: 't', type: 'fact', scope: 'project', projectId: mockProjectId, topicTags: [] } as any;
+       // 1 day old. Default decay 0.02.
+       // New importance = 0.78. Change 0.02 > 0.01.
+       
+       // Let's create a case where decay is TINY.
+       // Age = decayStartDays + 0.1 days.
+       // daysOld = floor(0.1) = 0. Decay = 0.
+       // diff = 0. Skip.
+       
+       // Or simpler: importance is already at floor.
+       // Or importance change is < 0.01.
+       
+       // Let's mock decay rate to be super small.
+       vi.mocked(getMemoriesForConsolidation).mockResolvedValue([mem]);
+       
+       const result = await applyImportanceDecay({ projectId: mockProjectId, decayRate: 0.001, decayStartDays: 0 });
+       // Age 1 day. daysOld = 1. decay = 0.001. Diff 0.001 < 0.01. 
+       
+       expect(result.decayed).toBe(0);
+       expect(updateMemory).not.toHaveBeenCalled();
+    });
   });
 
   describe('mergeSimilarMemories', () => {
+    it('appends text if similarity is high but not almost exact', async () => {
+       const mem1 = { id: 'm1', text: 'This is a long memory text about consolidation', type: 'fact', projectId: mockProjectId, topicTags: ['tag'], importance: 0.8 } as any;
+       const mem2 = { id: 'm2', text: 'This is a long memory text about consolidation process', type: 'fact', projectId: mockProjectId, topicTags: ['tag'], importance: 0.7 } as any;
+       // Similarity should be > mergeThreshold (0.7) but < 0.9
+       
+       vi.mocked(getMemories).mockResolvedValue([mem1, mem2]);
+       vi.mocked(updateMemory).mockResolvedValue(mem1);
+
+       await mergeSimilarMemories({ projectId: mockProjectId, mergeThreshold: 0.7 });
+
+       const updateCall = vi.mocked(updateMemory).mock.calls[0];
+       const updatedText = updateCall[1].text;
+       expect(updatedText).toContain('[Merged:');
+    });
+    
+    it('skips merge if tags do not overlap significantly', async () => {
+       const mem1 = { id: 'm1', text: 'Same text', type: 'fact', projectId: mockProjectId, topicTags: ['tag1', 'tag2'], importance: 0.8 } as any;
+       const mem2 = { id: 'm2', text: 'Same text', type: 'fact', projectId: mockProjectId, topicTags: ['tag9', 'tag8'], importance: 0.8 } as any;
+       // Disjoint tags -> no candidate due to tag index or overlap check
+       
+       vi.mocked(getMemories).mockResolvedValue([mem1, mem2]);
+       
+       const result = await mergeSimilarMemories({ projectId: mockProjectId });
+       expect(result.merged).toBe(0);
+    });
+
+    it('handles empty text gracefully (100% similarity)', async () => {
+       const mem1 = { id: 'm1', text: '', type: 'fact', projectId: mockProjectId, topicTags: ['tag'], importance: 0.8 } as any;
+       const mem2 = { id: 'm2', text: '', type: 'fact', projectId: mockProjectId, topicTags: ['tag'], importance: 0.7 } as any;
+       
+       vi.mocked(getMemories).mockResolvedValue([mem1, mem2]);
+       vi.mocked(updateMemory).mockResolvedValue(mem1);
+       
+       const result = await mergeSimilarMemories({ projectId: mockProjectId });
+       expect(result.merged).toBe(1);
+    });
+    
+    // ... existing merge tests ...
+
     it('merges similar memories with high text overlap', async () => {
       const memory1 = {
         id: 'mem-1',
@@ -275,6 +349,30 @@ describe('Memory Consolidation', () => {
       expect(result.archived).toBe(0);
       expect(deleteMemory).not.toHaveBeenCalled();
     });
+
+    it('handles delete errors gracefully', async () => {
+      vi.mocked(getMemoriesForConsolidation).mockResolvedValue([
+        { id: 'm1', importance: 0.05, createdAt: oneWeekAgo, text: 't', type: 'fact', scope: 'project', projectId: mockProjectId, topicTags: [] }
+      ]);
+      vi.mocked(deleteMemory).mockRejectedValue(new Error('Delete Fail'));
+
+      const result = await archiveStaleMemories({ projectId: mockProjectId });
+      
+      expect(result.archived).toBe(0);
+      expect(result.errors).toHaveLength(1);
+    });
+  });
+
+  describe('Jaccard Similarity Edge Cases (via merge)', () => {
+    it('handles one empty text (0 similarity)', async () => {
+       const mem1 = { id: 'm1', text: '', type: 'fact', projectId: mockProjectId, topicTags: ['tag'], importance: 0.8 } as any;
+       const mem2 = { id: 'm2', text: 'Full text', type: 'fact', projectId: mockProjectId, topicTags: ['tag'], importance: 0.7 } as any;
+       
+       vi.mocked(getMemories).mockResolvedValue([mem1, mem2]);
+       
+       const result = await mergeSimilarMemories({ projectId: mockProjectId, mergeThreshold: 0.1 });
+       expect(result.merged).toBe(0); // Similarity 0 < 0.1
+    });
   });
 
   describe('reinforceMemory', () => {
@@ -343,15 +441,16 @@ describe('Memory Consolidation', () => {
         importance: 1, // Capped at 1
       }));
     });
+    it('handles database errors gracefully', async () => {
+      vi.mocked(db.memories.get).mockRejectedValue(new Error('DB Fail'));
+      const success = await reinforceMemory({ memoryId: 'm1', reason: 'manual' });
+      expect(success).toBe(false);
+    });
   });
 
   describe('reinforceMemories', () => {
     it('reinforces multiple memories', async () => {
-      const memory = {
-        id: 'mem-1',
-        importance: 0.5,
-      };
-
+      const memory = { id: 'mem-1', importance: 0.5 };
       vi.mocked(db.memories.get).mockResolvedValue(memory as any);
       vi.mocked(updateMemory).mockResolvedValue(memory as any);
 
@@ -362,6 +461,22 @@ describe('Memory Consolidation', () => {
 
       expect(result.reinforced).toBe(2);
       expect(result.failed).toBe(0);
+    });
+
+    it('counts failures correctly', async () => {
+       // Mock first success, second failure (undefined memory)
+       vi.mocked(db.memories.get)
+         .mockResolvedValueOnce({ id: 'm1', importance: 0.5 } as any)
+         .mockResolvedValueOnce(undefined);
+       vi.mocked(updateMemory).mockResolvedValue({} as any);
+
+       const result = await reinforceMemories([
+         { memoryId: 'm1', reason: 'manual' },
+         { memoryId: 'm2', reason: 'manual' }
+       ]);
+       
+       expect(result.reinforced).toBe(1);
+       expect(result.failed).toBe(1);
     });
   });
 
@@ -377,6 +492,58 @@ describe('Memory Consolidation', () => {
       expect(result).toHaveProperty('archived');
       expect(result).toHaveProperty('duration');
       expect(result.duration).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('archiveOldGoals', () => {
+    it('archives completed or abandoned goals older than threshold', async () => {
+      const oldDate = now - (31 * 24 * 60 * 60 * 1000); // 31 days ago
+      const recentDate = now - (10 * 24 * 60 * 60 * 1000); // 10 days ago
+
+      const goals = [
+        { id: 'g1', status: 'completed', createdAt: oldDate, projectId: mockProjectId }, // Should archive
+        { id: 'g2', status: 'abandoned', createdAt: oldDate, projectId: mockProjectId }, // Should archive
+        { id: 'g3', status: 'active', createdAt: oldDate, projectId: mockProjectId },    // Should keep (active)
+        { id: 'g4', status: 'completed', createdAt: recentDate, projectId: mockProjectId }, // Should keep (recent)
+      ];
+
+      // Mock chain: where -> equals -> filter -> toArray
+      const mockFilter = vi.fn().mockImplementation((predicate) => {
+        const filtered = goals.filter(predicate);
+        return {
+          toArray: vi.fn().mockResolvedValue(filtered)
+        };
+      });
+
+      vi.mocked(db.goals.where).mockReturnValue({
+        equals: vi.fn().mockReturnValue({
+          filter: mockFilter
+        })
+      } as any);
+
+      const result = await archiveOldGoals(mockProjectId, { maxAgeDays: 30 });
+
+      expect(result.archived).toBe(2);
+      expect(db.goals.bulkDelete).toHaveBeenCalledWith(['g1', 'g2']);
+    });
+
+    it('respects dryRun mode', async () => {
+        const oldDate = now - (31 * 24 * 60 * 60 * 1000);
+        const goals = [{ id: 'g1', status: 'completed', createdAt: oldDate, projectId: mockProjectId }];
+        
+        // Setup mock to return this goal
+        vi.mocked(db.goals.where).mockReturnValue({
+            equals: vi.fn().mockReturnValue({
+              filter: vi.fn().mockReturnValue({
+                toArray: vi.fn().mockResolvedValue(goals)
+              })
+            })
+        } as any);
+
+        const result = await archiveOldGoals(mockProjectId, { maxAgeDays: 30, dryRun: true });
+
+        expect(result.archived).toBe(1);
+        expect(db.goals.bulkDelete).not.toHaveBeenCalled();
     });
   });
 
@@ -423,6 +590,54 @@ describe('Memory Consolidation', () => {
       expect(stats.lowImportanceCount).toBe(1);
       expect(stats.activeGoals).toBe(1);
       expect(stats.completedGoals).toBe(1);
+    });
+
+    it('handles empty memory set gracefully', async () => {
+        vi.mocked(countProjectMemories).mockResolvedValue(0);
+        vi.mocked(getMemories).mockResolvedValue([]);
+        vi.mocked(db.goals.where).mockReturnValue({
+            equals: vi.fn().mockReturnValue({
+                toArray: vi.fn().mockResolvedValue([])
+            })
+        } as any);
+
+        const stats = await getMemoryHealthStats(mockProjectId);
+        
+        expect(stats.totalMemories).toBe(0);
+        expect(stats.avgImportance).toBe(0);
+        expect(stats.oldMemoriesCount).toBe(0);
+    });
+
+    it('extrapolates stats from sample for large datasets', async () => {
+        vi.mocked(countProjectMemories).mockResolvedValue(1000); // Total
+        // Sample says: 50 items returned (5% sample). 
+        // 10 are low importance. 5 are old.
+        // Expect extrapolation: low = 200, old = 100.
+        
+        const sampleMemories = Array.from({ length: 50 }, (_, i) => ({
+            id: `mem-${i}`,
+            importance: i < 10 ? 0.1 : 0.8, // 10 low importance
+            createdAt: i < 5 ? (now - 100 * 24 * 3600 * 1000) : now, // 5 old
+            text: 'sample',
+            type: 'observation',
+            scope: 'project',
+            topicTags: [],
+            projectId: mockProjectId
+        }));
+
+        vi.mocked(getMemories).mockResolvedValue(sampleMemories as any);
+        vi.mocked(db.goals.where).mockReturnValue({
+            equals: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) })
+        } as any);
+
+        const stats = await getMemoryHealthStats(mockProjectId);
+        
+        expect(stats.totalMemories).toBe(1000);
+        // Sample ratio = 1000 / 50 = 20
+        // Low: 10 * 20 = 200
+        expect(stats.lowImportanceCount).toBe(200);
+        // Old: 5 * 20 = 100
+        expect(stats.oldMemoriesCount).toBe(100);
     });
   });
 });

@@ -1,9 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { eventBus, emitChapterChanged, startAppBrainEventObserver } from '@/services/appBrain';
+import { eventBus, emitChapterChanged, startAppBrainEventObserver, emitTextChanged } from '@/services/appBrain';
 import { evolveBedsideNote } from '@/services/memory';
+import { eventObserverLogger } from '@/services/appBrain/logger';
+import { startSignificantEditMonitor, getSignificantEditMonitor } from '@/services/appBrain/significantEditMonitor';
+import { startDreamingService, stopDreamingService } from '@/services/appBrain/dreamingService';
 
 vi.mock('@/services/memory', () => ({
   evolveBedsideNote: vi.fn(),
+}));
+
+vi.mock('@/services/appBrain/logger', () => ({
+  eventObserverLogger: { warn: vi.fn() },
+}));
+
+vi.mock('@/services/appBrain/significantEditMonitor', () => ({
+  startSignificantEditMonitor: vi.fn(),
+  getSignificantEditMonitor: vi.fn(() => ({ handleTextChanged: vi.fn() })),
 }));
 
 vi.mock('@/services/appBrain/dreamingService', () => ({
@@ -47,5 +59,67 @@ describe('AppBrain event observer', () => {
 
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(vi.mocked(evolveBedsideNote)).not.toHaveBeenCalled();
+  });
+
+  it('handles formatting edge cases and filters invalid items', async () => {
+    emitChapterChanged('proj-1', 'chap-3', 'Edge Case', {
+      issues: [
+        { description: 'Plain issue missing severity' }, 
+        { description: '' } as any 
+      ],
+      watchedEntities: [
+        { name: 'Bob', reason: '' },
+        { name: '' } as any
+      ],
+    });
+
+    await vi.waitFor(() => expect(vi.mocked(evolveBedsideNote)).toHaveBeenCalledTimes(1));
+
+    const [, noteText] = vi.mocked(evolveBedsideNote).mock.calls[0];
+    expect(noteText).toContain('- Plain issue missing severity');
+    expect(noteText).not.toContain('undefined');
+    expect(noteText).toContain('- Bob');
+    const lines = noteText.split('\n');
+    expect(lines.filter(l => l.trim().startsWith('-')).length).toBe(2);
+  });
+
+  it('limits reminders to 5 items', async () => {
+    const issues = Array.from({ length: 6 }, (_, i) => ({ description: `Issue ${i}`, severity: 'info' } as const));
+    emitChapterChanged('proj-1', 'chap-4', 'Limit Test', { issues });
+
+    await vi.waitFor(() => expect(vi.mocked(evolveBedsideNote)).toHaveBeenCalledTimes(1));
+
+    const [, noteText] = vi.mocked(evolveBedsideNote).mock.calls[0];
+    expect(noteText).toContain('Issue 4');
+    expect(noteText).not.toContain('Issue 5');
+  });
+
+  it('logs warning when bedside note evolution fails', async () => {
+    const error = new Error('API Error');
+    vi.mocked(evolveBedsideNote).mockRejectedValueOnce(error);
+
+    emitChapterChanged('proj-1', 'chap-5', 'Error Test', {
+      issues: [{ description: 'Test' }]
+    });
+
+    await vi.waitFor(() => expect(eventObserverLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to evolve'),
+      expect.objectContaining({ error })
+    ));
+  });
+
+  it('manages service lifecycle on events', async () => {
+    emitChapterChanged('proj-1', 'chap-6', 'Lifecycle', {});
+    expect(startSignificantEditMonitor).toHaveBeenCalledWith('proj-1');
+    expect(startDreamingService).toHaveBeenCalled();
+
+    const mockMonitor = { handleTextChanged: vi.fn() };
+    vi.mocked(getSignificantEditMonitor).mockReturnValue(mockMonitor as any);
+    
+    emitTextChanged(100, 5); // length, delta
+    expect(getSignificantEditMonitor).toHaveBeenCalled();
+    expect(mockMonitor.handleTextChanged).toHaveBeenCalled();
+    
+    /* Stop observer handling is tested implicitly via afterEach calling stopObserver */
   });
 });

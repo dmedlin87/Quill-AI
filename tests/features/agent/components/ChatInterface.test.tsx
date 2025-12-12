@@ -284,6 +284,25 @@ describe('ChatInterface', () => {
     await waitFor(() => {
       expect(screen.getByText('Action complete.')).toBeInTheDocument();
     }, { timeout: 3000 });
+
+    // Verify the tool result payload sent back to the agent
+    const calls = mockSendMessage.mock.calls;
+    const toolResponseCall = calls.find(call =>
+      call[0].message &&
+      Array.isArray(call[0].message) &&
+      call[0].message[0].functionResponse
+    );
+
+    expect(toolResponseCall).toBeDefined();
+    expect(toolResponseCall![0]).toEqual({
+      message: [{
+        functionResponse: {
+          id: 'call1',
+          name: 'edit_text',
+          response: { result: 'Action executed successfully' }
+        }
+      }]
+    });
   });
 
   it('handles tool call errors gracefully', async () => {
@@ -379,12 +398,21 @@ describe('ChatInterface', () => {
 
     await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
 
+    // Clear constructor mock to check for re-initialization
+    mockAgentConstructor.mockClear();
+
     const deepButton = screen.getByRole('button', { name: /Deep/ });
     await act(async () => {
         fireEvent.click(deepButton);
     });
 
     expect(deepButton).toHaveTextContent('Deep On');
+
+    await waitFor(() => {
+      expect(mockAgentConstructor).toHaveBeenCalledWith(expect.objectContaining({
+        deepAnalysis: true,
+      }));
+    });
 
     const input = screen.getByPlaceholderText(/Type \/ to use tools/);
     fireEvent.change(input, { target: { value: 'Test deep mode' } });
@@ -445,6 +473,11 @@ describe('ChatInterface', () => {
     );
 
     await waitFor(() => expect(mockInitialize).toHaveBeenCalled());
+
+    // Verify constructor was called with interviewTarget
+    expect(mockAgentConstructor).toHaveBeenCalledWith(expect.objectContaining({
+      interviewTarget: interviewTarget,
+    }));
 
     expect(screen.getByText('Sherlock')).toBeInTheDocument();
     expect(screen.getByText('Roleplay Active')).toBeInTheDocument();
