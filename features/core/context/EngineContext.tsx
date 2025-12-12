@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { useEditor } from './EditorContext';
+import { AgentActionHandler } from '@/types/agent';
 
 import { useProjectStore } from '@/features/project';
 import { useQuillAIEngine, type PendingDiff } from '@/features/shared/hooks/useDraftSmithEngine';
@@ -86,7 +87,7 @@ export interface EngineActions {
   applyGrammarSuggestion: (id?: string | null) => void;
   applyAllGrammarSuggestions: () => void;
   dismissGrammarSuggestion: (id: string) => void;
-  handleAgentAction: (action: string, params: any) => Promise<string>;
+  handleAgentAction: AgentActionHandler;
   acceptDiff: () => void;
   rejectDiff: () => void;
 }

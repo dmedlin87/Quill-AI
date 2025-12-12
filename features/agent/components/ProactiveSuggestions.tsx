@@ -54,6 +54,11 @@ const typeIcons: Record<ProactiveSuggestion['type'], string> = {
   lore_discovery: '📖',
   timeline_conflict: '⏳',
   voice_inconsistency: '🎙️',
+  plot: '📝',
+  character: '👤',
+  pacing: '⏱️',
+  style: '🎨',
+  continuity: '🔄',
 };
 
 const priorityColors: Record<ProactiveSuggestion['priority'], string> = {
@@ -67,6 +72,28 @@ const priorityDots: Record<ProactiveSuggestion['priority'], string> = {
   medium: 'bg-amber-500',
   low: 'bg-blue-500',
 };
+
+// Define specific metadata interfaces
+interface VoiceInconsistencyMetadata {
+  speaker: string;
+  historicImpression: string;
+  currentImpression: string;
+  diffs: Array<{ label: string; current: number; historic: number }>;
+}
+
+interface TimelineConflictMetadata {
+  previousMarker: string;
+  currentMarker: string;
+}
+
+// Type guard helpers
+function isVoiceInconsistencyMetadata(metadata: Record<string, unknown> | undefined): metadata is Record<string, unknown> & VoiceInconsistencyMetadata {
+  return metadata !== undefined && 'speaker' in metadata && 'historicImpression' in metadata;
+}
+
+function isTimelineConflictMetadata(metadata: Record<string, unknown> | undefined): metadata is Record<string, unknown> & TimelineConflictMetadata {
+  return metadata !== undefined && 'previousMarker' in metadata && 'currentMarker' in metadata;
+}
 
 export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
   suggestions,
@@ -194,7 +221,7 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                 {suggestion.description}
               </p>
 
-              {suggestion.type === 'voice_inconsistency' && (
+              {suggestion.type === 'voice_inconsistency' && isVoiceInconsistencyMetadata(suggestion.metadata) && (
                 <div className="mt-2 ml-6 rounded-md border border-indigo-100 bg-indigo-50/60 px-2 py-1.5 text-[11px] text-indigo-900">
                   <div className="font-semibold flex items-center gap-1 text-indigo-700">
                     <span>🗣️</span>
@@ -202,20 +229,20 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                   </div>
                   <div className="mt-1 flex flex-col gap-0.5">
                     <span>
-                      Speaker: <strong>{(suggestion.metadata as any)?.speaker ?? 'Unknown'}</strong>
+                      Speaker: <strong>{suggestion.metadata.speaker ?? 'Unknown'}</strong>
                     </span>
                     <span>
-                      Historic tone: <strong>{(suggestion.metadata as any)?.historicImpression ?? '—'}</strong>
+                      Historic tone: <strong>{suggestion.metadata.historicImpression ?? '—'}</strong>
                     </span>
                     <span>
-                      Current tone: <strong>{(suggestion.metadata as any)?.currentImpression ?? '—'}</strong>
+                      Current tone: <strong>{suggestion.metadata.currentImpression ?? '—'}</strong>
                     </span>
                   </div>
-                  {Array.isArray((suggestion.metadata as any)?.diffs) && (
+                  {Array.isArray(suggestion.metadata.diffs) && (
                     <ul className="mt-1 list-disc list-inside space-y-0.5 text-indigo-800">
-                      {(suggestion.metadata as any).diffs.slice(0, 3).map((diff: any, index: number) => (
+                      {suggestion.metadata.diffs.slice(0, 3).map((diff, index) => (
                         <li key={`${suggestion.id}-diff-${index}`}>
-                          {diff.label}: {(diff.current as number).toFixed(2)} vs {(diff.historic as number).toFixed(2)}
+                          {diff.label}: {diff.current.toFixed(2)} vs {diff.historic.toFixed(2)}
                         </li>
                       ))}
                     </ul>
@@ -223,7 +250,7 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                 </div>
               )}
 
-              {suggestion.type === 'timeline_conflict' && (
+              {suggestion.type === 'timeline_conflict' && isTimelineConflictMetadata(suggestion.metadata) && (
                 <div className="mt-2 ml-6 rounded-md border border-rose-100 bg-rose-50/60 px-2 py-1.5 text-[11px] text-rose-800">
                   <div className="font-semibold flex items-center gap-1 text-rose-700">
                     <span>⏱️</span>
@@ -231,10 +258,10 @@ export const ProactiveSuggestions: React.FC<ProactiveSuggestionsProps> = ({
                   </div>
                   <div className="mt-1 flex flex-col gap-0.5">
                     <span>
-                      Previous: <strong>{(suggestion.metadata as any)?.previousMarker ?? '—'}</strong>
+                      Previous: <strong>{suggestion.metadata.previousMarker ?? '—'}</strong>
                     </span>
                     <span>
-                      Current: <strong>{(suggestion.metadata as any)?.currentMarker ?? '—'}</strong>
+                      Current: <strong>{suggestion.metadata.currentMarker ?? '—'}</strong>
                     </span>
                   </div>
                 </div>

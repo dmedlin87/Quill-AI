@@ -1,13 +1,14 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SidebarTab, AnalysisWarning } from '@/types';
+import { SidebarTab, AnalysisWarning, AnalysisResult, HistoryItem } from '@/types';
+import { AgentActionHandler } from '@/types/agent';
 import { ChatInterface, ActivityFeed } from '@/features/agent';
 import { Dashboard, ShadowReaderPanel } from '@/features/analysis';
 import { VoiceMode } from '@/features/voice';
 import { KnowledgeGraph, LoreManager } from '@/features/lore';
 import { MemoryManager } from '@/features/memory';
 import { StoryVersionsPanel } from '@/features/editor';
-import { Branch, Contradiction, Lore } from '@/types/schema';
+import { Branch, Contradiction, Lore, Chapter } from '@/types/schema';
 import { useLayoutStore } from './store/useLayoutStore';
 import { DeveloperModeToggle, ThemeSelector, ModelBuildSelector, ApiKeyManager } from '@/features/settings';
 import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
@@ -25,21 +26,21 @@ interface ToolsPanelProps {
   };
   // Project data
   projectId?: string;
-  lore?: any;
-  chapters?: any[];
-  analysis?: any;
+  lore?: Lore;
+  chapters?: Chapter[];
+  analysis?: AnalysisResult;
   contradictions?: Contradiction[];
   derivedLore?: Lore | null;
-  history: any[];
+  history: HistoryItem[];
   // Engine state
   isAnalyzing: boolean;
   analysisWarning?: AnalysisWarning | null;
   onAnalyzeSelection?: () => void;
   hasSelection?: boolean;
   // Callbacks
-  onAgentAction: (action: string, params: any) => Promise<string>;
+  onAgentAction: AgentActionHandler;
   onNavigateToText?: (start: number, end: number) => void;
-  onRestore: (item: any) => void;
+  onRestore: (id: string) => void;
   // Branching/Story Versions
   branches?: Branch[];
   activeBranchId?: string | null;
