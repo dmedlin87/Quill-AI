@@ -4,6 +4,7 @@ import { DEFAULT_READERS } from '@/types/personas';
 import { useEditorState, useEditorActions } from '@/features/core/context/EditorContext';
 import { findQuoteRange } from '@/features/shared';
 import { InlineComment } from '@/types/schema';
+import { AccessibleTooltip } from '@/features/shared/components/AccessibleTooltip';
 
 export const ShadowReaderPanel: React.FC = () => {
   const { activePersona, setActivePersona, isReading, generateReactions, reactions } = useReaderStore();
@@ -16,7 +17,7 @@ export const ShadowReaderPanel: React.FC = () => {
   };
 
   const handleAddComment = (reaction: any) => {
-    if (!reaction.quote) return;
+    if (!reaction.quote || !reaction.issue) return;
 
     setAddingId(reaction.id);
 
@@ -34,7 +35,7 @@ export const ShadowReaderPanel: React.FC = () => {
         type: 'prose', // Generic type for reader reactions
         issue: `${activePersona.name} says: ${reaction.issue}`,
         suggestion: '',
-        severity: reaction.severity > 0.6 ? 'error' : reaction.severity < 0.3 ? 'info' : 'warning',
+        severity: reaction.severity === 'error' ? 'error' : reaction.severity === 'info' ? 'info' : 'warning',
         quote: reaction.quote,
         startIndex: range.start,
         endIndex: range.end,
@@ -91,22 +92,29 @@ export const ShadowReaderPanel: React.FC = () => {
 
       {/* Action Area */}
       <div className="p-4 flex justify-center">
-        <button
-          onClick={handleRead}
-          disabled={isReading || !currentText}
-          className="w-full py-2 px-4 bg-[var(--ink-900)] text-white rounded-lg font-medium shadow-sm hover:bg-[var(--ink-800)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
+        <AccessibleTooltip
+          content={!currentText ? "Text content required" : isReading ? "Reading..." : "Generate AI reader feedback"}
+          position="top"
         >
-          {isReading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Reading...
-            </>
-          ) : (
-            <>
-              <span>👓</span> Read Chapter
-            </>
-          )}
-        </button>
+          <div className="w-full"> {/* Wrapper for disabled tooltip */}
+            <button
+              onClick={handleRead}
+              disabled={isReading || !currentText}
+              className="w-full py-2 px-4 bg-[var(--ink-900)] text-white rounded-lg font-medium shadow-sm hover:bg-[var(--ink-800)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
+            >
+              {isReading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Reading...
+                </>
+              ) : (
+                <>
+                  <span>👓</span> Read Chapter
+                </>
+              )}
+            </button>
+          </div>
+        </AccessibleTooltip>
       </div>
 
       {/* Reactions List */}
@@ -120,9 +128,9 @@ export const ShadowReaderPanel: React.FC = () => {
             <div
               key={reaction.id}
               className={`p-3 rounded-lg border text-sm animate-fade-in ${
-                reaction.severity > 0.5
+                reaction.severity === 'error'
                   ? 'bg-red-50 border-red-100 text-red-900'
-                  : reaction.severity < 0.2
+                  : reaction.severity === 'info'
                   ? 'bg-green-50 border-green-100 text-green-900'
                   : 'bg-yellow-50 border-yellow-100 text-yellow-900'
               }`}
@@ -130,7 +138,7 @@ export const ShadowReaderPanel: React.FC = () => {
               <div className="font-bold mb-1 flex justify-between">
                 <span>{activePersona.name}</span>
                 <span className="opacity-50 text-xs">
-                  {reaction.severity > 0.5 ? '😠' : reaction.severity < 0.2 ? '😍' : '🤔'}
+                  {reaction.severity === 'error' ? '😠' : reaction.severity === 'info' ? '😍' : '🤔'}
                 </span>
               </div>
               <p className="mb-2">{reaction.issue}</p>

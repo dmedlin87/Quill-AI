@@ -1,7 +1,9 @@
 import { ai } from '@/services/gemini/client';
 import { ReaderPersona } from '@/types/personas';
-import { ModelBuilds } from '@/config/models';
+import { getActiveModels } from '@/config/models';
 import { InlineComment } from '@/types/schema';
+
+const MIN_TEXT_LENGTH = 50;
 
 export class ReaderService {
   /**
@@ -12,8 +14,9 @@ export class ReaderService {
     persona: ReaderPersona,
     context?: string
   ): Promise<InlineComment[]> {
-    if (!text || text.length < 50) return [];
+    if (!text || text.length < MIN_TEXT_LENGTH) return [];
 
+    // Safely formatted prompt
     const prompt = `
       ${persona.systemPrompt}
 
@@ -26,7 +29,9 @@ export class ReaderService {
       CONTEXT: ${context || 'No specific context provided.'}
 
       EXCERPT:
-      "${text}"
+      \`\`\`
+      ${text}
+      \`\`\`
 
       OUTPUT FORMAT: JSON Array of objects with keys:
       - quote: string (exact text match)
@@ -35,8 +40,9 @@ export class ReaderService {
     `;
 
     try {
+      const activeModels = getActiveModels();
       const response = await ai.models.generateContent({
-        model: ModelBuilds.free.analysis.id, // Use analysis model
+        model: activeModels.analysis.id,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
       });
 
@@ -44,21 +50,67 @@ export class ReaderService {
       // Simple cleaning of markdown code blocks if present
       const cleanJson = resultText.replace(/```json|```/g, '').trim();
 
-      const reactions = JSON.parse(cleanJson);
+      let reactions;
+      try {
+        reactions = JSON.parse(cleanJson);
+      } catch (jsonError) {
+        console.error('Failed to parse AI-generated JSON:', jsonError, '\nAI output:', cleanJson);
+        return [{
+            id: crypto.randomUUID(),
+            type: 'prose',
+            issue: 'Error parsing AI response. Please try again.',
+            suggestion: '',
+            severity: 'error',
+            quote: '',
+            startIndex: 0,
+            endIndex: 0,
+            dismissed: false,
+            createdAt: Date.now()
+        }];
+      }
+
+      if (!Array.isArray(reactions)) {
+        return [{
+            id: crypto.randomUUID(),
+            type: 'prose',
+            issue: 'AI response format was invalid.',
+            suggestion: '',
+            severity: 'error',
+            quote: '',
+            startIndex: 0,
+            endIndex: 0,
+            dismissed: false,
+            createdAt: Date.now()
+        }];
+      }
 
       return reactions.map((r: any) => ({
         id: crypto.randomUUID(),
-        quote: r.quote,
-        issue: r.reaction, // Mapping reaction to 'issue' for display compatibility
-        suggestion: '', // No suggestion needed for reactions
-        severity: r.sentiment === 'negative' ? 0.8 : r.sentiment === 'positive' ? 0.1 : 0.4,
-        type: 'reader_reaction',
-        timestamp: Date.now()
+        quote: r.quote || '',
+        issue: r.reaction || 'No reaction text',
+        suggestion: '',
+        severity: r.sentiment === 'negative' ? 'error' : r.sentiment === 'positive' ? 'info' : 'warning',
+        type: 'prose',
+        startIndex: 0,
+        endIndex: 0,
+        dismissed: false,
+        createdAt: Date.now()
       }));
 
     } catch (error) {
       console.error('Error generating reader reactions:', error);
-      return [];
+      return [{
+        id: crypto.randomUUID(),
+        type: 'prose',
+        issue: 'An error occurred while generating reader reactions. Please try again later.',
+        suggestion: '',
+        severity: 'error',
+        quote: '',
+        startIndex: 0,
+        endIndex: 0,
+        dismissed: false,
+        createdAt: Date.now()
+      }];
     }
   }
 }
