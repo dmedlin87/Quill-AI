@@ -5,7 +5,34 @@
  * their components, hooks, and contexts. This provides coverage for the
  * index.ts files which are otherwise at 0% branch coverage.
  */
-import { describe, it, expect } from 'vitest';
+import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('framer-motion', () => {
+  const MotionDiv = ({ children, ...props }: any) => React.createElement('div', props, children);
+  return {
+    motion: {
+      div: MotionDiv,
+    },
+    AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
+  };
+});
+
+vi.mock('@/services/gemini/agent', () => {
+  class QuillAgent {
+    async initialize() {}
+    async sendMessage() {
+      return { text: '', functionCalls: [] };
+    }
+  }
+  return { QuillAgent };
+});
+
+vi.mock('@/services/gemini/errors', () => {
+  class AIError extends Error {}
+  class RateLimitError extends Error {}
+  return { AIError, RateLimitError };
+});
 
 describe('Feature Index Exports', () => {
   describe('features/agent/index.ts', () => {
