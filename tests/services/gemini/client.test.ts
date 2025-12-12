@@ -42,7 +42,7 @@ vi.mock('@/config/api', () => ({
 vi.mock('@/config/models', () => ({
   getActiveModelBuild: mockGetActiveModelBuild,
   ModelBuilds: {
-    free: { analysis: { id: 'gemini-pro' } },
+    normal: { analysis: { id: 'gemini-pro' } },
     cheap: { analysis: { id: 'gemini-flash' } },
   },
   ModelBuildKey: 'normal',
@@ -166,16 +166,21 @@ describe('Gemini Client', () => {
     it('proxies normal requests successfully', async () => {
       const { ai } = await import('@/services/gemini/client');
       const result = await ai.models.generateContent({ contents: [] });
-      
+
       expect(mockGenerateContent).toHaveBeenCalled();
+      expect(mockGenerateContent).toHaveBeenCalledWith(expect.objectContaining({ model: 'gemini-pro' }));
       expect((result as any).response.text()).toBe('Success');
     });
 
     it('handles string requests by wrapping them', async () => {
       const { ai } = await import('@/services/gemini/client');
       await ai.models.generateContent('Hello world');
-      
-      expect(mockGenerateContent).toHaveBeenCalledWith('Hello world');
+
+      expect(mockGenerateContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gemini-pro',
+        })
+      );
     });
 
     it('passes through other properties (e.g., chats)', async () => {
