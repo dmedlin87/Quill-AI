@@ -5,7 +5,7 @@
 <!-- TEST_HEALTH_BADGES:START - Do not remove or modify this section -->
 <!-- Badges are updated by npm run test:status -->
 ![Tests](https://img.shields.io/badge/tests-4000%2B-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)
 <!-- TEST_HEALTH_BADGES:END -->
 
 AI-powered manuscript editor with real-time analysis, multi-persona agents, and voice interaction.

@@ -217,6 +217,69 @@ describe('semanticDedup', () => {
       // Similarity should be high (close to 1) when using same text/embedding
       expect(result.similarity).toBeGreaterThan(0.7);
     });
+
+    it('falls back to computed embedding when stored embedding has wrong dimension', async () => {
+      // Wrong length should be ignored
+      const badEmbedding = [0.1, 0.2, 0.3] as any;
+      vi.mocked(getMemories).mockResolvedValue([
+        createMockNote({ text: 'Sarah has blue eyes', embedding: badEmbedding }),
+      ]);
+
+      const result = await isSemanticDuplicate('proj-1', 'Sarah has blue eyes', []);
+
+      expect(result.similarity).toBeGreaterThan(0.7);
+    });
+
+    it('prefers tag-based match reason when tag overlap is high', async () => {
+      vi.mocked(getMemories).mockResolvedValue([
+        createMockNote({
+          text: 'Something unrelated',
+          topicTags: ['plot', 'mystery'],
+        }),
+      ]);
+
+      const result = await isSemanticDuplicate('proj-1', 'Completely different text', ['plot', 'mystery'], {
+        similarityThreshold: 0,
+        tagWeight: 0.9,
+        entityWeight: 0,
+      });
+
+      expect(result.isDuplicate).toBe(true);
+      expect(result.reason).toBe('Similar tags with overlapping content');
+    });
+
+    it('handles empty tags as full overlap and yields semantic reason when entities/tags are empty', async () => {
+      vi.mocked(getMemories).mockResolvedValue([
+        createMockNote({ text: 'no entities here', topicTags: [] }),
+      ]);
+
+      const result = await isSemanticDuplicate('proj-1', 'no entities here', [], {
+        similarityThreshold: 0,
+        tagWeight: 0,
+        entityWeight: 0,
+      });
+
+      expect(result.isDuplicate).toBe(true);
+      expect(result.reason).toBe('Similar tags with overlapping content');
+    });
+
+    it('prefers entity-based match reason when entity overlap and embedding similarity are high', async () => {
+      vi.mocked(getMemories).mockResolvedValue([
+        createMockNote({
+          text: 'Sarah visited Paris yesterday',
+          topicTags: [],
+        }),
+      ]);
+
+      const result = await isSemanticDuplicate('proj-1', 'Sarah visited Paris today', [], {
+        similarityThreshold: 0,
+        tagWeight: 0,
+        entityWeight: 0.5,
+      });
+
+      expect(result.isDuplicate).toBe(true);
+      expect(result.reason).toBe('Same entities with similar content');
+    });
   });
 
   describe('findSimilarMemories', () => {

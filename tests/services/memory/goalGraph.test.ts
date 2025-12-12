@@ -152,6 +152,19 @@ describe('goalGraph', () => {
       );
     });
 
+    it('does not update when blocker is already present', async () => {
+      const mockGoal = createMockGoal({
+        id: 'goal-1',
+        description: '[meta:blocked_by:blocker-1]',
+      });
+      vi.mocked(getGoal).mockResolvedValue(mockGoal);
+      vi.mocked(updateGoal).mockResolvedValue(undefined);
+
+      await addGoalDependency('goal-1', 'blocker-1');
+
+      expect(updateGoal).not.toHaveBeenCalled();
+    });
+
     it('throws when goal not found', async () => {
       vi.mocked(getGoal).mockResolvedValue(undefined);
 
@@ -174,6 +187,24 @@ describe('goalGraph', () => {
         'goal-1',
         expect.objectContaining({
           description: expect.not.stringContaining('blocker-1'),
+        })
+      );
+    });
+
+    it('removes metadata entirely when last blocker is removed', async () => {
+      const mockGoal = createMockGoal({
+        id: 'goal-1',
+        description: 'Some description\n[meta:blocked_by:blocker-1]',
+      });
+      vi.mocked(getGoal).mockResolvedValue(mockGoal);
+      vi.mocked(updateGoal).mockResolvedValue(undefined);
+
+      await removeGoalDependency('goal-1', 'blocker-1');
+
+      expect(updateGoal).toHaveBeenCalledWith(
+        'goal-1',
+        expect.objectContaining({
+          description: 'Some description',
         })
       );
     });
@@ -233,6 +264,20 @@ describe('goalGraph', () => {
       expect(result.blockedGoals).toBe(1);
       const blockedNode = result.roots.find((r) => r.id === 'blocked');
       expect(blockedNode?.isBlocked).toBe(true);
+    });
+
+    it('does not mark goal blocked when blocker is completed and does not include blocker name', async () => {
+      vi.mocked(getGoals).mockResolvedValue([
+        createMockGoal({ id: 'blocker', title: 'Blocker', status: 'completed', progress: 100 }),
+        createMockGoal({ id: 'blocked', title: 'Blocked', description: '[meta:blocked_by:blocker]' }),
+      ]);
+
+      const result = await buildGoalGraph('proj-1');
+
+      expect(result.blockedGoals).toBe(0);
+      const blockedNode = result.roots.find((r) => r.id === 'blocked');
+      expect(blockedNode?.isBlocked).toBe(false);
+      expect(blockedNode?.blockedByNames).toEqual([]);
     });
 
     it('calculates overall progress', async () => {
@@ -318,6 +363,20 @@ describe('goalGraph', () => {
       const path = await getCriticalPath('proj-1', 'standalone');
 
       expect(path).toHaveLength(1);
+    });
+
+    it('handles cyclic dependencies without infinite recursion', async () => {
+      vi.mocked(getGoals).mockResolvedValue([
+        createMockGoal({ id: 'a', title: 'A', description: '[meta:blocked_by:b]' }),
+        createMockGoal({ id: 'b', title: 'B', description: '[meta:blocked_by:a]' }),
+      ]);
+
+      const path = await getCriticalPath('proj-1', 'a');
+
+      // Should contain each goal at most once
+      expect(new Set(path.map(p => p.id)).size).toBe(path.length);
+      expect(path.some(p => p.id === 'a')).toBe(true);
+      expect(path.some(p => p.id === 'b')).toBe(true);
     });
   });
 

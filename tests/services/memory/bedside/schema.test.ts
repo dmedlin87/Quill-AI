@@ -71,6 +71,28 @@ describe('BedsideNoteMutationSchema', () => {
       expect(result.content).toEqual(['Valid', 'Also valid']);
     });
 
+    it('trims array items', () => {
+      const input = {
+        section: 'nextSteps',
+        action: 'set',
+        content: ['  Step 1  ', 'Step 2'],
+      };
+
+      const result = BedsideNoteMutationSchema.parse(input);
+
+      expect(result.content).toEqual(['Step 1', 'Step 2']);
+    });
+
+    it('rejects string content that becomes empty after trim', () => {
+      const input = {
+        section: 'warnings',
+        action: 'append',
+        content: '   ',
+      };
+
+      expect(() => BedsideNoteMutationSchema.parse(input)).toThrow();
+    });
+
     it('rejects empty content array', () => {
       const input = {
         section: 'recentDiscoveries',

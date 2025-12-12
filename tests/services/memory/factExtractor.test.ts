@@ -107,6 +107,41 @@ describe('factExtractor', () => {
       expect(facts.some((f) => f.subject === 'Sarah' && f.predicate === 'has eyes')).toBe(true);
     });
 
+    it('skips non-character entities and empty attribute values', () => {
+      const intelligence = createMockIntelligence({
+        entities: {
+          nodes: [
+            {
+              id: 'loc-1',
+              name: 'Paris',
+              type: 'location',
+              aliases: ['The City of Light'],
+              firstMention: 5,
+              mentionCount: 2,
+              mentions: [],
+              attributes: { setting: ['urban'] },
+            },
+            {
+              id: 'char-1',
+              name: 'Sarah',
+              type: 'character',
+              aliases: [],
+              firstMention: 10,
+              mentionCount: 5,
+              mentions: [],
+              attributes: { hair: [] },
+            },
+          ],
+          edges: [],
+        },
+      });
+
+      const facts = extractFacts(intelligence);
+
+      expect(facts.some((f) => f.subject === 'Paris')).toBe(false);
+      expect(facts.some((f) => f.subject === 'Sarah' && f.predicate === 'has hair')).toBe(false);
+    });
+
     it('extracts facts from entity aliases', () => {
       const intelligence = createMockIntelligence({
         entities: {
@@ -147,6 +182,46 @@ describe('factExtractor', () => {
       const facts = extractFacts(intelligence);
 
       expect(facts.some((f) => f.subject === 'Sarah' && f.object === 'Marcus')).toBe(true);
+    });
+
+    it('skips relationship edges when source or target node is missing', () => {
+      const intelligence = createMockIntelligence({
+        entities: {
+          nodes: [
+            { id: 'e1', name: 'Sarah', type: 'character', aliases: [], firstMention: 0, mentionCount: 1, mentions: [], attributes: {} },
+          ],
+          edges: [
+            { id: 'edge-1', source: 'e1', target: 'missing', type: 'interacts', coOccurrences: 5, sentiment: 0.5, chapters: [], evidence: ['They talked'] },
+          ],
+        },
+      });
+
+      const facts = extractFacts(intelligence);
+
+      expect(facts.some((f) => f.sourceType === 'relationship')).toBe(false);
+    });
+
+    it('uses edge.type as predicate when not in relationship map and omits evidence when none provided', () => {
+      const intelligence = createMockIntelligence({
+        entities: {
+          nodes: [
+            { id: 'e1', name: 'Lady Sarah', type: 'character', aliases: [], firstMention: 0, mentionCount: 1, mentions: [], attributes: {} },
+            { id: 'e2', name: 'Marcus', type: 'character', aliases: [], firstMention: 0, mentionCount: 1, mentions: [], attributes: {} },
+          ],
+          edges: [
+            { id: 'edge-1', source: 'e1', target: 'e2', type: 'mysterious', coOccurrences: 1, sentiment: 0.8, chapters: [] } as any,
+          ],
+        },
+      });
+
+      const facts = extractFacts(intelligence);
+
+      const baseRel = facts.find((f) => f.sourceType === 'relationship' && f.predicate === 'mysterious');
+      expect(baseRel).toBeDefined();
+      expect(baseRel?.evidence).toBeUndefined();
+
+      // Positive sentiment should add an inferred relationship fact
+      expect(facts.some((f) => f.predicate === 'has positive relationship with')).toBe(true);
     });
 
     it('extracts positive/negative relationship facts based on sentiment', () => {
@@ -201,6 +276,22 @@ describe('factExtractor', () => {
       const facts = extractFacts(intelligence);
 
       expect(facts.some((f) => f.predicate === 'occurs')).toBe(true);
+    });
+
+    it('does not create timeline facts for events without temporalMarker', () => {
+      const intelligence = createMockIntelligence({
+        timeline: {
+          events: [
+            { id: 'evt-1', description: 'Something happened', offset: 100, chapterId: 'ch-1', temporalMarker: undefined, relativePosition: 'before', dependsOn: [] },
+          ],
+          causalChains: [],
+          promises: [],
+        },
+      });
+
+      const facts = extractFacts(intelligence);
+
+      expect(facts.some((f) => f.sourceType === 'timeline' && f.predicate === 'occurs')).toBe(false);
     });
 
     it('extracts facts from causal chains', () => {
@@ -438,6 +529,40 @@ describe('factExtractor', () => {
           'character:marcus',
         ]),
       );
+    });
+
+    it('adds timeline tag when timeline facts are extracted', async () => {
+      const intelligence = createMockIntelligence({
+        timeline: {
+          events: [
+            {
+              id: 'evt-1',
+              description: 'The meeting occurred',
+              offset: 100,
+              chapterId: 'ch-1',
+              temporalMarker: 'that morning',
+              relativePosition: 'before',
+              dependsOn: [],
+            },
+          ],
+          causalChains: [],
+          promises: [],
+        },
+      });
+
+      const result = await extractFactsToMemories(intelligence, {
+        projectId: 'proj-1',
+        createMemories: true,
+        skipDuplicates: false,
+        maxFacts: 1,
+        minConfidence: 0,
+      });
+
+      expect(result.memoriesCreated).toBe(1);
+      expect(createMemory).toHaveBeenCalledTimes(1);
+      const payload = vi.mocked(createMemory).mock.calls[0]?.[0];
+      expect(payload.topicTags).toEqual(expect.arrayContaining(['source:timeline', 'timeline']));
+      expect(payload.type).toBe('fact');
     });
   });
 

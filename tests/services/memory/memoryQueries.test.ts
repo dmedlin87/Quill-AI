@@ -92,6 +92,23 @@ describe('memoryQueries', () => {
       expect(db.memories.where).toHaveBeenCalledWith('[scope+projectId]');
     });
 
+    it('filters by projectId when projectId is provided without scope', async () => {
+      const mockNotes = [createMockNote({ projectId: 'proj-1' })];
+
+      const mockWhere = {
+        equals: vi.fn().mockReturnValue({
+          filter: vi.fn().mockReturnThis(),
+          toArray: vi.fn().mockResolvedValue(mockNotes),
+        }),
+      };
+      vi.mocked(db.memories.where).mockReturnValue(mockWhere as any);
+
+      const result = await getMemories({ projectId: 'proj-1' });
+
+      expect(db.memories.where).toHaveBeenCalledWith('projectId');
+      expect(result).toHaveLength(1);
+    });
+
     it('filters by type', async () => {
       const mockNotes = [
         createMockNote({ type: 'fact' }),
@@ -168,6 +185,22 @@ describe('memoryQueries', () => {
       expect(result).toHaveLength(3);
     });
 
+    it('does not slice when limit is 0', async () => {
+      const mockNotes = Array.from({ length: 5 }, (_, i) =>
+        createMockNote({ id: `n${i}` })
+      );
+
+      const mockCollection = {
+        filter: vi.fn().mockReturnThis(),
+        toArray: vi.fn().mockResolvedValue(mockNotes),
+      };
+      vi.mocked(db.memories.toCollection).mockReturnValue(mockCollection as any);
+
+      const result = await getMemories({ limit: 0 });
+
+      expect(result).toHaveLength(5);
+    });
+
     it('sorts by importance then recency', async () => {
       const mockNotes = [
         createMockNote({ id: 'n1', importance: 0.5, createdAt: 3000 }),
@@ -204,6 +237,23 @@ describe('memoryQueries', () => {
         where: vi.fn(),
         toCollection: vi.fn(),
       };
+    });
+
+    it('handles object-with-data container and missing data array', async () => {
+      const originalMemories = (db as any).memories;
+
+      const note = createMockNote({ id: 'n1' });
+      (db as any).memories = { data: [note] };
+
+      const result = await getMemories();
+      expect(result.map(r => r.id)).toEqual(['n1']);
+
+      // Covers branch where `data` exists but is not an array / undefined
+      (db as any).memories = { data: undefined };
+      const empty = await getMemories();
+      expect(empty).toEqual([]);
+
+      (db as any).memories = originalMemories;
     });
 
     it('returns empty array when combined filters exclude all notes', async () => {

@@ -114,11 +114,14 @@ describe('realtimeTriggers', () => {
   it('gracefully handles memoryQuery errors', async () => {
     const { checkTriggers } = await import('@/services/memory/realtimeTriggers');
 
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     memoryMocks.searchMemoriesByTags.mockRejectedValueOnce(new Error('dexie down'));
 
     const results = await checkTriggers("Mara said she'd stay", projectId);
 
     expect(results).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   describe('trigger management', () => {
@@ -296,6 +299,95 @@ describe('realtimeTriggers', () => {
       await new Promise(resolve => setTimeout(resolve, 600));
       // Debounced results should not have been called since we cancelled
       // (immediate triggers may still fire before cancel)
+    });
+
+    it('clears existing timeout and runs only the latest debounced check', async () => {
+      vi.useFakeTimers();
+      const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+      const { createTriggerChecker } = await import('@/services/memory/realtimeTriggers');
+
+      // First call returns a location memory to allow debounced suggestion
+      memoryMocks.searchMemoriesByTags
+        .mockResolvedValueOnce([
+          {
+            id: 'loc1',
+            projectId,
+            text: 'The Castle has hidden tunnels.',
+            topicTags: ['location:castle', 'setting'],
+            type: 'lore',
+          },
+        ])
+        // Second call returns a different location memory
+        .mockResolvedValueOnce([
+          {
+            id: 'loc2',
+            projectId,
+            text: 'The Tower is crumbling.',
+            topicTags: ['location:tower', 'setting'],
+            type: 'lore',
+          },
+        ]);
+
+      const checker = createTriggerChecker(projectId, {
+        enabled: true,
+        debounceMs: 100,
+        maxResults: 3,
+      });
+
+      const onResult = vi.fn();
+
+      checker.check('We went to the Castle gate', onResult);
+      checker.check('We went to the Tower gate', onResult);
+
+      // Second call should clear previous scheduled timeout
+      expect(clearSpy).toHaveBeenCalled();
+
+      // Run only the latest debounced timer
+      await vi.advanceTimersByTimeAsync(110);
+      await vi.runAllTimersAsync();
+
+      expect(onResult).toHaveBeenCalled();
+      const calls = onResult.mock.calls.flat();
+      expect(JSON.stringify(calls)).toContain('Tower');
+
+      clearSpy.mockRestore();
+      vi.useRealTimers();
+    });
+
+    it('cancel prevents the debounced result callback from firing', async () => {
+      vi.useFakeTimers();
+
+      const { createTriggerChecker } = await import('@/services/memory/realtimeTriggers');
+
+      memoryMocks.searchMemoriesByTags.mockResolvedValueOnce([
+        {
+          id: 'loc1',
+          projectId,
+          text: 'The Castle has hidden tunnels.',
+          topicTags: ['location:castle', 'setting'],
+          type: 'lore',
+        },
+      ]);
+
+      const checker = createTriggerChecker(projectId, {
+        enabled: true,
+        debounceMs: 100,
+        maxResults: 3,
+      });
+
+      const onResult = vi.fn();
+      checker.check('We went to the Castle gate', onResult);
+      checker.cancel();
+
+      await vi.advanceTimersByTimeAsync(200);
+      await vi.runAllTimersAsync();
+
+      // Debounced location results should not fire after cancel.
+      // (Immediate triggers may still fire in other scenarios, but this text is debounced-only.)
+      expect(onResult).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
     });
   });
 
@@ -523,6 +615,42 @@ describe('realtimeTriggers', () => {
       });
 
       expect(results.length).toBeLessThanOrEqual(1);
+    });
+
+    it('preserves original trigger order when priorities are the same', async () => {
+      const { checkTriggers } = await import('@/services/memory/realtimeTriggers');
+
+      // character_mention is earlier than location in defaultTriggers
+      memoryMocks.searchMemoriesByTags
+        .mockResolvedValueOnce([
+          {
+            id: 'm1',
+            projectId,
+            text: 'John has green eyes',
+            topicTags: ['character:john', 'appearance'],
+            type: 'lore',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 'loc1',
+            projectId,
+            text: 'The Castle has hidden tunnels.',
+            topicTags: ['location:castle', 'setting'],
+            type: 'lore',
+          },
+        ]);
+
+      const results = await checkTriggers("John said we went to the Castle gate", projectId, {
+        priorityFilter: 'debounced',
+        maxResults: 10,
+      });
+
+      expect(results.length).toBeGreaterThanOrEqual(2);
+      expect(results[0].priority).toBe('debounced');
+      expect(results[1].priority).toBe('debounced');
+      expect(results[0].triggerId).toBe('character_mention');
+      expect(results[1].triggerId).toBe('location');
     });
   });
 });
