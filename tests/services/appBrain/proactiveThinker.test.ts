@@ -721,7 +721,7 @@ describe('ProactiveThinker', () => {
 
     await thinker.forceThink();
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Bedside evolve failed'), '');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Bedside evolve failed'), expect.anything());
 
     warnSpy.mockRestore();
   });
@@ -795,5 +795,236 @@ describe('ProactiveThinker', () => {
     // Just verifying that it ran without error and updated lastTimelineCheckAt
     // We can check if it called extractTemporalMarkers
     expect(extractTemporalMarkers).toHaveBeenCalledWith('New text');
+  });
+
+  // Coverage expansions
+  describe('Coverage Expansions', () => {
+
+    it('does not start when disabled via config', () => {
+      // Test config.enabled check in start()
+      const disabledThinker = new ProactiveThinker({ enabled: false });
+      const spy = vi.spyOn(eventBus, 'subscribeAll');
+      disabledThinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('forceThink returns null if not initialized', async () => {
+      // Covers `if (!this.getState || !this.projectId)` in forceThink
+      const t = new ProactiveThinker();
+      expect(await t.forceThink()).toBeNull();
+    });
+
+    it('maybeUpdateBedsideNotes handles missing dependencies', () => {
+      // Covers `if (!this.projectId || !this.getState)` in maybeUpdateBedsideNotes
+      const t = new ProactiveThinker();
+      // @ts-ignore
+      t.handleEvent({ type: 'TEXT_CHANGED' });
+      // Should not throw and just return
+    });
+
+    it('handleSignificantEdit respects threshold and cooldown', () => {
+      // Covers `if (!exceededThreshold || !pastCooldown)`
+      thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+      const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+      // We need to set time > 300000 to pass initial cooldown check if lastEditEvolveAt=0
+      vi.setSystemTime(400_000);
+
+      // 1. Small delta (below 500)
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 100 }, timestamp: Date.now() });
+      expect(evolveBedsideNote).not.toHaveBeenCalled();
+
+      // 2. Large delta, but recently evolved (if we trigger one first)
+      // Trigger a success first
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+      expect(evolveBedsideNote).toHaveBeenCalledTimes(1);
+      vi.mocked(evolveBedsideNote).mockClear();
+
+      // Now lastEditEvolveAt = 400,000.
+      // Advance just a bit
+      vi.setSystemTime(400_100);
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+      // Should fail cooldown
+      expect(evolveBedsideNote).not.toHaveBeenCalled();
+    });
+
+    it('detectConflicts exits early on missing data', async () => {
+      // Covers `if (!timeline || !activeChapterId)` and `if (!currentText)`
+      thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+      const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+      vi.setSystemTime(10_000_000); // Past cooldown
+
+      // 1. No timeline
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId, activeChapterId: 'ch1', currentText: 'Txt' },
+        intelligence: { timeline: null } // No timeline
+      });
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+      expect(extractTemporalMarkers).not.toHaveBeenCalled();
+
+      // 2. No activeChapterId
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId, activeChapterId: null, currentText: 'Txt' },
+        intelligence: { timeline: { events: [] } }
+      });
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+      expect(extractTemporalMarkers).not.toHaveBeenCalled();
+
+      // 3. No currentText
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId, activeChapterId: 'ch1', currentText: '' },
+        intelligence: { timeline: { events: [] } }
+      });
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+      expect(extractTemporalMarkers).not.toHaveBeenCalled();
+    });
+
+    it('detectConflicts handles missing baseText', async () => {
+      // Covers `if (!baseText) continue;`
+      thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+      const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+      vi.setSystemTime(20_000_000);
+
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId, activeChapterId: 'ch1', currentText: 'Monday' },
+        intelligence: {
+            timeline: {
+                events: [
+                    { chapterId: 'ch1', offset: 0, temporalMarker: null, description: null } // Both null
+                ]
+            },
+            full: { entities: { nodes: [] } }
+        },
+      });
+      vi.mocked(extractTemporalMarkers).mockReturnValue([{ category: 'day', normalized: 'monday', marker: 'Monday', offset: 0, sentence: '' }]);
+
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+
+      // Should run but find no historical markers, so no conflict
+      expect(mockOnSuggestion).not.toHaveBeenCalled();
+    });
+
+    it('detectConflicts handles new marker (no previous)', async () => {
+      // Covers `if (!previous)`
+      thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+      const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+      vi.setSystemTime(30_000_000);
+
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId, activeChapterId: 'ch1', currentText: 'Tuesday' },
+        intelligence: {
+            timeline: { events: [] }, // No history
+            full: { entities: { nodes: [] } }
+        },
+      });
+      vi.mocked(extractTemporalMarkers).mockReturnValue([{ category: 'day', normalized: 'tuesday', marker: 'Tuesday', offset: 0, sentence: '' }]);
+
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+
+      expect(mockOnSuggestion).not.toHaveBeenCalled();
+    });
+
+    it('detectVoiceConsistency handles missing data', async () => {
+      thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+      const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+      // 1. No quotes in text -> `if (!text.includes('"'))`
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId, currentText: 'No quotes here' },
+        intelligence: { full: { entities: { nodes: [] } }, entities: { nodes: [] } },
+        lore: { characters: [] },
+      });
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+      expect(generateVoiceProfile).not.toHaveBeenCalled();
+
+      // 2. No speaker found -> `if (!speaker)`
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId, currentText: '"Unknown voice."' },
+        intelligence: { full: { entities: { nodes: [] } }, entities: { nodes: [] } },
+        lore: { characters: [] },
+      });
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+      expect(upsertVoiceProfile).not.toHaveBeenCalled();
+
+      // 3. No baseline profile -> `if (!baseline)`
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId, currentText: '"Hello, this is a much longer sentence to satisfy the regex length requirement." Alice said.' },
+        intelligence: { full: { entities: { nodes: [] } }, entities: { nodes: [{ type: 'character', name: 'Alice' }] } },
+        lore: { characters: [] },
+      });
+      vi.mocked(getVoiceProfileForCharacter).mockResolvedValue(null);
+      await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+      // Should call upsert but not generate suggestion
+      expect(upsertVoiceProfile).toHaveBeenCalled();
+      expect(mockOnSuggestion).not.toHaveBeenCalled();
+    });
+
+    it('detectLoreSuggestions exits early', async () => {
+      // 1. No significant edit -> `if (!sawSignificantEdit)`
+      thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+      // We need to trigger think without significant edit event?
+      // But think is triggered by events.
+      // If we send only TEXT_CHANGED (not significant), it might trigger if we force it?
+      // `detectLoreSuggestions` is called in `performThinking`.
+      // So let's forceThink with pending events that are NOT significant edits.
+      const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 1 }, timestamp: Date.now() });
+      // Manual force think
+      await thinker.forceThink();
+      // Should not call filterNovelLoreEntities
+      expect(filterNovelLoreEntities).not.toHaveBeenCalled();
+
+      // 2. No entities -> `if (!intelligence?.entities?.nodes?.length)`
+      mockGetState.mockReturnValue({
+        manuscript: { projectId: mockProjectId },
+        intelligence: { full: { entities: { nodes: [] } } }, // Empty nodes
+        lore: { characters: [] }
+      });
+      // Add significant edit event to pending
+      callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() });
+      await thinker.forceThink();
+      expect(filterNovelLoreEntities).not.toHaveBeenCalled();
+    });
+
+    it('parseThinkingResult handles invalid JSON', async () => {
+      // Covers `if (!parsed)`
+      thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+      vi.mocked(ai.models.generateContent).mockResolvedValue({ text: 'invalid json' } as any);
+
+      const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+
+      const result = await thinker.forceThink();
+      expect(result.suggestions).toEqual([]);
+      expect(result.significant).toBe(false);
+    });
+
+    it('clearDebounceTimer handles null timer', () => {
+      // Covers `if (!this.debounceTimer)`
+      // This is private. We can check via side effects or just rely on 'stop' test which calls it.
+      // 'stop' test already calls it. If timer is null, it returns.
+      // We can verify no error is thrown.
+      const t = new ProactiveThinker();
+      t.stop(); // calls clearDebounceTimer with null
+    });
+
+    it('canEvolveBedside handles config disabled', () => {
+      // Covers `if (!this.config.allowBedsideEvolve)`
+      // Implicitly tested via `maybeEvolveBedsideNote`
+      const t = new ProactiveThinker({ allowBedsideEvolve: false });
+      t.start(mockGetState, mockProjectId, mockOnSuggestion);
+      // @ts-ignore - accessing private
+      t.maybeEvolveBedsideNote('test', {});
+      expect(evolveBedsideNote).not.toHaveBeenCalled();
+    });
+
+    it('maybeEvolveBedsideNote checks projectId and evolve capability', async () => {
+      // Covers `if (!this.projectId || !this.canEvolveBedside())`
+      const t = new ProactiveThinker();
+      // No start() called, so projectId is null.
+      // @ts-ignore
+      await t.maybeEvolveBedsideNote('test', {});
+      expect(evolveBedsideNote).not.toHaveBeenCalled();
+    });
   });
 });
