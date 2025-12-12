@@ -17,6 +17,13 @@ describe('manuscript export helpers', () => {
     expect(result[0].content).toBe('First\nLine');
   });
 
+  it('defaults to including titles and no page breaks when options are omitted', () => {
+    const plainText = toManuscriptPlainText(chapters);
+
+    expect(plainText).toContain('Chapter 1');
+    expect(plainText).not.toContain('\n\n\f\n\n');
+  });
+
   it('creates plain text with and without titles', () => {
     const withTitles = toManuscriptPlainText(chapters, { includeTitles: true });
     expect(withTitles).toContain('Chapter 1');
@@ -41,5 +48,16 @@ describe('manuscript export helpers', () => {
 
     expect(data.title).toBe('My Book');
     expect(data.content).toContain('Chapter 1');
+  });
+
+  it('defaults export data payload options when not provided', () => {
+    const data = createManuscriptExportData({
+      title: 'My Book',
+      author: 'Author',
+      chapters,
+    });
+
+    expect(data.content).toContain('Chapter 1');
+    expect(data.content).not.toContain('\n\n\f\n\n');
   });
 });

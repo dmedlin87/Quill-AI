@@ -482,4 +482,270 @@ describe('MemoryManager', () => {
 
     await waitFor(() => expect(screen.getByText('Entity delete error')).toBeInTheDocument());
   });
+  it('handles data refresh errors gracefully', async () => {
+    // Mock getMemories to fail
+    mocks.getMemories.mockRejectedValue(new Error('Fetch failed'));
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    render(<MemoryManager projectId="proj-1" />);
+
+    await waitFor(() => expect(console.warn).toHaveBeenCalledWith(
+      '[MemoryManager] Failed to refresh data',
+      expect.any(Error)
+    ));
+    spy.mockRestore();
+  });
+
+  it('updates an existing goal', async () => {
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('Goal title')).toBeInTheDocument());
+
+    // Click edit on goal
+    const goalItem = screen.getByText('Goal title').closest('div[class*="p-3"]');
+    const editButton = goalItem?.querySelector('button');
+    if (editButton) await user.click(editButton);
+
+    // Change title
+    const goalsSection = screen.getByText('Goals').closest('section');
+    const titleInput = goalsSection?.querySelector('input[type="text"]');
+    if (titleInput) fireEvent.change(titleInput, { target: { value: 'Updated Goal Title' } });
+
+    // Submit
+    const updateButton = screen.getByRole('button', { name: 'Update Goal' });
+    await user.click(updateButton);
+
+    await waitFor(() => expect(mocks.updateGoal).toHaveBeenCalledWith(
+      'g-1',
+      expect.objectContaining({ title: 'Updated Goal Title' })
+    ));
+  });
+
+  it('updates an existing watched entity', async () => {
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('Watcher')).toBeInTheDocument());
+
+    // Click edit
+    const entitySection = screen.getByText('Proactive Monitoring').closest('section');
+    const editButton = Array.from(entitySection?.querySelectorAll('button') || []).find(
+      (btn) => btn.textContent === 'Edit'
+    );
+    if (editButton) await user.click(editButton);
+
+    // Change name
+    const nameInput = entitySection?.querySelector('input[type="text"]');
+    if (nameInput) fireEvent.change(nameInput, { target: { value: 'Updated Watcher' } });
+
+    // Submit
+    const updateButton = screen.getByRole('button', { name: 'Update Entity' });
+    await user.click(updateButton);
+
+    await waitFor(() => expect(mocks.updateWatchedEntity).toHaveBeenCalledWith(
+      'e-1',
+      expect.objectContaining({ name: 'Updated Watcher' })
+    ));
+  });
+
+  it('resets entity form when editing entity is deleted', async () => {
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('Watcher')).toBeInTheDocument());
+
+    // Start editing
+    const entitySection = screen.getByText('Proactive Monitoring').closest('section');
+    const editButton = Array.from(entitySection?.querySelectorAll('button') || []).find(
+      (btn) => btn.textContent === 'Edit'
+    );
+    if (editButton) await user.click(editButton);
+
+    // Verify form populated
+    const nameInput = entitySection?.querySelector('input[type="text"]') as HTMLInputElement;
+    expect(nameInput.value).toBe('Watcher');
+
+    // Delete the entity
+    const deleteButton = Array.from(entitySection?.querySelectorAll('button') || []).find(
+      (btn) => btn.textContent === 'Delete'
+    );
+    if (deleteButton) await user.click(deleteButton);
+
+    await waitFor(() => expect(mocks.removeWatchedEntity).toHaveBeenCalled());
+    
+    // Verify form reset
+    expect(nameInput.value).toBe('');
+    expect(screen.getByRole('button', { name: 'Watch Entity' })).toBeInTheDocument();
+  });
+
+  it('renders empty states for all sections', async () => {
+    mocks.getMemories.mockResolvedValue([]);
+    mocks.getGoals.mockResolvedValue([]);
+    mocks.getWatchedEntities.mockResolvedValue([]);
+
+    render(<MemoryManager projectId="proj-1" />);
+    
+    await waitFor(() => expect(mocks.getMemories).toHaveBeenCalled());
+
+    expect(screen.getByText('No project memories yet.')).toBeInTheDocument();
+    expect(screen.getByText('No author memories yet.')).toBeInTheDocument();
+    expect(screen.getByText('No goals added for this project.')).toBeInTheDocument();
+    expect(screen.getByText('No watched entities for this project.')).toBeInTheDocument();
+  });
+
+  it('handles memory form field changes', async () => {
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(mocks.getMemories).toHaveBeenCalled());
+
+    const scopeSelect = screen.getByLabelText('Scope', { selector: 'select' });
+    const typeSelect = screen.getByLabelText('Type', { selector: 'select' });
+
+    fireEvent.change(scopeSelect, { target: { value: 'author' } });
+    expect(scopeSelect).toHaveValue('author');
+
+    fireEvent.change(typeSelect, { target: { value: 'plan' } });
+    expect(typeSelect).toHaveValue('plan');
+  });
+
+  it('cancels goal edit mode', async () => {
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('Goal title')).toBeInTheDocument());
+
+    const goalItem = screen.getByText('Goal title').closest('div[class*="p-3"]');
+    const editButton = goalItem?.querySelector('button');
+    if (editButton) await user.click(editButton);
+
+    const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    await user.click(cancelButton);
+
+    const goalsSection = screen.getByText('Goals').closest('section');
+    const titleInput = goalsSection?.querySelector('input[type="text"]');
+    expect(titleInput).toHaveValue('');
+  });
+
+  it('cancels entity edit mode', async () => {
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('Watcher')).toBeInTheDocument());
+
+    const entitySection = screen.getByText('Proactive Monitoring').closest('section');
+    const editButton = Array.from(entitySection?.querySelectorAll('button') || []).find(
+      (btn) => btn.textContent === 'Edit'
+    );
+    if (editButton) await user.click(editButton);
+
+    const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    await user.click(cancelButton);
+
+    const nameInput = entitySection?.querySelector('input[type="text"]');
+    expect(nameInput).toHaveValue('');
+  });
+
+  it('handles all goal form fields', async () => {
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(mocks.getGoals).toHaveBeenCalled());
+
+    const goalsSection = screen.getByText('Goals').closest('section');
+    const titleInput = goalsSection?.querySelector('input[type="text"]');
+    const descInput = goalsSection?.querySelector('textarea');
+    const progressInput = goalsSection?.querySelector('input[type="range"]');
+
+    if (titleInput) fireEvent.change(titleInput, { target: { value: 'Required Title' } });
+    if (descInput) fireEvent.change(descInput, { target: { value: 'New Description' } });
+    if (progressInput) fireEvent.change(progressInput, { target: { value: '50' } });
+
+    const submitButton = screen.getByRole('button', { name: 'Add Goal' });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(mocks.addGoal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Required Title',
+        description: 'New Description',
+        progress: 50
+      })
+    ));
+  });
+
+  it('handles all entity form fields', async () => {
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(mocks.getWatchedEntities).toHaveBeenCalled());
+
+    const entitySection = screen.getByText('Proactive Monitoring').closest('section');
+    const nameInput = entitySection?.querySelector('input[type="text"]');
+    const reasonInput = entitySection?.querySelector('textarea');
+    const monitoringCheckbox = entitySection?.querySelector('input[type="checkbox"]');
+
+    if (nameInput) fireEvent.change(nameInput, { target: { value: 'Required Name' } });
+    if (reasonInput) fireEvent.change(reasonInput, { target: { value: 'New Reason' } });
+    if (monitoringCheckbox) fireEvent.click(monitoringCheckbox); // Toggle off
+
+    const submitButton = screen.getByRole('button', { name: 'Watch Entity' });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(mocks.addWatchedEntity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Required Name',
+        reason: 'New Reason',
+        monitoringEnabled: false
+      })
+    ));
+  });
+
+  it('edits an author memory', async () => {
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('Author note')).toBeInTheDocument());
+
+    // Find edit button for author memory
+    const authorSection = screen.getByText('Author Memories').closest('div');
+    const editButton = authorSection?.querySelector('button'); // First button should be edit
+    if (editButton) await user.click(editButton);
+
+    const form = screen.getByRole('form', { name: /memories/i });
+    const textarea = screen.getByLabelText('Memory Text', { selector: 'textarea' });
+    expect(textarea).toHaveValue('Author note');
+  });
+
+  it('deletes an author memory', async () => {
+    const user = userEvent.setup();
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('Author note')).toBeInTheDocument());
+
+    const authorSection = screen.getByText('Author Memories').closest('div');
+    const deleteButton = Array.from(authorSection?.querySelectorAll('button') || []).find(
+      (btn) => btn.textContent === 'Delete'
+    );
+    if (deleteButton) await user.click(deleteButton);
+
+    await waitFor(() => expect(mocks.deleteMemory).toHaveBeenCalledWith('m-author'));
+  });
+
+  it('clamps importance values correctly', async () => {
+    render(<MemoryManager projectId="proj-1" />);
+    await waitFor(() => expect(mocks.getMemories).toHaveBeenCalled());
+
+    const form = screen.getByRole('form', { name: /memories/i });
+    const textarea = screen.getByLabelText('Memory Text', { selector: 'textarea' });
+    const importanceInput = screen.getByLabelText('Importance (0-1)', { selector: 'input' });
+
+    fireEvent.change(textarea, { target: { value: 'Clamped memory' } });
+
+    // Test > 1
+    fireEvent.change(importanceInput, { target: { value: '2.5' } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(mocks.createMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ importance: 1 })
+    ));
+
+    mocks.createMemory.mockClear();
+
+    // Form resets after successful submit; re-enter text for the next submission
+    fireEvent.change(textarea, { target: { value: 'Clamped memory' } });
+
+    // Test < 0
+    fireEvent.change(importanceInput, { target: { value: '-1.5' } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(mocks.createMemory).toHaveBeenCalledWith(
+        expect.objectContaining({ importance: 0 })
+      ));
+  });
 });

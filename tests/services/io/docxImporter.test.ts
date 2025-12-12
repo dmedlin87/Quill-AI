@@ -31,6 +31,7 @@ describe('extractRawTextFromDocxArrayBuffer', () => {
     const extractRawText = vi.fn(async () => ({}));
 
     vi.doMock('mammoth', () => ({
+      default: undefined,
       extractRawText,
     }));
 

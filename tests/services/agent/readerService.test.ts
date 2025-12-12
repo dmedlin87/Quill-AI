@@ -1,7 +1,10 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
+const { mockGenerateContent } = vi.hoisted(() => ({
+  mockGenerateContent: vi.fn(),
+}));
+
 describe('ReaderService.generateReactions', () => {
-  const mockGenerateContent = vi.fn();
   const mockRandomUUID = vi.spyOn(crypto, 'randomUUID');
 
   vi.mock('@/services/gemini/client', () => ({
@@ -19,7 +22,7 @@ describe('ReaderService.generateReactions', () => {
   beforeEach(() => {
     mockGenerateContent.mockReset();
     mockRandomUUID.mockReset();
-    mockRandomUUID.mockReturnValue('uuid-1');
+    mockRandomUUID.mockReturnValue('00000000-0000-4000-8000-000000000001');
   });
 
   it('returns empty array for short text', async () => {
@@ -35,7 +38,7 @@ describe('ReaderService.generateReactions', () => {
         text: () => '[{"quote":"Hello","reaction":"Nice","sentiment":"positive"}]',
       },
     });
-    mockRandomUUID.mockReturnValueOnce('uuid-success');
+    mockRandomUUID.mockReturnValueOnce('00000000-0000-4000-8000-000000000002');
 
     const { ReaderService } = await import('@/services/agent/readerService');
     const service = new ReaderService();
@@ -47,7 +50,7 @@ describe('ReaderService.generateReactions', () => {
     expect(mockGenerateContent).toHaveBeenCalled();
     expect(result).toEqual([
       expect.objectContaining({
-        id: 'uuid-success',
+        id: '00000000-0000-4000-8000-000000000002',
         quote: 'Hello',
         issue: 'Nice',
         severity: 'info',
@@ -61,7 +64,7 @@ describe('ReaderService.generateReactions', () => {
         text: () => 'not json',
       },
     });
-    mockRandomUUID.mockReturnValue('uuid-json-error');
+    mockRandomUUID.mockReturnValue('00000000-0000-4000-8000-000000000003');
 
     const { ReaderService } = await import('@/services/agent/readerService');
     const service = new ReaderService();
@@ -72,7 +75,8 @@ describe('ReaderService.generateReactions', () => {
 
     expect(result).toEqual([
       expect.objectContaining({
-        id: 'uuid-json-error',
+        id: '00000000-0000-4000-8000-000000000003',
+        issue: 'Error parsing AI response. Please try again.',
         severity: 'error',
       }),
     ]);
@@ -84,7 +88,7 @@ describe('ReaderService.generateReactions', () => {
         text: () => '{"quote":"one"}',
       },
     });
-    mockRandomUUID.mockReturnValue('uuid-not-array');
+    mockRandomUUID.mockReturnValue('00000000-0000-4000-8000-000000000004');
 
     const { ReaderService } = await import('@/services/agent/readerService');
     const service = new ReaderService();
@@ -95,7 +99,7 @@ describe('ReaderService.generateReactions', () => {
 
     expect(result).toEqual([
       expect.objectContaining({
-        id: 'uuid-not-array',
+        id: '00000000-0000-4000-8000-000000000004',
         issue: 'AI response format was invalid.',
       }),
     ]);
@@ -103,7 +107,7 @@ describe('ReaderService.generateReactions', () => {
 
   it('returns error InlineComment when generation fails', async () => {
     mockGenerateContent.mockRejectedValue(new Error('AI offline'));
-    mockRandomUUID.mockReturnValue('uuid-ai-error');
+    mockRandomUUID.mockReturnValue('00000000-0000-4000-8000-000000000005');
 
     const { ReaderService } = await import('@/services/agent/readerService');
     const service = new ReaderService();
@@ -114,7 +118,7 @@ describe('ReaderService.generateReactions', () => {
 
     expect(result).toEqual([
       expect.objectContaining({
-        id: 'uuid-ai-error',
+        id: '00000000-0000-4000-8000-000000000005',
         issue: 'An error occurred while generating reader reactions. Please try again later.',
       }),
     ]);

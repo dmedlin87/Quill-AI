@@ -521,6 +521,25 @@ describe('LoreManager', () => {
         expect(updateProjectLore).not.toHaveBeenCalled();
     });
 
+    it('handles project with undefined lore', () => {
+        mockedUseProjectStore.mockReturnValue({
+            currentProject: { id: 'p1' }, // No lore property
+            updateProjectLore,
+        } as any);
+        render(<LoreManager />);
+        expect(screen.getByText(/No characters yet/)).toBeInTheDocument();
+    });
+
+    it('handles lore with undefined worldRules', () => {
+        mockedUseProjectStore.mockReturnValue({
+            currentProject: { id: 'p1', lore: { characters: [] } }, // worldRules missing
+            updateProjectLore,
+        } as any);
+        render(<LoreManager />);
+        fireEvent.click(screen.getByRole('button', { name: /world rules/i }));
+        expect(screen.getByText(/no world rules defined yet/i)).toBeInTheDocument();
+    });
+
       it('does not add plot thread if empty', () => {
           renderLoreManager();
           fireEvent.click(screen.getByRole('button', { name: /add character manually/i }));

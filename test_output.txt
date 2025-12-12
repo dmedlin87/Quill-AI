@@ -1,33 +1,25 @@
 
 [1m[46m RUN [49m[22m [36mv4.0.15 [39m[90mC:/Users/dmedl/Projects/Quill AI[39m
+      [2mCoverage enabled with [22m[33mv8[39m
 
- [31mΓ¥»[39m tests/components/LoreManager.test.tsx [2m([22m[2m22 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 313[2mms[22m[39m
-       [32mΓ£ô[39m switches to World Rules tab and shows empty state[32m 67[2mms[22m[39m
-       [32mΓ£ô[39m adds a new world rule[32m 18[2mms[22m[39m
-       [32mΓ£ô[39m adds a new world rule via Enter key[32m 9[2mms[22m[39m
-       [32mΓ£ô[39m edits an existing world rule[32m 8[2mms[22m[39m
-       [32mΓ£ô[39m deletes a world rule[32m 10[2mms[22m[39m
-       [32mΓ£ô[39m opens the create character form[32m 16[2mms[22m[39m
-       [32mΓ£ô[39m creates a new character with all fields[32m 29[2mms[22m[39m
-       [32mΓ£ô[39m removes a relationship[32m 14[2mms[22m[39m
-       [32mΓ£ô[39m removes a plot thread[32m 13[2mms[22m[39m
-       [32mΓ£ô[39m edits an existing character[32m 11[2mms[22m[39m
-       [32mΓ£ô[39m deletes a character[32m 12[2mms[22m[39m
-       [32mΓ£ô[39m cancels creating a new character[32m 13[2mms[22m[39m
-       [32mΓ£ô[39m cancels editing a character[32m 10[2mms[22m[39m
-       [32mΓ£ô[39m navigates back to list using "Back to list" button[32m 8[2mms[22m[39m
-       [32mΓ£ô[39m invokes onInterviewCharacter when interview button is clicked[32m 6[2mms[22m[39m
-       [32mΓ£ô[39m initializes editor from draftCharacter and consumes draft[32m 4[2mms[22m[39m
-       [32mΓ£ô[39m handles partial draft character with defaults[32m 4[2mms[22m[39m
-       [32mΓ£ô[39m does not add world rule if empty[32m 7[2mms[22m[39m
-       [32mΓ£ô[39m does not add relationship if incomplete[32m 15[2mms[22m[39m
-       [32mΓ£ô[39m does not add plot thread if empty[32m 14[2mms[22m[39m
-[31m       [31m├ù[31m does not crash if onInterview is undefined[39m[32m 7[2mms[22m[39m
-       [32mΓ£ô[39m safely handles null project when saving[32m 16[2mms[22m[39m
+ [32mΓ£ô[39m tests/features/memory/MemoryManager.test.tsx [2m([22m[2m35 tests[22m[2m)[22m[33m 2650[2mms[22m[39m
 
-[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m21 passed[39m[22m[90m (22)[39m
-[2m   Start at [22m 20:07:25
-[2m   Duration [22m 1.66s[2m (transform 149ms, setup 410ms, import 114ms, tests 313ms, environment 646ms)[22m
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m35 passed[39m[22m[90m (35)[39m
+[2m   Start at [22m 22:15:31
+[2m   Duration [22m 4.40s[2m (transform 187ms, setup 482ms, import 205ms, tests 2.65s, environment 765ms)[22m
 
 JSON report written to C:/Users/dmedl/Projects/Quill AI/coverage/vitest-report.json
+[34m % [39m[2mCoverage report from [22m[33mv8[39m
+-------------------|---------|----------|---------|---------|-----------------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s           
+-------------------|---------|----------|---------|---------|-----------------------------
+All files          |    94.5 |    78.57 |   98.57 |   95.67 |                             
+ MemoryManager.tsx |    94.5 |    78.57 |   98.57 |   95.67 | 151-152,218-219,271-272,329 
+-------------------|---------|----------|---------|---------|-----------------------------
+ERROR: Coverage for branches (78.57%) does not meet global threshold (90%)
+npm notice
+npm notice New major version of npm available! 10.9.0 -> 11.7.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.7.0
+npm notice To update run: npm install -g npm@11.7.0
+npm notice
