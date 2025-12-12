@@ -185,12 +185,12 @@ export function useTiptapSync(options: UseTiptapSyncOptions) {
 }
 
 /**
- * Creates a debounced callback for editor updates.
- * @param callback - The function to call with the markdown content
+ * Creates a debounced callback.
+ * @param callback - The function to call
  * @param delay - Debounce delay in milliseconds (default: 300)
  */
-export function useDebouncedUpdate(
-  callback: (text: string) => void,
+export function useDebouncedUpdate<T extends (...args: any[]) => void>(
+  callback: T,
   delay: number = 300
 ) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
@@ -201,12 +201,12 @@ export function useDebouncedUpdate(
     callbackRef.current = callback;
   }, [callback]);
 
-  const debouncedCallback = useCallback((text: string) => {
+  const debouncedCallback = useCallback((...args: Parameters<T>) => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
     timeoutRef.current = setTimeout(() => {
-      callbackRef.current(text);
+      callbackRef.current(...args);
     }, delay);
   }, [delay]);
 

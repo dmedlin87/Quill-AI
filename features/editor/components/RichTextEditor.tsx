@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
@@ -77,8 +77,21 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
     onCommentClick,
   });
 
+  // Performance: Get markdown ONLY when debounced callback fires, not on every keystroke
+  const handleUpdate = useCallback((editor: Editor) => {
+    // Check if editor is destroyed before accessing storage
+    if (editor.isDestroyed) return;
+
+    // Safety check for markdown extension
+    const markdownStorage = (editor.storage as any).markdown;
+    if (!markdownStorage?.getMarkdown) return;
+
+    const markdown = markdownStorage.getMarkdown();
+    onUpdate(markdown);
+  }, [onUpdate]);
+
   // Debounced update to prevent re-renders on every keystroke (300ms default)
-  const debouncedOnUpdate = useDebouncedUpdate(onUpdate, 300);
+  const debouncedOnUpdate = useDebouncedUpdate(handleUpdate, 300);
 
   const editorAttributes = useMemo(() => getEditorAttributes(nativeSpellcheckEnabled), [nativeSpellcheckEnabled]);
 
@@ -96,9 +109,8 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
     onFocus: () => setIsFocused(true),
     onBlur: () => setIsFocused(false),
     onUpdate: ({ editor }) => {
-      const markdown = (editor.storage as any).markdown.getMarkdown();
       setIsEmpty(editor.isEmpty);
-      debouncedOnUpdate(markdown);
+      debouncedOnUpdate(editor);
     },
     onSelectionUpdate: ({ editor }) => {
       const { from, to, empty } = editor.state.selection;
