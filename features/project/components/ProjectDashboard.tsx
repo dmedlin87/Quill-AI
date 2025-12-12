@@ -5,6 +5,9 @@ import { extractRawTextFromDocxArrayBuffer } from '@/services/io/docxImporter';
 import { ImportWizard } from './ImportWizard';
 import { Project } from '@/types/schema';
 
+// 10MB limit to prevent browser crash/DoS
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
 /**
  * Generate a deterministic gradient from a string (project title)
  * Returns CSS gradient string
@@ -225,6 +228,15 @@ export const ProjectDashboard: React.FC = () => {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
+
+      // Security Check: Enforce file size limit (10MB)
+      if (file.size > MAX_FILE_SIZE) {
+        setError("File too large. Please upload a file smaller than 10MB.");
+        setIsModalOpen(true); // Show modal to display the error
+        // Reset input value so same file can be selected again if needed
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
 
       try {
           const text = file.name.endsWith('.docx')
