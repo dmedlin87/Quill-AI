@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { InlineComment } from '@/types/schema';
+import { Editor } from '@tiptap/react';
 
 const ANALYSIS_PLUGIN_KEY = new PluginKey('analysis-decorations');
 const COMMENT_PLUGIN_KEY = new PluginKey('comment-decorations');
@@ -78,7 +79,7 @@ export function useTiptapSync(options: UseTiptapSyncOptions) {
   }, [analysisHighlights, inlineComments, onCommentClick]);
 
   // Force decoration refresh - call this after data changes
-  const refreshDecorations = useCallback((editor: any) => {
+  const refreshDecorations = useCallback((editor: Editor) => {
     if (!editor || editor.isDestroyed) return;
     // Trigger a no-op transaction to force decoration recalculation
     editor.view.dispatch(editor.state.tr.setMeta('forceDecorationRefresh', true));
@@ -159,7 +160,7 @@ export function useTiptapSync(options: UseTiptapSyncOptions) {
   }, []); // Empty deps - plugin uses refs internally
 
   // Plugin installer - call once after editor is created
-  const installPlugins = useCallback((editor: any) => {
+  const installPlugins = useCallback((editor: Editor) => {
     if (!editor || editor.isDestroyed) return;
 
     const state = editor.state;

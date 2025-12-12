@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
 import { Markdown } from 'tiptap-markdown';
@@ -13,7 +13,7 @@ interface RichTextEditorProps {
   content: string;
   onUpdate: (text: string) => void;
   onSelectionChange: (selection: { start: number; end: number; text: string } | null, pos: { top: number; left: number } | null) => void;
-  setEditorRef: (editor: any) => void;
+  setEditorRef: (editor: Editor | null) => void;
   activeHighlight: { start: number; end: number; type: string } | null;
   analysisHighlights?: HighlightItem[];
   inlineComments?: InlineComment[];
@@ -158,16 +158,13 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
 
     setIsEmpty(editor.isEmpty);
 
-    const rawIsFocused = (editor as any).isFocused;
-    // Only treat an explicit boolean value as indicating focus. This allows
-    // tests to override focus state via a boolean property while ignoring
-    // Tiptap's default function-style isFocused() for this sync behavior.
-    const isEditorFocused = typeof rawIsFocused === 'boolean' ? rawIsFocused : false;
+    // Use Tiptap's isFocused from the editor instance
+    const isEditorFocused = editor.isFocused;
 
     if (isEditorFocused) return;
 
-    const currentMarkdown =
-      (editor.storage as any)?.markdown?.getMarkdown?.() ?? '';
+    // Use safe access for markdown storage
+    const currentMarkdown = (editor.storage as any)?.markdown?.getMarkdown?.() ?? '';
 
     if (currentMarkdown === content) return;
 
