@@ -21,7 +21,7 @@
     "test:quick": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest run --reporter=dot"
   },
   "dependencies": {
-    "@google/genai": "^1.30.0",
+    "@google/genai": "^1.33.0",
     "@tiptap/core": "^2.27.1",
     "@tiptap/extension-highlight": "^2.27.1",
     "@tiptap/pm": "^2.27.1",
@@ -30,7 +30,7 @@
     "dexie": "3.2.4",
     "diff": "5.2.0",
     "diff-match-patch": "1.0.5",
-    "framer-motion": "^12.23.24",
+    "framer-motion": "^12.23.26",
     "jspdf": "^3.0.4",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -48,7 +48,7 @@
     "cross-env": "^7.0.3",
     "happy-dom": "^20.0.11",
     "jsdom": "^24.0.0",
-    "typescript": "~5.8.2",
+    "typescript": "~5.9.3",
     "vite": "^6.4.1",
     "vitest": "^4.0.15"
   }
