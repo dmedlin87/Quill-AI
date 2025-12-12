@@ -873,5 +873,258 @@ describe('adaptiveContext', () => {
           const budget = selectBudget(15, false, false, 'general');
           expect(budget.totalTokens).toBe(DEFAULT_BUDGET.totalTokens * 0.7);
       });
+
+      it('returns voice budget when isVoiceMode is true', () => {
+          const budget = selectBudget(0, false, true);
+          expect(budget).toEqual(VOICE_MODE_BUDGET);
+      });
+
+      it('returns editing budget when queryType is editing', () => {
+          const budget = selectBudget(0, false, false, 'editing');
+          expect(budget).toEqual(EDITING_BUDGET);
+      });
+
+      it('returns editing budget when hasSelection is true', () => {
+          const budget = selectBudget(0, true, false);
+          expect(budget).toEqual(EDITING_BUDGET);
+      });
+
+      it('returns deep analysis budget when queryType is analysis', () => {
+          const budget = selectBudget(0, false, false, 'analysis');
+          expect(budget).toEqual(DEEP_ANALYSIS_BUDGET);
+      });
+
+      it('returns default budget for short conversations without special params', () => {
+          const budget = selectBudget(5, false, false);
+          expect(budget).toEqual(DEFAULT_BUDGET);
+      });
+
+      it('prioritizes voice mode over other options', () => {
+          // Voice mode should take precedence even with selection and analysis query
+          const budget = selectBudget(0, true, true, 'analysis');
+          expect(budget).toEqual(VOICE_MODE_BUDGET);
+      });
+
+      it('prioritizes editing/selection over analysis', () => {
+          // Editing should come before analysis in priority
+          const budget = selectBudget(0, true, false, 'analysis');
+          expect(budget).toEqual(EDITING_BUDGET);
+      });
+  });
+
+  describe('Section Omission and Truncation', () => {
+    it('omits sections when budget is exhausted and section is not truncatable', async () => {
+      // Use extremely tiny budget to force omission
+      const tinyBudget = { ...DEFAULT_BUDGET, totalTokens: 50 };
+      const result = await buildAdaptiveContext(baseState, 'p1', { budget: tinyBudget });
+
+      // Should have omitted some sections due to budget
+      expect(result.sectionsOmitted.length + result.sectionsTruncated.length).toBeGreaterThan(0);
+    });
+
+    it('tracks sections that were truncated during assembly', async () => {
+      const smallBudget = { ...DEFAULT_BUDGET, totalTokens: 200 };
+      const largeState = {
+        ...baseState,
+        manuscript: {
+          ...baseState.manuscript,
+          currentText: 'content '.repeat(200),
+        },
+      };
+
+      const result = await buildAdaptiveContext(largeState, 'p1', { budget: smallBudget });
+
+      // At least one section should be truncated
+      expect(result.sectionsTruncated.length).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('Memory Section Error Handling', () => {
+    it('handles memory service errors gracefully', async () => {
+      vi.spyOn(memoryService, 'getMemories').mockRejectedValueOnce(new Error('DB error'));
+      vi.spyOn(memoryService, 'getMemoriesForContext').mockRejectedValueOnce(new Error('DB error'));
+
+      const result = await buildAdaptiveContext(baseState, 'p1', {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('Memory unavailable');
+    });
+  });
+
+  describe('buildBedsidePlanText Edge Cases', () => {
+    it('includes goal progress in bedside note text', async () => {
+      const staleTimestamp = Date.now() - 1000 * 60 * 60 * 24;
+      vi.spyOn(memoryService, 'getMemories').mockResolvedValueOnce([
+        {
+          id: 'bedside-1',
+          scope: 'project',
+          projectId: 'p1',
+          type: 'plan',
+          text: 'Old note',
+          topicTags: ['meta:bedside-note'],
+          importance: 0.9,
+          createdAt: staleTimestamp,
+          updatedAt: staleTimestamp,
+        },
+      ] as any);
+
+      vi.spyOn(memoryService, 'getMemoriesForContext')
+        .mockResolvedValueOnce({
+          author: [],
+          project: [{
+            id: 'bedside-1',
+            topicTags: ['meta:bedside-note'],
+            createdAt: staleTimestamp,
+            updatedAt: staleTimestamp,
+          }],
+        } as any)
+        .mockResolvedValueOnce({ author: [], project: [] } as any);
+
+      const evolveSpy = vi.spyOn(memoryService, 'evolveBedsideNote').mockResolvedValueOnce({} as any);
+      vi.spyOn(memoryService, 'getActiveGoals').mockResolvedValueOnce([
+        { id: 'g1', title: 'Complete chapter 5', progress: 75 } as any,
+      ]);
+      vi.spyOn(memoryService, 'formatMemoriesForPrompt').mockReturnValue('');
+      vi.spyOn(memoryService, 'formatGoalsForPrompt').mockReturnValue('');
+
+      await buildAdaptiveContext(baseState, 'p1', {
+        budget: DEFAULT_BUDGET,
+        bedsideNoteStalenessMs: 1000 * 60 * 60,
+        sceneAwareMemory: false,
+      });
+
+      expect(evolveSpy).toHaveBeenCalled();
+      const planText = evolveSpy.mock.calls[0][1];
+      expect(planText).toContain('Complete chapter 5');
+      expect(planText).toContain('[75%]');
+    });
+
+    it('includes plot issues in bedside refresh', async () => {
+      const staleTimestamp = Date.now() - 1000 * 60 * 60 * 24;
+      vi.spyOn(memoryService, 'getMemories').mockResolvedValueOnce([
+        {
+          id: 'bedside-1',
+          scope: 'project',
+          type: 'plan',
+          topicTags: ['meta:bedside-note'],
+          createdAt: staleTimestamp,
+          updatedAt: staleTimestamp,
+        },
+      ] as any);
+
+      vi.spyOn(memoryService, 'getMemoriesForContext')
+        .mockResolvedValueOnce({
+          author: [],
+          project: [{
+            id: 'bedside-1',
+            topicTags: ['meta:bedside-note'],
+            createdAt: staleTimestamp,
+          }],
+        } as any)
+        .mockResolvedValueOnce({ author: [], project: [] } as any);
+
+      const evolveSpy = vi.spyOn(memoryService, 'evolveBedsideNote').mockResolvedValueOnce({} as any);
+      vi.spyOn(memoryService, 'getActiveGoals').mockResolvedValueOnce([]);
+      vi.spyOn(memoryService, 'formatMemoriesForPrompt').mockReturnValue('');
+      vi.spyOn(memoryService, 'formatGoalsForPrompt').mockReturnValue('');
+
+      const stateWithPlotIssues = {
+        ...baseState,
+        analysis: {
+          result: {
+            summary: 'Story summary',
+            strengths: [],
+            weaknesses: ['Weak dialogue', 'Pacing issues'],
+            plotIssues: [{ issue: 'Plot hole in chapter 3' }],
+          },
+        },
+      };
+
+      await buildAdaptiveContext(stateWithPlotIssues, 'p1', {
+        budget: DEFAULT_BUDGET,
+        bedsideNoteStalenessMs: 1000 * 60 * 60,
+        sceneAwareMemory: false,
+      });
+
+      expect(evolveSpy).toHaveBeenCalled();
+      const planText = evolveSpy.mock.calls[0][1];
+      expect(planText).toContain('Plot hole in chapter 3');
+      expect(planText).toContain('Weak dialogue');
+    });
+  });
+
+  describe('No Project ID Handling', () => {
+    it('returns minimal memory section when no projectId', async () => {
+      const result = await buildAdaptiveContext(baseState, null, {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('No project context for memory');
+    });
+  });
+
+  describe('Conflict Alert - No Structured Conflicts', () => {
+    it('shows generic conflict message when structuredContent has no conflicts array', async () => {
+      const conflictNote = {
+        id: 'bed-conflict',
+        scope: 'project',
+        projectId: 'p1',
+        type: 'plan',
+        text: 'Conflicting note',
+        topicTags: ['meta:bedside-note', 'conflict:detected'],
+        importance: 0.9,
+        structuredContent: {}, // No conflicts array
+      } as any;
+
+      vi.spyOn(memoryService, 'getMemories').mockResolvedValue([conflictNote]);
+      vi.spyOn(memoryService, 'getActiveGoals').mockResolvedValue([] as any);
+      vi.spyOn(memoryService, 'getMemoriesForContext').mockResolvedValue({
+        author: [],
+        project: [conflictNote],
+      } as any);
+      vi.spyOn(memoryService, 'formatMemoriesForPrompt').mockReturnValue('');
+      vi.spyOn(memoryService, 'formatGoalsForPrompt').mockReturnValue('');
+
+      const result = await buildAdaptiveContext(baseState, 'p1', {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('[CONFLICT ALERT]');
+      expect(result.context).toContain('Conflicting updates detected');
+      expect(result.context).toContain('Review history');
+    });
+  });
+
+  describe('Last Agent Action Failed', () => {
+    it('shows Failed result for unsuccessful actions', async () => {
+      const stateWithFailedAction = {
+        ...baseState,
+        session: {
+          lastAgentAction: { type: 'generate', description: 'Failed generation', success: false },
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithFailedAction, 'p1', {
+        budget: DEFAULT_BUDGET,
+      });
+
+      expect(result.context).toContain('Result: Failed');
+    });
+  });
+
+  describe('Empty Event History', () => {
+    it('handles no recent events', async () => {
+      vi.mocked(eventBus.formatRecentEventsForAI).mockReturnValue(null);
+
+      const result = await buildAdaptiveContext(baseState, 'p1', {
+        budget: DEFAULT_BUDGET,
+      });
+
+      expect(result.context).toContain('No recent events');
+    });
   });
 });

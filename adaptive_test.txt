@@ -1,0 +1,82 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.15 [39m[90mC:/Users/dmedl/Projects/Quill AI[39m
+
+ [31mΓ¥»[39m tests/services/appBrain/adaptiveContext.test.ts [2m([22m[2m54 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 33[2mms[22m[39m
+       [32mΓ£ô[39m prefers voice budget when mode provided and tracks inclusions[32m 14[2mms[22m[39m
+       [32mΓ£ô[39m truncates sections when exceeding budget[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m uses default budget when no options provided[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m ensures a bedside-note planning memory exists for the project[32m 2[2mms[22m[39m
+       [32mΓ£ô[39m prioritizes bedside-note memories at the top of project memory list[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m refreshes stale bedside note using latest analysis summary and goals[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m does not refresh bedside note when within staleness threshold[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m merges project, arc, and chapter bedside notes hierarchically[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m injects a conflict alert section when bedside notes are tagged with conflicts[32m 1[2mms[22m[39m
+       [32mΓ£ô[39m estimates tokens by character count[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m handles empty string[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns voice profile for voice mode[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns analysis_deep for analysis queryType[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns editing for editing queryType or selection[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns full for general text mode without selection[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns budget with appropriate total tokens[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m uses profile allocations[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m respects maxBudget option[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m respects reserveForResponse option[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m has all expected profiles[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m all profiles sum to ~1.0[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns default context when no HUD available[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m extracts scene context from HUD[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m adds scene-type-specific keywords[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m adds dialogue-specific keywords for dialogue scenes[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m adds tension-level keywords[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m adds location as keyword[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m adds POV character to active entities[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m preserves base relevance keywords[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m deduplicates keywords[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m applies scene-aware filtering by default[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m can disable scene-aware filtering[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m includes surrounding text in manuscript section when budget permits[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m includes intelligence details (entities, style alerts)[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m includes analysis breakdown[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m includes lore characters and rules[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m includes history and last action[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m reduces budget for long conversations[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns voice budget when isVoiceMode is true[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns editing budget when queryType is editing[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns editing budget when hasSelection is true[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns deep analysis budget when queryType is analysis[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m returns default budget for short conversations without special params[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m prioritizes voice mode over other options[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m prioritizes editing/selection over analysis[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m omits sections when budget is exhausted and section is not truncatable[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m tracks sections that were truncated during assembly[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m handles memory service errors gracefully[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m includes goal progress in bedside note text[32m 0[2mms[22m[39m
+[31m       [31m├ù[31m includes plot issues in bedside refresh[39m[32m 5[2mms[22m[39m
+       [32mΓ£ô[39m returns minimal memory section when no projectId[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m shows generic conflict message when structuredContent has no conflicts array[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m shows Failed result for unsuccessful actions[32m 0[2mms[22m[39m
+       [32mΓ£ô[39m handles no recent events[32m 0[2mms[22m[39m
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 1 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  tests/services/appBrain/adaptiveContext.test.ts > adaptiveContext > buildBedsidePlanText Edge Cases > includes plot issues in bedside refresh
+TypeError: Cannot read properties of undefined (reading 'length')
+ Γ¥» buildAnalysisSection services/appBrain/adaptiveContext.ts:486:24
+    484|   }
+    485|   
+    486|   if (result.strengths.length > 0) {
+       |                        ^
+    487|     content += `Strengths: ${result.strengths.slice(0, 3).join(', ')}\ΓÇª
+    488|   }
+ Γ¥» Module.buildAdaptiveContext services/appBrain/adaptiveContext.ts:811:27
+ Γ¥» tests/services/appBrain/adaptiveContext.test.ts:1044:13
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/1]ΓÄ»
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m53 passed[39m[22m[90m (54)[39m
+[2m   Start at [22m 18:02:50
+[2m   Duration [22m 1.80s[2m (transform 419ms, setup 399ms, import 458ms, tests 33ms, environment 702ms)[22m
+
+JSON report written to C:/Users/dmedl/Projects/Quill AI/coverage/vitest-report.json

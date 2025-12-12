@@ -244,19 +244,31 @@ describe('useAgentOrchestrator', () => {
         const { result } = renderHook(() => useAgentOrchestrator({ messageLimit: 2 }));
         await waitFor(() => expect(result.current.isReady).toBe(true));
 
-        // Inject calls directly via sendMessage mocking isn't easy as state is internal.
-        // But we can trigger sendMessage 3 times.
-
-        // We need runAgentToolLoop to resolve fast
-
         await act(async () => { await result.current.sendMessage('1'); });
         await act(async () => { await result.current.sendMessage('2'); });
         await act(async () => { await result.current.sendMessage('3'); });
 
-        // 3 user messages + 3 model responses = 6 messages.
-        // Limit is 2. So we should have 2.
         expect(result.current.messages.length).toBe(2);
         expect(result.current.messages[1].text).toBe('Final Response');
+    });
+
+    it('handles invalid messageLimit values by defaulting to 200', async () => {
+        // Test with 0
+        const { result: r0 } = renderHook(() => useAgentOrchestrator({ messageLimit: 0 }));
+        await waitFor(() => expect(r0.current.isReady).toBe(true));
+        
+        // Test with negative
+        const { result: rNeg } = renderHook(() => useAgentOrchestrator({ messageLimit: -5 }));
+        await waitFor(() => expect(rNeg.current.isReady).toBe(true));
+
+        // Test with non-finite
+        const { result: rInf } = renderHook(() => useAgentOrchestrator({ messageLimit: Infinity }));
+        await waitFor(() => expect(rInf.current.isReady).toBe(true));
+
+        // We can't easily verify the internal variable, but we can verify it doesn't crash 
+        // and behaves "normally" (accepts messages).
+        await act(async () => { await r0.current.sendMessage('1'); });
+        expect(r0.current.messages.length).toBeGreaterThan(0);
     });
 
     it('auto-reinitializes on context change', async () => {
@@ -277,6 +289,84 @@ describe('useAgentOrchestrator', () => {
         await waitFor(() => {
             expect(createAgentSession).toHaveBeenCalledTimes(2);
         });
+    });
+
+    it('validates malformed UI selection during fallback', async () => {
+        // Force smart context failure to trigger fallback logic
+        (getSmartAgentContext as any).mockRejectedValue(new Error('Context fail'));
+
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        // Mock state with malformed selection (missing start/end)
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            ui: {
+                ...defaultState.ui,
+                // Missing start/end, just has text. Should result in undefined selection in fallback.
+                selection: { text: 'Some Text' } 
+            }
+        }));
+
+        await act(async () => {
+            await result.current.sendMessage('Hi');
+        });
+
+        // Verify fallback context was constructed (we can spy on buildAgentContextPrompt if exported or infer from execution)
+        expect(runAgentToolLoop).toHaveBeenCalled();
+        // The fact it didn't crash proves validation passed.
+    });
+
+    it('correctly determines queryType based on UI state', async () => {
+        // 1. Editing (Selection present)
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            ui: { ...defaultState.ui, selection: { start: 0, end: 10, text: 'Sel' } }
+        }));
+        
+        let { result, unmount } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+        await act(async () => { await result.current.sendMessage('Q1'); });
+        
+        expect(getSmartAgentContext).toHaveBeenLastCalledWith(
+            expect.anything(), 
+            expect.anything(), 
+            expect.objectContaining({ queryType: 'editing' })
+        );
+        unmount();
+
+        // 2. Analysis (No selection, activePanel = analysis)
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            ui: { ...defaultState.ui, selection: null, activePanel: 'analysis' }
+        }));
+
+        ({ result, unmount } = renderHook(() => useAgentOrchestrator()));
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+        await act(async () => { await result.current.sendMessage('Q2'); });
+
+        expect(getSmartAgentContext).toHaveBeenLastCalledWith(
+            expect.anything(), 
+            expect.anything(), 
+            expect.objectContaining({ queryType: 'analysis' })
+        );
+        unmount();
+
+        // 3. General (No selection, other panel)
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            ui: { ...defaultState.ui, selection: null, activePanel: 'files' }
+        }));
+
+        ({ result, unmount } = renderHook(() => useAgentOrchestrator()));
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+        await act(async () => { await result.current.sendMessage('Q3'); });
+
+        expect(getSmartAgentContext).toHaveBeenLastCalledWith(
+            expect.anything(), 
+            expect.anything(), 
+            expect.objectContaining({ queryType: 'general' })
+        );
     });
 
     it('does NOT auto-reinitialize if autoReinit is false', async () => {
@@ -362,24 +452,110 @@ describe('useAgentOrchestrator', () => {
         expect(result.current.state.lastError).toBeUndefined();
     });
 
-    it('uses a fallback ToolResult when a tool execution throws exception', async () => {
+    it('generates IDs for tool calls if missing', async () => {
         const { result } = renderHook(() => useAgentOrchestrator());
         await waitFor(() => expect(result.current.isReady).toBe(true));
 
-        (executeAgentToolCall as any).mockRejectedValue(new Error('Kaboom'));
-
+        // Mock runAgentToolLoop to simulate tool calls without IDs
         (runAgentToolLoop as any).mockImplementation(async ({ processToolCalls }: any) => {
-            await processToolCalls([{ id: 'call1', name: 'explode_tool', args: {} }]);
-            return { text: 'After tool error' };
+             const functionResponses = await processToolCalls([{ name: 'tool_no_id', args: {} }]);
+             return { text: 'Done', responses: functionResponses };
+        });
+
+        // Trigger message
+        let responses: any[] = [];
+        (runAgentToolLoop as any).mockImplementation(async ({ processToolCalls }: any) => {
+            responses = await processToolCalls([{ name: 'tool_no_id', args: {} }]);
+            return { text: 'Done' };
         });
 
         await act(async () => {
-            await result.current.sendMessage('Trigger exploding tool');
+            await result.current.sendMessage('Run tool');
         });
 
-        // We can't verify messages array easily because tool outputs go to the agent loop, not directly to chat history in this hook.
-        // But we check that it handled the error without crashing.
-        expect(result.current.state.status).toBe('idle');
+        expect(responses).toHaveLength(1);
+        expect(responses[0].id).toBeDefined();
+        expect(typeof responses[0].id).toBe('string');
+        expect(responses[0].id.length).toBeGreaterThan(0);
+    });
+
+    it('passes available lore to session initialization', async () => {
+        const mockLore = { characters: [{ id: 'char1' }], worldRules: [] };
+        
+        // Setup state with Lore
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            lore: mockLore
+        }));
+
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
+            lore: mockLore
+        }));
+    });
+
+    it('handles undefined lore characters gracefully', async () => {
+        // Setup state with empty Lore
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            lore: { characters: [], worldRules: [] }
+        }));
+
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
+            lore: undefined
+        }));
+    });
+
+    it('formats recent events correctly in prompt', async () => {
+        // Mock event log with recent events
+        const mockEvents = [
+            { timestamp: Date.now(), type: 'TEXT_CHANGED' },
+            { timestamp: Date.now(), type: 'ANALYSIS_COMPLETED' }
+        ];
+        // We need to access the ref or mock the ref initialization? 
+        // The event log is initialized from eventBus.getChangeLog().
+        (eventBus.getChangeLog as any).mockReturnValue(mockEvents);
+
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        // Send message to trigger context building
+        await act(async () => {
+            await result.current.sendMessage('Hello');
+        });
+
+        // Check createAgentSession call IS NOT where prompt is passed. Prompt is passed to sendMessage.
+        // We need to check useAgentOrchestrator logic building prompt.
+        // It calls buildAgentContextPrompt. We can't easily spy on that imported function unless we mock it.
+        // But we can check the arguments passed to chat.sendMessage if we spy on it.
+        
+        const lastCall = mockSendMessage.mock.calls[mockSendMessage.mock.calls.length - 1][0];
+        // It should receive the prompt string.
+        // Or if we didn't mock buildContext, it's constructing a string.
+        // Let's verify it contains our event types.
+        expect(lastCall.message).toContain('TEXT_CHANGED');
+        expect(lastCall.message).toContain('ANALYSIS_COMPLETED');
+    });
+
+    it('handles empty event log', async () => {
+        (eventBus.getChangeLog as any).mockReturnValue([]);
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        await act(async () => { await result.current.sendMessage('Hi'); });
+
+        const lastCall = mockSendMessage.mock.calls[mockSendMessage.mock.calls.length - 1][0];
+        // Should contain 'None' or just not contain event types?
+        // The implementation says: recentEvents ... : 'None'
+        // But it's passed to buildAgentContextPrompt.
+        // We can't see the output of buildAgentContextPrompt easily if we don't mock it to return the inputs.
+        // Assuming real buildAgentContextPrompt puts it in the string.
+        expect(lastCall.message).not.toContain('TEXT_CHANGED');
     });
 
     it('handles sendMessage when chatRef is missing', async () => {

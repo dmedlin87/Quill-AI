@@ -53,8 +53,11 @@ vi.mock('framer-motion', () => ({
 // Mock child components to isolate ToolsPanel testing
 vi.mock('@/features/agent', () => ({
   ChatInterface: () => <div data-testid="chat-interface">Chat Interface</div>,
-  ActivityFeed: ({ history }: any) => (
-    <div data-testid="activity-feed">Activity Feed ({history.length} items)</div>
+  ActivityFeed: ({ history, onInspect }: any) => (
+    <div data-testid="activity-feed">
+      Activity Feed ({history.length} items)
+      <button onClick={() => onInspect && onInspect(history[0])}>Inspect First</button>
+    </div>
   ),
 }));
 
@@ -62,6 +65,20 @@ vi.mock('@/features/analysis', () => ({
   Dashboard: ({ isLoading, warning }: any) => (
     <div data-testid="analysis-dashboard" data-loading={isLoading} data-warning={warning?.message || warning}>
       Analysis Dashboard
+    </div>
+  ),
+  ShadowReaderPanel: () => <div data-testid="shadow-reader-panel">Shadow Reader</div>,
+}));
+
+vi.mock('@/features/editor', () => ({
+  StoryVersionsPanel: ({ onCreateBranch, onSwitchBranch, onMergeBranch, onDeleteBranch, onRenameBranch }: any) => (
+    <div data-testid="story-versions-panel">
+      Story Versions
+      <button onClick={() => onCreateBranch && onCreateBranch('new-branch')}>Create Branch</button>
+      <button onClick={() => onSwitchBranch && onSwitchBranch('b1')}>Switch Branch</button>
+      <button onClick={() => onMergeBranch && onMergeBranch('b1')}>Merge Branch</button>
+      <button onClick={() => onDeleteBranch && onDeleteBranch('b1')}>Delete Branch</button>
+      <button onClick={() => onRenameBranch && onRenameBranch('b1', 'renamed')}>Rename Branch</button>
     </div>
   ),
 }));
@@ -333,6 +350,62 @@ describe('ToolsPanel', () => {
     });
   });
 
+  describe('Tab Content: Branches', () => {
+    it('renders StoryVersionsPanel when activeTab is BRANCHES', () => {
+      mockActiveTab = SidebarTab.BRANCHES;
+      render(<ToolsPanel {...defaultProps} />);
+      expect(screen.getByTestId('story-versions-panel')).toBeInTheDocument();
+    });
+  });
+
+  describe('Analysis Mode Toggle', () => {
+    it('renders ShadowReaderPanel when in reader mode', () => {
+      mockActiveTab = SidebarTab.ANALYSIS;
+      render(<ToolsPanel {...defaultProps} />);
+      
+      // Default is Dashboard
+      expect(screen.getByTestId('analysis-dashboard')).toBeInTheDocument();
+      expect(screen.queryByTestId('shadow-reader-panel')).not.toBeInTheDocument();
+      
+      // Switch to Reader
+      fireEvent.click(screen.getByText('Reader'));
+      expect(screen.getByTestId('shadow-reader-panel')).toBeInTheDocument();
+      expect(screen.queryByTestId('analysis-dashboard')).not.toBeInTheDocument();
+      
+      // Switch back to Analysis
+      fireEvent.click(screen.getByText('Analysis'));
+      expect(screen.getByTestId('analysis-dashboard')).toBeInTheDocument();
+    });
+  });
+
+  describe('Author Profile Settings', () => {
+    it('loads initial value from localStorage', () => {
+      mockActiveTab = SidebarTab.SETTINGS;
+      const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('Test Author');
+      
+      render(<ToolsPanel {...defaultProps} />);
+      
+      const input = screen.getByPlaceholderText('Your Pen Name') as HTMLInputElement;
+      expect(input.value).toBe('Test Author');
+      
+      getItemSpy.mockRestore();
+    });
+
+    it('updates localStorage on change', () => {
+      mockActiveTab = SidebarTab.SETTINGS;
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+      
+      render(<ToolsPanel {...defaultProps} />);
+      
+      const input = screen.getByPlaceholderText('Your Pen Name');
+      fireEvent.change(input, { target: { value: 'New Author' } });
+      
+      expect(setItemSpy).toHaveBeenCalledWith('quill_author_name', 'New Author');
+      
+      setItemSpy.mockRestore();
+    });
+  });
+
   describe('Resize Handle', () => {
     it('calls setToolsPanelWidth with drag delta and clears resizing on mouseup', () => {
       mockToolsPanelWidth = 400;
@@ -353,6 +426,68 @@ describe('ToolsPanel', () => {
       unmount();
       fireEvent.mouseMove(document, { clientX: 400 });
       expect(mockSetToolsPanelWidth).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Default Callbacks & Inline Handlers', () => {
+    it('handles ActivityFeed inspect callback with console.log', () => {
+      mockActiveTab = SidebarTab.HISTORY;
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      
+      render(<ToolsPanel {...defaultProps} history={[{ id: '1' }]} />);
+      
+      fireEvent.click(screen.getByText('Inspect First'));
+      
+      expect(consoleSpy).toHaveBeenCalledWith('Inspect', { id: '1' });
+      consoleSpy.mockRestore();
+    });
+
+    it('uses default no-op handlers for branch actions when not provided', () => {
+      mockActiveTab = SidebarTab.BRANCHES;
+      // Render without branch callbacks
+      render(<ToolsPanel {...defaultProps} onCreateBranch={undefined} onSwitchBranch={undefined} onMergeBranch={undefined} onDeleteBranch={undefined} onRenameBranch={undefined} />);
+      
+      // Clicking should not throw errors
+      expect(() => fireEvent.click(screen.getByText('Create Branch'))).not.toThrow();
+      expect(() => fireEvent.click(screen.getByText('Switch Branch'))).not.toThrow();
+      expect(() => fireEvent.click(screen.getByText('Merge Branch'))).not.toThrow();
+      expect(() => fireEvent.click(screen.getByText('Delete Branch'))).not.toThrow();
+      expect(() => fireEvent.click(screen.getByText('Rename Branch'))).not.toThrow();
+    });
+
+    it('passes provided branch callbacks correctly', () => {
+      mockActiveTab = SidebarTab.BRANCHES;
+      const onCreate = vi.fn();
+      const onSwitch = vi.fn();
+      const onMerge = vi.fn();
+      const onDelete = vi.fn();
+      const onRename = vi.fn();
+
+      render(
+        <ToolsPanel 
+          {...defaultProps} 
+          onCreateBranch={onCreate}
+          onSwitchBranch={onSwitch}
+          onMergeBranch={onMerge}
+          onDeleteBranch={onDelete}
+          onRenameBranch={onRename}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Create Branch'));
+      expect(onCreate).toHaveBeenCalledWith('new-branch');
+
+      fireEvent.click(screen.getByText('Switch Branch'));
+      expect(onSwitch).toHaveBeenCalledWith('b1');
+      
+      fireEvent.click(screen.getByText('Merge Branch'));
+      expect(onMerge).toHaveBeenCalledWith('b1');
+
+      fireEvent.click(screen.getByText('Delete Branch'));
+      expect(onDelete).toHaveBeenCalledWith('b1');
+
+      fireEvent.click(screen.getByText('Rename Branch'));
+      expect(onRename).toHaveBeenCalledWith('b1', 'renamed');
     });
   });
 });
