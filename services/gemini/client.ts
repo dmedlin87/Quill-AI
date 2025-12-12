@@ -77,9 +77,9 @@ type GenerateContentFunc = (request: any) => Promise<GenerateContentResponse>;
 /**
  * Extracts model ID from request object or string.
  */
-function getModelId(request: any, defaultModel: string): string {
-  if (typeof request === 'string') return defaultModel;
-  return request.model || defaultModel;
+function getModelId(request: any, defaultModel?: string): string {
+  if (typeof request === 'string') return defaultModel ?? '';
+  return request.model || defaultModel || '';
 }
 
 /**
@@ -94,21 +94,32 @@ async function smartGenerateContent(
   request: any
 ): Promise<GenerateContentResponse> {
   const buildKey = getActiveModelBuild();
+  const activeBuild = ModelBuilds[buildKey as ModelBuildKey] ?? ModelBuilds.default;
+  const defaultModelId = activeBuild?.analysis?.id;
   const client = getAiClient();
 
   // Helper to ensure request has a model ID
-  const ensureRequestWithModel = (req: any, modelId: string): any => {
-    if (typeof req === 'string') {
-      return { model: modelId, contents: [{ role: 'user', parts: [{ text: req }] }] };
+  const ensureRequestWithModel = (req: any, modelId?: string): any => {
+    const resolvedModel = getModelId(req, modelId);
+
+    if (!resolvedModel) {
+      return req;
     }
-    return { ...req, model: modelId };
+
+    if (typeof req === 'string') {
+      return { model: resolvedModel, contents: [{ role: 'user', parts: [{ text: req }] }] };
+    }
+    return { ...req, model: resolvedModel };
   };
 
   try {
+    // Ensure every request has an explicit model (the API rejects bare strings)
+    const requestWithModel = ensureRequestWithModel(request, defaultModelId);
+
     // Attempt 1: Direct call
     // Note: We use call() to preserve 'this' context if needed, though GoogleGenAI might not need it
     // But safely binding to client.models is safer
-    return await originalMethod.call(client.models, request);
+    return await originalMethod.call(client.models, requestWithModel);
   } catch (error: any) {
     // Check for 429 or 503 (sometimes transient, but 429 is quota)
     // Some libraries might wrap error in response
@@ -137,7 +148,7 @@ async function smartGenerateContent(
       try {
         console.info(`[Quill AI] Switching to Paid Key for ${buildKey} mode.`);
         // IMPORTANT: We must get the method from the NEW client
-        return await newClient.models.generateContent(request);
+        return await newClient.models.generateContent(ensureRequestWithModel(request, defaultModelId));
       } catch (retryError) {
         // If paid key also fails, throw original or new error
         console.error('[Quill AI] Paid key also exhausted or unavailable.');
