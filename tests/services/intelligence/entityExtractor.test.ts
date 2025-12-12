@@ -40,6 +40,24 @@ const createTestDialogue = (quote: string, speaker: string | null, offset: numbe
 });
 
 describe('entityExtractor', () => {
+  describe('validation and canonicalization edge cases', () => {
+    it('rejects too-short, too-long, and numeric-only entity names', () => {
+      expect(isValidEntityName('A')).toBe(false);
+      expect(isValidEntityName('1')).toBe(false);
+      expect(isValidEntityName('12345')).toBe(false);
+      expect(isValidEntityName('x'.repeat(31))).toBe(false);
+      expect(isValidEntityName('Ok')).toBe(true);
+    });
+
+    it('handles getCanonicalEntityKey with empty and title-only names', () => {
+      const map = new Map<string, { hasBare: boolean }>();
+      expect(getCanonicalEntityKey('', map)).toBe('');
+      expect(getCanonicalEntityKey('   ', map)).toBe('   ');
+      // "mr" is filtered out as a title token, leaving no non-title tokens.
+      expect(getCanonicalEntityKey('Mr', map)).toBe('mr');
+    });
+  });
+
   // ─────────────────────────────────────────────────────────────────────────
   // CHARACTER EXTRACTION
   // ─────────────────────────────────────────────────────────────────────────
@@ -129,6 +147,89 @@ describe('entityExtractor', () => {
       
       expect(names).not.toContain('the');
       expect(names).not.toContain('chapter');
+    });
+  });
+
+  describe('pronoun resolution', () => {
+    it('adds a mention for resolved pronouns (short distance)', () => {
+      const text = `Alex walked home. He slept.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+
+      const alex = result.nodes.find(n => n.name === 'Alex');
+      expect(alex).toBeDefined();
+      // The pronoun resolution should add at least one mention beyond the name.
+      expect(alex!.mentionCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it('still resolves pronouns at long distances (exercises lower-confidence branch)', () => {
+      const filler = 'word '.repeat(120);
+      const text = `Alex walked home. ${filler} He slept.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+
+      const alex = result.nodes.find(n => n.name === 'Alex');
+      expect(alex).toBeDefined();
+      expect(alex!.mentionCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it('filters candidates by female pronouns when a female candidate exists', () => {
+      const filler = 'word '.repeat(40);
+      const text = `Maria arrived. Marcus waited. ${filler} She smiled.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+
+      const maria = result.nodes.find(n => n.name === 'Maria');
+      const marcus = result.nodes.find(n => n.name === 'Marcus');
+
+      expect(maria).toBeDefined();
+      expect(marcus).toBeDefined();
+      expect(maria!.mentionCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it('skips pronoun resolution when there are no character entities', () => {
+      const text = `In the Dark Forest, they slept.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+      // Should not throw, and should still produce a graph.
+      expect(result.nodes.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getRelatedEntities', () => {
+    it('returns relationships for both source and target lookups', () => {
+      const text = `Sarah and Marcus walked together.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+      const graph = extractEntities(text, paragraphs, [], 'chapter1');
+
+      const sarah = graph.nodes.find(n => n.name === 'Sarah');
+      const marcus = graph.nodes.find(n => n.name === 'Marcus');
+      expect(sarah).toBeDefined();
+      expect(marcus).toBeDefined();
+
+      const fromSarah = getRelatedEntities(graph, sarah!.id);
+      const fromMarcus = getRelatedEntities(graph, marcus!.id);
+      expect(fromSarah.length).toBeGreaterThan(0);
+      expect(fromMarcus.length).toBeGreaterThan(0);
+    });
+
+    it('ignores edges that reference missing nodes', () => {
+      const graph = {
+        nodes: [
+          { id: 'a', name: 'A', type: 'character', mentionCount: 1, mentions: [], aliases: [], firstMention: 0, attributes: {} },
+        ],
+        edges: [
+          { id: 'e1', source: 'a', target: 'missing', type: 'interacts', coOccurrences: 1, sentiment: 0, chapters: ['c1'], evidence: [] },
+        ],
+        processedAt: 0,
+      } as any;
+
+      const related = getRelatedEntities(graph, 'a');
+      expect(related).toEqual([]);
     });
   });
 

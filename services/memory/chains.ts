@@ -84,16 +84,17 @@ const extractFacts = (text: string): ParsedFact[] => {
   for (const sentence of sentences) {
     const factMatch = sentence.match(
       new RegExp(
-        `^(?<subject>[A-Z][A-Za-z0-9'’\-]+)\s+(?<verb>${CONTRADICTION_VERBS.join('|')})\s+(?<value>.+)$`,
+        `^([A-Z][A-Za-z0-9'’\-]+)\\s+(${CONTRADICTION_VERBS.join('|')})\\s+(.+)$`,
         'i'
       )
     );
 
-    if (factMatch?.groups) {
+    if (factMatch) {
+      const [, subject, verb, value] = factMatch;
       facts.push({
-        subject: factMatch.groups.subject.toLowerCase(),
-        verb: factMatch.groups.verb.toLowerCase(),
-        value: factMatch.groups.value.toLowerCase(),
+        subject: subject.toLowerCase(),
+        verb: verb.toLowerCase(),
+        value: value.toLowerCase(),
         raw: sentence,
       });
     }

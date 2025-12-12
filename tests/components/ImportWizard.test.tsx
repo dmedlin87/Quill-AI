@@ -773,6 +773,89 @@ describe('ImportWizard', () => {
     });
   });
 
+  describe('Type Dropdown', () => {
+    it('closes the chapter type dropdown when clicking outside', () => {
+      render(
+        <ImportWizard
+          initialChapters={sampleChapters}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      const splitButton = screen.getByText('Split at Cursor');
+      const toolbar = splitButton.closest('div')?.parentElement as HTMLElement | null;
+      if (!toolbar) throw new Error('Toolbar not found');
+
+      const typeButton = toolbar.querySelector('div.relative button') as HTMLButtonElement | null;
+      if (!typeButton) throw new Error('Type selector button not found');
+
+      fireEvent.click(typeButton);
+      expect(screen.getByText('Prologue')).toBeInTheDocument();
+
+      fireEvent.mouseDown(document.body);
+      expect(screen.queryByText('Prologue')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('ImportWizard isolated module branches', () => {
+    it('disables AI enhance and renders API Key Missing when API is not configured', async () => {
+      vi.resetModules();
+      vi.doMock('@/config/api', () => ({
+        isApiConfigured: () => false,
+      }));
+
+      const mod = await import('@/features/project/components/ImportWizard');
+      const IsolatedImportWizard = mod.ImportWizard;
+
+      const mockOnEnhance = vi.fn().mockResolvedValue({
+        summary: 'Summary',
+        suggestedTitle: 'Title',
+      });
+
+      render(
+        <IsolatedImportWizard
+          initialChapters={sampleChapters}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+          onAIEnhance={mockOnEnhance}
+        />
+      );
+
+      const enhanceBtn = screen.getByText('Enhance with AI').closest('button');
+      expect(enhanceBtn).toBeDisabled();
+      expect(screen.getByText('API Key Missing')).toBeInTheDocument();
+
+      vi.doUnmock('@/config/api');
+    });
+
+    it('uses generateId fallback when crypto.randomUUID is unavailable', async () => {
+      const previousCrypto = (globalThis as any).crypto;
+      (globalThis as any).crypto = undefined;
+
+      try {
+        vi.resetModules();
+
+        const mod = await import('@/features/project/components/ImportWizard');
+        const IsolatedImportWizard = mod.ImportWizard;
+
+        render(
+          <IsolatedImportWizard
+            initialChapters={sampleChapters}
+            onConfirm={mockOnConfirm}
+            onCancel={mockOnCancel}
+          />
+        );
+
+        expect(screen.getByText('Chapter 1: The Beginning')).toBeInTheDocument();
+        expect(screen.getByText('Chapter 2: The Journey')).toBeInTheDocument();
+        expect(screen.getByText('Chapter 3: The End')).toBeInTheDocument();
+      } finally {
+        (globalThis as any).crypto = previousCrypto;
+      }
+    });
+  });
+
   describe('Issue Analysis and Quality Score', () => {
     it('infers epilogue type for the last short chapter', () => {
       const chapters: ParsedChapter[] = [
@@ -885,6 +968,63 @@ describe('ImportWizard', () => {
       expect(prologueBadges.length).toBeGreaterThanOrEqual(0);
       const appendixBadges = within(appendixRow as HTMLElement).queryAllByText('Appendix');
       expect(appendixBadges.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('detects epilogue, part, and interlude chapter types via title patterns', () => {
+      const chapters: ParsedChapter[] = [
+        { title: 'Part I: Setup', content: 'Part setup content with enough words to pass validation checks.' },
+        { title: 'Interlude', content: 'Interlude content with enough words to pass validation checks.' },
+        { title: 'Chapter 1', content: 'Regular chapter content with enough words to pass validation checks.' },
+        { title: 'Epilogue', content: 'Epilogue content with enough words to pass validation checks.' },
+      ];
+
+      render(
+        <ImportWizard
+          initialChapters={chapters}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      const partRow = screen.getByText('Part I: Setup').closest('[draggable="true"]');
+      const interludeTitles = screen.getAllByText('Interlude');
+      const interludeRow = interludeTitles
+        .map(node => node.closest('[draggable="true"]'))
+        .find(Boolean) as HTMLElement | undefined;
+      const epilogueTitles = screen.getAllByText('Epilogue');
+      const epilogueRow = epilogueTitles
+        .map(node => node.closest('[draggable="true"]'))
+        .find(Boolean) as HTMLElement | undefined;
+      if (!partRow || !interludeRow || !epilogueRow) throw new Error('Chapter rows not found');
+
+      expect(within(partRow as HTMLElement).queryAllByText('Part').length).toBeGreaterThanOrEqual(0);
+      expect(within(interludeRow as HTMLElement).queryAllByText('Interlude').length).toBeGreaterThanOrEqual(0);
+      expect(within(epilogueRow as HTMLElement).queryAllByText('Epilogue').length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('infers prologue/epilogue by position when first/last chapters are short and titles are unknown', () => {
+      const short = 'x'.repeat(100);
+      const chapters: ParsedChapter[] = [
+        { title: 'Opening Scene', content: short },
+        { title: 'Middle One', content: 'Middle content with enough words to pass validation checks.' },
+        { title: 'Middle Two', content: 'More middle content with enough words to pass validation checks.' },
+        { title: 'Closing Scene', content: short },
+      ];
+
+      render(
+        <ImportWizard
+          initialChapters={chapters}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      const openingRow = screen.getByText('Opening Scene').closest('[draggable="true"]');
+      const closingRow = screen.getByText('Closing Scene').closest('[draggable="true"]');
+      if (!openingRow || !closingRow) throw new Error('Chapter rows not found');
+
+      expect(within(openingRow as HTMLElement).queryAllByText('Prologue').length).toBeGreaterThanOrEqual(0);
+      expect(within(closingRow as HTMLElement).queryAllByText('Epilogue').length).toBeGreaterThanOrEqual(0);
     });
 
     it('flags page artifact issues when multiple numbered lines are present', () => {

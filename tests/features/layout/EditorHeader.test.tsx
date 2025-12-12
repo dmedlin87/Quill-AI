@@ -24,7 +24,10 @@ vi.mock('@/features/layout/store/useLayoutStore', () => ({
 // Mock project store
 const mockUseProjectStore = vi.fn();
 vi.mock('@/features/project/store/useProjectStore', () => ({
-  useProjectStore: (selector: any) => selector(mockUseProjectStore()),
+  useProjectStore: (selector?: any) => {
+    const state = mockUseProjectStore();
+    return typeof selector === 'function' ? selector(state) : state;
+  },
 }));
 
 vi.mock('@/services/pdfExport', () => ({

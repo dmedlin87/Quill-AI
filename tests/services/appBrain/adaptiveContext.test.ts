@@ -551,6 +551,24 @@ describe('adaptiveContext', () => {
       // Larger reserve should result in smaller available budget
       expect(largeReserveBudget.totalTokens).toBeLessThanOrEqual(normalBudget.totalTokens);
     });
+
+    it('falls back to default token limit when model config has no limits', async () => {
+      vi.resetModules();
+      vi.doMock('@/config/models', () => ({
+        ActiveModels: {
+          agent: { id: 'unknown-model' },
+          analysis: { id: 'unknown-model' },
+        },
+        TokenLimits: {},
+      }));
+
+      const mod = await import('@/services/appBrain/adaptiveContext');
+      const budget = mod.getContextBudgetForModel('agent', 'full', { reserveForResponse: 4000, maxBudget: 999999 });
+
+      // Default fallback is 32_000 - reserveForResponse.
+      expect(budget.totalTokens).toBe(32000 - 4000);
+      vi.doUnmock('@/config/models');
+    });
   });
 
   describe('PROFILE_ALLOCATIONS', () => {
@@ -613,6 +631,26 @@ describe('adaptiveContext', () => {
       expect(context.pov).toBe('Seth');
       expect(context.location).toBe('Castle');
       expect(context.tensionLevel).toBe('high');
+    });
+
+    it('returns null scene fields when currentScene is present but missing values', () => {
+      const stateWithPartialScene = {
+        ...baseState,
+        intelligence: {
+          hud: {
+            ...baseState.intelligence.hud,
+            situational: {
+              ...baseState.intelligence.hud.situational,
+              currentScene: {} as any,
+            },
+          },
+        },
+      };
+
+      const context = getSceneContextFromState(stateWithPartialScene);
+      expect(context.sceneType).toBeNull();
+      expect(context.location).toBeNull();
+      expect(context.pov).toBeNull();
     });
   });
 
@@ -765,6 +803,42 @@ describe('adaptiveContext', () => {
     });
   });
   describe('Detailed Section Generation', () => {
+    it('omits active chapter line when activeChapterId does not match', async () => {
+      const stateNoActiveChapter = {
+        ...baseState,
+        manuscript: {
+          ...baseState.manuscript,
+          activeChapterId: 'missing',
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateNoActiveChapter, 'p1', {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('[MANUSCRIPT STATE]');
+      expect(result.context).not.toContain('Active Chapter:');
+    });
+
+    it('truncates selected text preview when selection exceeds 200 chars', async () => {
+      const longSelection = 'x'.repeat(250);
+      const stateWithLongSelection = {
+        ...baseState,
+        ui: {
+          ...baseState.ui,
+          selection: { text: longSelection, start: 0, end: 250 },
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithLongSelection, 'p1', {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain(longSelection.slice(0, 200) + '...');
+    });
+
     it('includes surrounding text in manuscript section when budget permits', async () => {
       const stateWithText = {
         ...baseState,
@@ -785,6 +859,125 @@ describe('adaptiveContext', () => {
 
       expect(result.context).toContain('Context around cursor:');
       expect(result.context).toContain('TARGET');
+    });
+
+    it('does not include a scene header when HUD has no currentScene', async () => {
+      const stateWithHudNoScene = {
+        ...baseState,
+        intelligence: {
+          hud: {
+            ...baseState.intelligence.hud,
+            situational: {
+              ...baseState.intelligence.hud.situational,
+              currentScene: null,
+            },
+          },
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithHudNoScene, 'p1', {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('[INTELLIGENCE HUD]');
+      expect(result.context).not.toContain('Scene:');
+    });
+
+    it('stops listing entities when entity budget is exceeded', async () => {
+      const stateWithManyEntities = {
+        ...baseState,
+        intelligence: {
+          hud: {
+            ...baseState.intelligence.hud,
+            context: {
+              activeEntities: [
+                { name: 'VeryLongEntityNameThatWillOverflowBudget', type: 'character', mentionCount: 999 },
+              ],
+            },
+          },
+        },
+      };
+
+      // Keep memory section small/stable so overall context isn't dominated by the catch block.
+      vi.spyOn(memoryService, 'getMemories').mockResolvedValue([{ id: 'bed', topicTags: ['meta:bedside-note'] }] as any);
+      vi.spyOn(memoryService, 'getMemoriesForContext').mockResolvedValue({ author: [], project: [] } as any);
+      vi.spyOn(memoryService, 'getActiveGoals').mockResolvedValue([] as any);
+      vi.spyOn(memoryService, 'formatMemoriesForPrompt').mockReturnValue('');
+      vi.spyOn(memoryService, 'formatGoalsForPrompt').mockReturnValue('');
+
+      // Use a budget that keeps the intelligence section present but small enough to trigger
+      // the entityBudget early-break.
+      const budget = {
+        totalTokens: 1000,
+        sections: {
+          manuscript: 0.2,
+          intelligence: 0.05,
+          analysis: 0.1,
+          memory: 0.25,
+          lore: 0.25,
+          history: 0.15,
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithManyEntities, 'p1', {
+        budget,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('Active Characters:');
+      expect(result.context).not.toContain('VeryLongEntityNameThatWillOverflowBudget');
+    });
+
+    it('includes prioritized issues with severity icons', async () => {
+      const stateWithIssues = {
+        ...baseState,
+        intelligence: {
+          hud: {
+            ...baseState.intelligence.hud,
+            prioritizedIssues: [
+              { severity: 0.8, description: 'High severity issue' },
+              { severity: 0.5, description: 'Medium severity issue' },
+              { severity: 0.2, description: 'Low severity issue' },
+            ],
+          },
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithIssues, 'p1', {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('Priority Issues:');
+      expect(result.context).toContain('High severity issue');
+      expect(result.context).toContain('Medium severity issue');
+      expect(result.context).toContain('Low severity issue');
+    });
+
+    it('omits optional analysis fields when missing', async () => {
+      const stateWithSparseAnalysis = {
+        ...baseState,
+        analysis: {
+          result: {
+            summary: '',
+            strengths: [],
+            weaknesses: [],
+            plotIssues: [],
+          },
+        },
+      };
+
+      const result = await buildAdaptiveContext(stateWithSparseAnalysis, 'p1', {
+        budget: DEFAULT_BUDGET,
+        sceneAwareMemory: false,
+      });
+
+      expect(result.context).toContain('[ANALYSIS INSIGHTS]');
+      expect(result.context).not.toContain('Summary:');
+      expect(result.context).not.toContain('Strengths:');
+      expect(result.context).not.toContain('Weaknesses:');
+      expect(result.context).not.toContain('Plot Issues');
     });
 
     it('includes intelligence details (entities, style alerts)', async () => {

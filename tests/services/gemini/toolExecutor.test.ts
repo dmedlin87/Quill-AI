@@ -236,6 +236,21 @@ describe('toolExecutor core helpers', () => {
     expect(result.message).toContain('Error executing update_manuscript');
   });
 
+  it('handles non-Error throws from AppBrain actions', async () => {
+    const actions = createMockActions();
+    (actions.updateManuscript as any).mockRejectedValueOnce('bad');
+
+    const result = await executeAppBrainToolCall(
+      'update_manuscript',
+      { search_text: 'old', replacement_text: 'new', description: 'desc' },
+      actions,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Unknown error');
+    expect(result.message).toContain('Error executing update_manuscript');
+  });
+
   it('wraps AppBrain action errors in ToolResult', async () => {
     const actions = createMockActions();
     (actions.updateManuscript as any).mockRejectedValueOnce(new Error('boom'));
@@ -276,6 +291,24 @@ describe('toolExecutor core helpers', () => {
     expect(result.message).toContain('Saved memory note');
   });
 
+  it('truncates preview for long write_memory_note text', async () => {
+    const longText = 'x'.repeat(200);
+    vi.mocked(memoryModule.createMemory).mockResolvedValueOnce({
+      text: longText,
+      scope: 'project',
+      type: 'observation',
+    } as any);
+
+    const result = await executeMemoryToolCall(
+      'write_memory_note',
+      { text: longText, type: 'observation', scope: 'project' },
+      'project-1',
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.message).toContain('...');
+  });
+
   it('fails to write project-scoped memory without projectId', async () => {
     const result = await executeMemoryToolCall(
       'write_memory_note',
@@ -308,6 +341,19 @@ describe('toolExecutor core helpers', () => {
     expect(result.success).toBe(true);
   });
 
+  it('search_memory defaults to scope=all and returns fallback message when formatting is empty', async () => {
+    vi.mocked(memoryModule.formatMemoriesForPrompt).mockReturnValueOnce('');
+
+    const result = await executeMemoryToolCall(
+      'search_memory',
+      { tags: [] },
+      'project-1',
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.message).toBe('No matching memories found.');
+  });
+
   it('handles update_bedside_note via memory helper', async () => {
     const result = await executeMemoryToolCall(
       'update_bedside_note',
@@ -321,6 +367,51 @@ describe('toolExecutor core helpers', () => {
       content: 'Fresh focus',
     });
     expect(result.message).toContain('Bedside note set applied');
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects update_bedside_note when required fields are missing', async () => {
+    const result = await executeMemoryToolCall(
+      'update_bedside_note',
+      { section: 'currentFocus', action: 'set' },
+      'project-1',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Missing required fields');
+  });
+
+  it('accepts bedside note list sections with non-empty content', async () => {
+    const result = await executeMemoryToolCall(
+      'update_bedside_note',
+      { section: 'warnings', action: 'add', content: ['One warning', '  ', 'Two'] },
+      'project-1',
+    );
+
+    expect(memoryModule.applyBedsideNoteMutation).toHaveBeenCalledWith('project-1', {
+      section: 'warnings',
+      action: 'add',
+      content: ['One warning', 'Two'],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts bedside note activeGoals with string and object goals', async () => {
+    const result = await executeMemoryToolCall(
+      'update_bedside_note',
+      {
+        section: 'activeGoals',
+        action: 'add',
+        content: ['Goal 1', { title: 'Goal 2', status: 'active' }],
+      },
+      'project-1',
+    );
+
+    expect(memoryModule.applyBedsideNoteMutation).toHaveBeenCalledWith('project-1', {
+      section: 'activeGoals',
+      action: 'add',
+      content: [{ title: 'Goal 1' }, { title: 'Goal 2', status: 'active' }],
+    });
     expect(result.success).toBe(true);
   });
 
@@ -428,6 +519,24 @@ describe('toolExecutor core helpers', () => {
     const missingId = await executeMemoryToolCall('update_memory_note', { text: 'x' }, 'project-1');
     expect(missingId.success).toBe(false);
     expect(missingId.message).toContain('Missing id');
+  });
+
+  it('truncates preview for long update_memory_note text', async () => {
+    const longText = 'y'.repeat(200);
+    vi.mocked(memoryModule.updateMemory).mockResolvedValueOnce({
+      text: longText,
+      scope: 'project',
+      type: 'observation',
+    } as any);
+
+    const result = await executeMemoryToolCall(
+      'update_memory_note',
+      { id: 'mem-1', text: longText },
+      'project-1',
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.message).toContain('...');
   });
 
   it('handles delete_memory_note success and missing id errors', async () => {

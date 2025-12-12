@@ -93,7 +93,7 @@ describe('memory chains bedside-note helpers', () => {
       type: 'plan',
       text:
         'Project planning notes for this manuscript. This note will be updated over time with key goals, concerns, and constraints.',
-      topicTags: BEDSIDE_NOTE_DEFAULT_TAGS,
+      topicTags: [...BEDSIDE_NOTE_DEFAULT_TAGS],
       importance: 0.85,
       createdAt: Date.now(),
     };
@@ -121,7 +121,7 @@ describe('memory chains bedside-note helpers', () => {
       projectId,
       type: 'plan',
       text: 'Existing bedside note',
-      topicTags: BEDSIDE_NOTE_DEFAULT_TAGS,
+      topicTags: [...BEDSIDE_NOTE_DEFAULT_TAGS],
       importance: 0.9,
       createdAt: Date.now() - 1000,
     };
@@ -155,7 +155,7 @@ describe('memory chains bedside-note helpers', () => {
       projectId,
       type: 'plan',
       text: 'Base bedside note',
-      topicTags: BEDSIDE_NOTE_DEFAULT_TAGS,
+      topicTags: [...BEDSIDE_NOTE_DEFAULT_TAGS],
       importance: 0.8,
       createdAt: Date.now() - 5000,
     };
@@ -206,7 +206,7 @@ describe('memory chains bedside-note helpers', () => {
         projectId,
         type: 'plan',
         text: 'Sarah has blue eyes. Keep Sarah alive.',
-        topicTags: BEDSIDE_NOTE_DEFAULT_TAGS,
+        topicTags: [...BEDSIDE_NOTE_DEFAULT_TAGS],
         importance: 0.8,
         createdAt: Date.now() - 5000,
       };
@@ -785,6 +785,35 @@ describe('memory chains - getMemoryChain', () => {
     expect(result[0]).toMatchObject({ memoryId: 'm-no-version', version: 1 });
     expect(result[1]).toMatchObject({ memoryId: 'm-with-version', version: 2 });
   });
+
+  it('executes the db filter predicate and parses correction vs supersede change types', async () => {
+    const allMemories = [
+      { id: 'm1', text: 'V1', topicTags: ['chain:chain_pred', 'chain_version:1'], createdAt: 1000 },
+      { id: 'm2', text: 'Other chain', topicTags: ['chain:other', 'chain_version:1'], createdAt: 1100 },
+      {
+        id: 'm3',
+        text: 'Corrected version',
+        topicTags: ['chain:chain_pred', 'chain_version:2', 'change_reason:correction'],
+        createdAt: 2000,
+      },
+      {
+        id: 'm4',
+        text: 'Superseded correction',
+        topicTags: ['chain:chain_pred', 'chain_version:3', 'supersedes:m3', 'change_reason:correction'],
+        createdAt: 3000,
+      },
+    ];
+
+    dbMocks.memoriesFilter.mockImplementation((predicate: any) => ({
+      toArray: vi.fn().mockResolvedValueOnce(allMemories.filter((m: any) => predicate(m))),
+    }));
+
+    const result = await getMemoryChain('chain_pred');
+
+    expect(result.map(entry => entry.memoryId)).toEqual(['m1', 'm3', 'm4']);
+    expect(result.find(entry => entry.memoryId === 'm3')?.changeType).toBe('correction');
+    expect(result.find(entry => entry.memoryId === 'm4')?.changeType).toBe('supersede');
+  });
 });
 
 describe('memory chains - getLatestInChain', () => {
@@ -1063,6 +1092,30 @@ describe('memory chains - conflict detection edge cases', () => {
     expect(conflicts.length).toBeGreaterThanOrEqual(1);
     expect(conflicts[0].strategy).toBe('llm');
     expect(conflicts[0].confidence).toBeCloseTo(0.6, 1);
+  });
+
+  it('heuristic detects fact value changes with higher confidence via fact parsing', async () => {
+    const conflicts = await detectBedsideNoteConflicts('Sarah has green eyes.', 'Sarah has blue eyes.');
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({
+      strategy: 'heuristic',
+      previous: 'Sarah has blue eyes',
+      current: 'Sarah has green eyes',
+    });
+    expect(conflicts[0].confidence).toBeCloseTo(0.78, 2);
+  });
+
+  it('heuristic detects negation flip conflicts even when verbs differ', async () => {
+    const conflicts = await detectBedsideNoteConflicts('Alice is not alive.', 'Alice was alive.');
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({
+      strategy: 'heuristic',
+      previous: 'Alice was alive',
+      current: 'Alice is not alive',
+    });
+    expect(conflicts[0].confidence).toBeCloseTo(0.7, 1);
   });
 
   it('detectLLMLikeConflicts catches "conflicts with" phrasing', async () => {

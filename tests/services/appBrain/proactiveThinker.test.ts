@@ -9,6 +9,7 @@ import { getImportantReminders } from '../../../services/memory/proactive';
 import { searchBedsideHistory } from '../../../services/memory/bedsideHistorySearch';
 import { extractTemporalMarkers } from '../../../services/intelligence/timelineTracker';
 import { generateVoiceProfile } from '../../../services/intelligence/voiceProfiler';
+import * as intelligenceBridge from '../../../services/appBrain/intelligenceMemoryBridge';
 import { VoiceMetrics } from '../../../types/intelligence';
 
 // Hoist mocks to avoid initialization errors
@@ -150,12 +151,12 @@ describe('ProactiveThinker', () => {
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
 
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5, length: 0 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5, length: 0 }, timestamp: Date.now() });
 
     expect(vi.getTimerCount()).toBe(0);
 
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5, length: 0 }, timestamp: Date.now() });
 
     expect(vi.getTimerCount()).toBe(1);
 
@@ -184,9 +185,9 @@ describe('ProactiveThinker', () => {
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
 
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 5 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5, length: 0 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5, length: 0 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 5, length: 0 }, timestamp: Date.now() });
 
     expect(thinker.getStatus().pendingEvents).toHaveLength(3);
     expect(vi.getTimerCount()).toBe(1);
@@ -485,6 +486,56 @@ describe('ProactiveThinker', () => {
     );
   });
 
+  it('handles chapter transition with no issues or watched entities', async () => {
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+    await callback({
+      type: 'CHAPTER_CHANGED',
+      payload: {
+        projectId: mockProjectId,
+        chapterId: 'ch2',
+        title: 'Chapter 2',
+        issues: [],
+        watchedEntities: [],
+      },
+      timestamp: Date.now(),
+    });
+
+    expect(evolveBedsideNote).toHaveBeenCalledWith(
+      mockProjectId,
+      expect.stringContaining('Now in chapter: "Chapter 2"'),
+      expect.objectContaining({ changeReason: 'chapter_transition', chapterId: 'ch2' }),
+    );
+    const callText = vi.mocked(evolveBedsideNote).mock.calls[0]?.[1] as string;
+    expect(callText).not.toContain('Chapter issues to watch');
+    expect(callText).not.toContain('Watched entities');
+  });
+
+  it('formats chapter issues and watched entities without optional metadata', async () => {
+    vi.mocked(evolveBedsideNote).mockClear();
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+    await callback({
+      type: 'CHAPTER_CHANGED',
+      payload: {
+        projectId: mockProjectId,
+        chapterId: 'ch3',
+        title: 'Chapter 3',
+        issues: [{ description: 'Continuity check' }],
+        watchedEntities: [{ name: 'Hero' }],
+      },
+      timestamp: Date.now(),
+    });
+
+    const planText = vi.mocked(evolveBedsideNote).mock.calls[0]?.[1] as string;
+    expect(planText).toContain('- Continuity check');
+    expect(planText).toContain('- Hero');
+    expect(planText).not.toContain('[');
+    expect(planText).not.toContain('—');
+  });
+
   it('should evolve bedside note when reminders are present', async () => {
     thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
 
@@ -580,7 +631,7 @@ describe('ProactiveThinker', () => {
     } as any);
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 0 }, timestamp: Date.now() });
 
     await thinker.forceThink();
 
@@ -662,7 +713,7 @@ describe('ProactiveThinker', () => {
     } as any);
 
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 0 }, timestamp: Date.now() });
 
     // 2. ACT
     const result = await thinker.forceThink();
@@ -738,7 +789,7 @@ describe('ProactiveThinker', () => {
     const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
 
     // Trigger significant edits
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 600, length: 0 }, timestamp: Date.now() });
 
     // Initial state: not past cooldown (lastEditEvolveAt = 0) but cooldown check depends on (now - 0) > 5 mins
     // Wait, lastEditEvolveAt is 0 initially.
@@ -753,13 +804,209 @@ describe('ProactiveThinker', () => {
 
     vi.setSystemTime(new Date().getTime() + 400_000); // Ensure we are past the initial cooldown relative to 0
 
-    callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 600, length: 0 }, timestamp: Date.now() });
 
     expect(evolveBedsideNote).toHaveBeenCalledWith(
       mockProjectId,
       expect.stringContaining('Significant edits detected'),
       expect.objectContaining({ changeReason: 'significant_edit' })
     );
+  });
+
+  it('includes active chapter details when evolving bedside note for significant edits', async () => {
+    vi.mocked(evolveBedsideNote).mockClear();
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    mockGetState.mockReturnValue({
+      manuscript: {
+        projectId: mockProjectId,
+        activeChapterId: 'ch1',
+        currentText: '',
+        chapters: [{ id: 'ch1', title: 'Chapter One' }],
+      },
+      intelligence: {
+        full: { entities: { nodes: [] } },
+        entities: { nodes: [] },
+        hud: { context: { activeEntities: [] }, situational: { currentScene: {} } },
+        timeline: { events: [] },
+      },
+      lore: { characters: [] },
+    });
+
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+
+    vi.setSystemTime(new Date().getTime() + 400_000);
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 600, length: 0 }, timestamp: Date.now() });
+
+    expect(evolveBedsideNote).toHaveBeenCalledWith(
+      mockProjectId,
+      expect.stringContaining('in "Chapter One"'),
+      expect.objectContaining({
+        changeReason: 'significant_edit',
+        extraTags: expect.arrayContaining(['chapter:ch1', 'edit:significant']),
+      }),
+    );
+  });
+
+  it('does not trigger conflict detection when within timeline check cooldown', async () => {
+    vi.mocked(extractTemporalMarkers).mockClear();
+
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    const mockState = {
+      manuscript: {
+        projectId: mockProjectId,
+        activeChapterId: 'ch1',
+        currentText: 'It was Monday morning.',
+      },
+      intelligence: {
+        timeline: {
+          events: [
+            {
+              chapterId: 'ch1',
+              offset: 0,
+              temporalMarker: 'Sunday night',
+              description: 'It was Sunday night.',
+            },
+          ],
+        },
+        full: { entities: { nodes: [] } },
+        entities: { nodes: [] },
+        hud: { context: { activeEntities: [] }, situational: {} },
+      },
+      lore: { characters: [] },
+    };
+
+    mockGetState.mockReturnValue(mockState);
+
+    vi.mocked(extractTemporalMarkers)
+      .mockReturnValueOnce([
+        { category: 'day', normalized: 'monday', marker: 'Monday', offset: 0, sentence: 'It was Monday morning.' },
+      ])
+      .mockReturnValueOnce([
+        { category: 'day', normalized: 'sunday', marker: 'Sunday', offset: 0, sentence: 'It was Sunday night.' },
+      ]);
+
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+    await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 600 }, timestamp: Date.now() });
+    expect(extractTemporalMarkers).toHaveBeenCalled();
+
+    vi.mocked(extractTemporalMarkers).mockClear();
+    await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 600 }, timestamp: Date.now() });
+    expect(extractTemporalMarkers).not.toHaveBeenCalled();
+  });
+
+  it('does not trigger conflict detection when no temporal markers are found', async () => {
+    vi.mocked(extractTemporalMarkers).mockReturnValueOnce([]);
+
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+
+    mockGetState.mockReturnValue({
+      manuscript: {
+        projectId: mockProjectId,
+        activeChapterId: 'ch1',
+        currentText: 'No markers here.',
+      },
+      intelligence: {
+        timeline: { events: [] },
+        full: { entities: { nodes: [] } },
+        entities: { nodes: [] },
+        hud: { context: { activeEntities: [] }, situational: {} },
+      },
+      lore: { characters: [] },
+    });
+
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+    await callback({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 600 }, timestamp: Date.now() });
+
+    expect(mockOnSuggestion).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'timeline_conflict' }));
+  });
+
+  it('extractDialogueBlocks skips empty quotes', () => {
+    const blocks = (thinker as any).extractDialogueBlocks('"          "');
+    expect(blocks).toEqual([]);
+  });
+
+  it('inferDialogueSpeaker uses attribution fallback and returns candidate when unknown', () => {
+    const speaker = (thinker as any).inferDialogueSpeaker('"Hello" said Bob.', ['Alice']);
+    expect(speaker).toBe('Bob');
+  });
+
+  it('inferDialogueSpeaker returns exact known character when attribution matches case-insensitively', () => {
+    const speaker = (thinker as any).inferDialogueSpeaker('"Hello" said bob.', ['Bob']);
+    expect(speaker).toBe('Bob');
+  });
+
+  it('injects detected conflicts into proactive thinking prompt', async () => {
+    vi.mocked((intelligenceBridge as any).getHighPriorityConflicts).mockResolvedValueOnce([{ id: 'c1' }]);
+    vi.mocked((intelligenceBridge as any).formatConflictsForPrompt).mockReturnValueOnce('CONFLICTS');
+
+    vi.mocked(ai.models.generateContent).mockImplementationOnce(async (args: any) => {
+      expect(args.contents).toContain('DETECTED CONFLICTS');
+      expect(args.contents).toContain('CONFLICTS');
+      return { text: JSON.stringify({ significant: false, suggestions: [] }) } as any;
+    });
+
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
+
+    await thinker.forceThink();
+  });
+
+  it('skips bedside evolve when significant but there are no suggestions or reminders', async () => {
+    vi.mocked(evolveBedsideNote).mockClear();
+    vi.mocked(getImportantReminders).mockResolvedValueOnce([]);
+    vi.mocked(ai.models.generateContent).mockResolvedValueOnce({
+      text: JSON.stringify({ significant: true, suggestions: [] }),
+    } as any);
+
+    thinker.start(mockGetState, mockProjectId, mockOnSuggestion);
+    const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
+    callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 10 }, timestamp: Date.now() });
+
+    await thinker.forceThink();
+
+    expect(evolveBedsideNote).not.toHaveBeenCalledWith(
+      mockProjectId,
+      expect.stringContaining('Proactive opportunities'),
+      expect.anything(),
+    );
+  });
+
+  it('formats empty event list for prompt', () => {
+    expect((thinker as any).formatEventsForPrompt([])).toBe('No recent events.');
+  });
+
+  it('mutes suggestions when adaptive weight is near zero', () => {
+    setProactiveThinkerSettingsAdapter({
+      getSuggestionWeights: () => ({
+        plot: 0.0,
+        character: 1.0,
+        pacing: 1.0,
+        style: 1.0,
+        continuity: 1.0,
+        lore_discovery: 1.0,
+        timeline_conflict: 1.0,
+        voice_inconsistency: 1.0,
+        other: 1.0,
+      }),
+    });
+
+    const filtered = (thinker as any).applyAdaptiveRelevance([
+      {
+        id: 's1',
+        type: 'related_memory',
+        priority: 'high',
+        title: 'Plot item',
+        description: 'desc',
+        source: { type: 'memory', id: 'x' },
+        tags: ['plot'],
+        createdAt: 0,
+      },
+    ]);
+
+    expect(filtered).toEqual([]);
   });
 
   it('should check timeline conflicts on significant edit after cooldown', async () => {
@@ -831,19 +1078,19 @@ describe('ProactiveThinker', () => {
       vi.setSystemTime(400_000);
 
       // 1. Small delta (below 500)
-      callback({ type: 'TEXT_CHANGED', payload: { delta: 100 }, timestamp: Date.now() });
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 100, length: 0 }, timestamp: Date.now() });
       expect(evolveBedsideNote).not.toHaveBeenCalled();
 
       // 2. Large delta, but recently evolved (if we trigger one first)
       // Trigger a success first
-      callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 600, length: 0 }, timestamp: Date.now() });
       expect(evolveBedsideNote).toHaveBeenCalledTimes(1);
       vi.mocked(evolveBedsideNote).mockClear();
 
       // Now lastEditEvolveAt = 400,000.
       // Advance just a bit
       vi.setSystemTime(400_100);
-      callback({ type: 'TEXT_CHANGED', payload: { delta: 600 }, timestamp: Date.now() });
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 600, length: 0 }, timestamp: Date.now() });
       // Should fail cooldown
       expect(evolveBedsideNote).not.toHaveBeenCalled();
     });
@@ -968,7 +1215,7 @@ describe('ProactiveThinker', () => {
       // `detectLoreSuggestions` is called in `performThinking`.
       // So let's forceThink with pending events that are NOT significant edits.
       const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-      callback({ type: 'TEXT_CHANGED', payload: { delta: 1 }, timestamp: Date.now() });
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 1, length: 0 }, timestamp: Date.now() });
       // Manual force think
       await thinker.forceThink();
       // Should not call filterNovelLoreEntities
@@ -992,7 +1239,7 @@ describe('ProactiveThinker', () => {
       vi.mocked(ai.models.generateContent).mockResolvedValue({ text: 'invalid json' } as any);
 
       const callback = vi.mocked(eventBus.subscribeAll).mock.calls[0][0];
-      callback({ type: 'TEXT_CHANGED', payload: { delta: 10 }, timestamp: Date.now() });
+      callback({ type: 'TEXT_CHANGED', payload: { delta: 10, length: 0 }, timestamp: Date.now() });
 
       const result = await thinker.forceThink();
       expect(result.suggestions).toEqual([]);
