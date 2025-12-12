@@ -12,71 +12,86 @@
 
 ## The routing map (what to open, in order)
 
-1) **Architecture layer map** — [ARCHITECTURE.md](./ARCHITECTURE.md): persistence → editor session → AI engine → agent.  
-2) **App Brain & flow** — [APP_BRAIN_FLOW.md](./APP_BRAIN_FLOW.md): mermaid diagram of UI + Brain + memory + orchestrator.  
-3) **Omniscient agent vision** — [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md): phases, legacy vs. current paths.  
-4) **Memory system** — [MEMORY_SYSTEM.md](./MEMORY_SYSTEM.md): schemas, services, prompt integration.  
-5) **Bedside-note state** — [BEDSIDE_NOTE_ROADMAP.md](./BEDSIDE_NOTE_ROADMAP.md): current triggers, roadmap, and key files.  
-6) **Tools catalog** — [AGENT_TOOLS_REFERENCE.md](./AGENT_TOOLS_REFERENCE.md): available tools and how to add one.
+### 1. Architecture & State
+- **State Provider:** `features/core/context/AppBrainContext.tsx` — The central hub. Aggregates manuscript, analysis, intelligence, and UI state into the `AppBrainState`.
+- **Context Builders:** `services/appBrain/contextBuilder.ts`, `services/appBrain/adaptiveContext.ts` — Where raw state is converted into "Smart Context" prompts for the AI.
+
+### 2. Parallel Agent Paths
+The application has three distinct ways of using agentic intelligence:
+
+*   **A. Conversational Orchestrator (Main Agent)**
+    *   **Entrypoint:** `features/agent/hooks/useAgentOrchestrator.ts` (UI hook).
+    *   **Logic:** `services/core/agentOrchestratorMachine.ts` (State machine) + `services/core/agentToolLoop.ts` (Execution).
+    *   **Use case:** Chat, complex multi-step editing, research, analysis requests.
+
+*   **B. Shadow Reader (Reactions)**
+    *   **Entrypoint:** `services/agent/readerService.ts`.
+    *   **Logic:** Stateless, direct-to-LLM calls using specific "Reader Personas".
+    *   **Use case:** Generating inline reactions ("boring", "love this") in `ShadowReaderPanel`.
+
+*   **C. Proactive Thinker (Background)**
+    *   **Entrypoint:** `services/appBrain/proactiveThinker.ts`.
+    *   **Logic:** Event-driven, debounced background loop. Watches for significant edits or chapter changes.
+    *   **Use case:** Unsolicited suggestions ("Timeline conflict detected", "Voice drift") and memory consolidation.
+
+### 3. Intelligence Layer (The "Senses")
+Before the agent "thinks," the application "sees" the manuscript via deterministic analysis.
+- **Unified API:** `services/intelligence/index.ts`.
+- **Components:** `structuralParser` (scenes/paragraphs), `entityExtractor` (characters/locations), `timelineTracker` (chronology), `voiceProfiler` (dialogue style).
+- **Flow:** Code changes → `useManuscriptIntelligence` → `AppBrainState` → Agent Context.
 
 ## How the agent gets context (files to inspect)
 
-- **App Brain state + builders:** `services/appBrain/contextBuilder.ts`, `services/appBrain/adaptiveContext.ts`, `services/appBrain/contextStreamer.ts` (prompt assembly, token budgeting, memory relevance).  
-- **State provider:** `features/core/context/AppBrainContext.tsx` (aggregates manuscript, editor, analysis, intelligence, UI/session).  
-- **Smart context entrypoint:** `services/appBrain/index.ts` exports `getSmartAgentContext` and profiles (see `PROFILE_ALLOCATIONS`).  
-- **Memory fetch + ordering:** `services/memory/index.ts` (memory slices, bedside prioritization).  
-- **Model + token budgets:** `config/models.ts`, `config/api.ts`, `config/index.ts` (limits, reserves).  
-- **Where prompts are consumed:** `services/gemini/agent.ts` (chat creation), `services/gemini/agentTools.ts` (tools), `services/core/agentToolLoop.ts` (execution loop).
+- **Smart Context:** `services/appBrain/index.ts` exports `getSmartAgentContext`. This selects the right "Profile" (Editing vs. Analysis vs. General) to budget tokens.
+- **Memory Fetch:** `services/memory/index.ts` and `services/memory/bedsideHistorySearch.ts` retrieve relevant long-term memories and bedside notes.
+- **Token Budgeting:** `config/models.ts` and `config/api.ts` define the hard limits for different models (Flash vs. Pro).
 
-## Event bus → Orchestrator → Tool execution
+## Tools catalog
 
-- **Event bus + orchestrator machine:** `services/core/agentOrchestratorMachine.ts`, `services/core/AgentController.ts`, `services/core/agentToolLoop.ts`.  
-- **Canonical hook:** `features/agent/hooks/useAgentOrchestrator.ts` (UI entrypoint).  
-- **Commands registry:** `services/commands/*` (grouped by domain: editing, navigation, analysis, generation, etc.).  
-- **App actions wiring:** `features/core/context/AppBrainContext.tsx` passes action handlers into the orchestrator.  
-- **Legacy path (deprecated):** `features/agent/hooks/useAgentService.ts` + `features/agent/components/ChatInterface.tsx` — prefer orchestrator.
+Tools are the "hands" of the agent.
+
+- **Definition:** `services/gemini/agentTools.ts` — Contains the `FunctionDeclaration` schema for all tools (Navigation, Editing, Analysis, Memory, etc.).
+- **Registry:** `services/commands/registry.ts` — Maps tool names to executable Command classes.
+- **Implementation:** `services/commands/*.ts` — The actual logic for each command.
+- **Execution:** `services/gemini/toolExecutor.ts` — The bridge between the LLM's function call and the Command Registry.
+
+**Reference:** See [AGENT_TOOLS_REFERENCE.md](./AGENT_TOOLS_REFERENCE.md) for the full list of available tools.
+
+## Legacy paths (Deprecated)
+
+Avoid touching these unless fixing regressions in old code:
+- `features/agent/hooks/useAgentService.ts`: Old distinct state management.
+- `features/agent/hooks/useAgenticEditor.ts`: Wrapper around the legacy service for editor specific tasks.
+- `features/agent/components/ChatInterface.tsx`: Some parts may still reference the old service pattern, but are migrating to `useAgentOrchestrator`.
 
 ## Agent tools: how to add or change one
 
 1. **Define/modify tool schema:** `services/gemini/agentTools.ts` (FunctionDeclarations).  
 2. **Wire execution:** Add or update a command in `services/commands/*.ts` and register it in `services/commands/registry.ts`.  
-3. **Expose to orchestrator:** The shared tool loop lives in `services/core/agentToolLoop.ts` and is used by both `useAgentOrchestrator` and `services/core/AgentController.ts` via `services/gemini/toolExecutor.ts`. Make sure the **tool name** you added in `agentTools.ts` matches the command name registered in the `CommandRegistry`.
-4. **Surface in UI (if needed):** Confirm `useAgentOrchestrator` is used by the UI you care about.  
-5. **Docs:** Add the tool to [AGENT_TOOLS_REFERENCE.md](./AGENT_TOOLS_REFERENCE.md).  
-6. **Tests:** Add coverage under `tests/services/commands/` or feature-level tests as appropriate.
+3. **Expose to orchestrator:** Ensure the **tool name** in `agentTools.ts` matches the command name in `CommandRegistry`.
+4. **Docs:** Add the tool to [AGENT_TOOLS_REFERENCE.md](./AGENT_TOOLS_REFERENCE.md).
+5. **Tests:** Add coverage under `tests/services/commands/`.
 
 ## Planning memory triggers
 
-The bedside-note planning memory is evolved from multiple entrypoints. Trace these in order when debugging:
+The bedside-note planning memory is evolved from multiple entrypoints:
 
-- **Proactive thinker:** `services/appBrain/proactiveThinker.ts` (chapter transition, significant edits debounce/cooldown).  
+- **Proactive thinker:** `services/appBrain/proactiveThinker.ts` (chapter transition, significant edits).
 - **Analysis → plan:** `features/agent/hooks/useMemoryIntelligence.ts` (turns analysis + goals into plan text).  
-- **Goals lifecycle:** `services/memory/index.ts` (goal add/complete/abandon triggers).  
-- **Session lifecycle:** `services/memory/sessionLifecycle.ts` (session start/end reminders/summary).  
-- **Agent-driven mutations:** `services/memory/bedsideNoteMutations.ts` + `update_bedside_note` tool.  
-- **Core evolution logic:** `services/memory/chains.ts` (`evolveBedsideNote`, conflict handling, roll-ups).  
-- **UI surfacing:** `features/memory/components/BedsideNotePanel.tsx` (history, conflicts, notifications).  
-- **Reference doc:** [BEDSIDE_NOTE_ROADMAP.md](./BEDSIDE_NOTE_ROADMAP.md) lists current triggers, gaps, and roadmap.
+- **Goals lifecycle:** `services/memory/index.ts`.
+- **Agent tools:** The `update_bedside_note` tool allows the agent to explicitly modify the plan during conversation.
+- **Reference doc:** [BEDSIDE_NOTE_ROADMAP.md](./BEDSIDE_NOTE_ROADMAP.md).
 
 ## Debugging playbook
 
-1. **Reproduce with App Brain visible:** Confirm `projectId`, active chapter, and pending events in the Brain.  
-2. **Inspect prompt assembly:** Log `getSmartAgentContext` output (or use `contextStreamer`) to verify context/profile/budget.  
-3. **Check event flow:** Verify the event bus fired and `agentOrchestratorMachine` received the event; inspect `pendingEvents` in `ProactiveThinker` if edits are involved.  
-4. **Tool path check:** Ensure the FunctionDeclaration matches the command signature and the command is exported.  
-5. **Memory effects:** If bedside-note changes are expected, inspect `evolveBedsideNote` inputs and tags; check cooldowns and thresholds.  
-6. **Tests:** Add or run focused tests in `tests/services` / `tests/features/agent` depending on the layer you touched.
+1. **Reproduce with App Brain:** Confirm `projectId`, active chapter, and pending events are correct in the debug panel (if available) or console logs.
+2. **Inspect prompt assembly:** Log `getSmartAgentContext` output to verify what the agent actually "sees".
+3. **Check event flow:** Verify the `eventBus` fired the expected event (e.g., `TEXT_CHANGED`) and `proactiveThinker` received it (if debugging background suggestions).
+4. **Tool path check:** If a tool fails, check `services/core/agentToolLoop.ts` logs. Does the tool name match the registry?
+5. **Memory effects:** Inspect `evolveBedsideNote` calls to see why a plan updated (or didn't).
 
-## Proposing new agent ideas (where to plug them)
+## Proposing new agent ideas
 
-- **New proactive behaviors:** Add to `ProactiveThinker` (debounced, event-driven) and document in [BEDSIDE_NOTE_ROADMAP.md](./BEDSIDE_NOTE_ROADMAP.md) if planning-related.  
-- **New context signals:** Extend `AppBrainState` and wire through `contextBuilder.ts` / `adaptiveContext.ts`.  
-- **New memory signals:** Add to `services/memory` and surface via `getSmartAgentContext`.  
-- **UI affordances:** Add panels or buttons that call `useAgentOrchestrator` rather than bypassing App Brain.
-
-## Prompt and safety considerations
-
-- **Token guard:** Use `config/models.ts` + `services/gemini/tokenGuard.ts` to size prompts before calls.  
-- **Budget profiles:** Prefer `selectContextProfile` + `getContextBudgetForModel` in `services/appBrain`.  
-- **Conflict and warnings:** Bedside evolution auto-tags conflicts; ensure prompts surface `conflicts`/`warnings` sections from serialized bedside notes.  
-- **Cooldowns/debounce:** Respect existing cooldowns in `ProactiveThinker` and `sessionLifecycle` to avoid noisy evolutions.
+- **New proactive behaviors:** Add logic to `services/appBrain/proactiveThinker.ts`.
+- **New context signals:** Extend `services/intelligence` (deterministic) and expose it via `AppBrainState`.
+- **New tool capabilities:** Create a new Command in `services/commands/` and register it.
