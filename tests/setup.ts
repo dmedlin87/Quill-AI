@@ -1,12 +1,17 @@
 import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import React from 'react';
 
 const windowRef =
   typeof window !== 'undefined'
     ? window
     : ((globalThis as any) as Window & typeof globalThis);
+
+fs.mkdirSync(path.join(process.cwd(), 'coverage'), { recursive: true });
+fs.mkdirSync(path.join(process.cwd(), 'coverage', '.tmp'), { recursive: true });
 
 // Force zero-latency persistence in tests to avoid debounce-induced delays
 (globalThis as any).__QUILL_WRITE_DEBOUNCE_MS = 0;

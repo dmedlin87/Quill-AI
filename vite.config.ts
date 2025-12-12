@@ -4,52 +4,58 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    return {
-      server: {
-        port: 3000,
-        host: '0.0.0.0',
-      },
-      plugins: [react()],
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
-        }
-      },
-      test: {
-        globals: true,
-        environment: 'jsdom',
-        isolate: true,
-        pool: 'forks',
-        poolOptions: {
-          forks: {
-            singleFork: false,
-            minForks: 1,
-            maxForks: 2,
-            execArgv: ['--max-old-space-size=16384'],
-          },
+  const env = loadEnv(mode, '.', '');
+  const isWindows = process.platform === 'win32';
+  const pool = isWindows ? 'threads' : 'forks';
+  return {
+    server: {
+      port: 3000,
+      host: '0.0.0.0',
+    },
+    plugins: [react()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      }
+    },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      isolate: true,
+      pool,
+      ...(pool === 'forks'
+        ? {
+            poolOptions: {
+              forks: {
+                singleFork: false,
+                minForks: 1,
+                maxForks: 2,
+                execArgv: ['--max-old-space-size=16384'],
+              },
+            },
+          }
+        : {}),
+      maxConcurrency: 5,
+      setupFiles: ['./tests/setup.ts'],
+      include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+      coverage: {
+        reporter: ['text', 'json', 'json-summary', 'html'],
+        exclude: [
+          'scripts/**/*.mjs',
+          'types/**/*.ts',
+        ],
+        perFile: true,
+        thresholds: {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
         },
-        maxConcurrency: 5,
-        setupFiles: ['./tests/setup.ts'],
-        include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-        coverage: {
-          reporter: ['text', 'json', 'json-summary', 'html'],
-          exclude: [
-            'scripts/**/*.mjs',
-            'types/**/*.ts',
-          ],
-          perFile: true,
-          thresholds: {
-            statements: 90,
-            branches: 90,
-            functions: 90,
-            lines: 90,
-          },
-        },
-        reporters: ['default', 'json'],
-        outputFile: {
-          json: 'coverage/vitest-report.json',
-        },
       },
-    };
+      reporters: ['default', 'json'],
+      outputFile: {
+        json: 'coverage/vitest-report.json',
+      },
+    },
+  };
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
 
-import { CritiqueIntensitySelector } from '@/features/settings/components/CritiqueIntensitySelector';
+import { CritiqueIntensitySelector, IntensityBadge } from '@/features/settings/components/CritiqueIntensitySelector';
 import { CRITIQUE_PRESETS, CritiqueIntensity } from '@/types/critiqueSettings';
 
 type SettingsState = {
@@ -156,5 +156,17 @@ describe('CritiqueIntensitySelector', () => {
 
     // Inline styles for border/background use the preset color
     expect(activeButton).toHaveStyle({ borderColor: active.color });
+  });
+
+  it('renders IntensityBadge using the current store intensity', () => {
+    const active = presets[1];
+    setupStore({ critiqueIntensity: active.id });
+
+    render(<IntensityBadge className="my-badge" />);
+
+    const badge = screen.getByTitle(`Critique mode: ${active.label} - ${active.description}`);
+    expect(badge).toHaveClass('my-badge');
+    expect(screen.getByText(active.icon)).toBeInTheDocument();
+    expect(screen.getByText(active.label)).toBeInTheDocument();
   });
 });
