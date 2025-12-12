@@ -11,8 +11,9 @@ const createPdf = (Ctor: any, options: { orientation: 'portrait' | 'landscape'; 
   }
 };
 
-const MARGIN_X = 20;
-const MARGIN_Y = 20;
+const DEFAULT_MARGIN_X = 20;
+const DEFAULT_MARGIN_Y = 20;
+const STANDARD_MANUSCRIPT_MARGIN_MM = 25.4;
 const TITLE_OFFSET = 60;
 const LINE_HEIGHT_FACTOR = 1.5;
 const FONT_SIZE_BODY = 12;
@@ -25,17 +26,57 @@ export class PDFExportService {
   private pageHeight: number;
   private pageWidth: number;
   private contentWidth: number;
+  private marginX: number;
+  private marginY: number;
+  private activePreset: 'default' | 'standard_manuscript';
 
   constructor() {
     this.doc = createPdf(jsPDF as any, { orientation: 'portrait', unit: 'mm', format: 'a4' });
     this.pageHeight = this.doc.internal.pageSize.getHeight();
     this.pageWidth = this.doc.internal.pageSize.getWidth();
-    this.contentWidth = this.pageWidth - MARGIN_X * 2;
-    this.cursorY = MARGIN_Y;
+    this.marginX = DEFAULT_MARGIN_X;
+    this.marginY = DEFAULT_MARGIN_Y;
+    this.contentWidth = this.pageWidth - this.marginX * 2;
+    this.cursorY = this.marginY;
+    this.activePreset = 'default';
+  }
+
+  private isStandardManuscript(config: ExportConfig): boolean {
+    return config.manuscriptOptions.preset === 'standard_manuscript';
+  }
+
+  private initializeDocument(config: ExportConfig) {
+    const wantsStandard = this.isStandardManuscript(config);
+
+    if (wantsStandard) {
+      if (this.activePreset !== 'standard_manuscript') {
+        this.doc = createPdf(jsPDF as any, { orientation: 'portrait', unit: 'mm', format: 'letter' });
+      }
+      this.marginX = STANDARD_MANUSCRIPT_MARGIN_MM;
+      this.marginY = STANDARD_MANUSCRIPT_MARGIN_MM;
+      this.activePreset = 'standard_manuscript';
+    } else {
+      if (this.activePreset !== 'default') {
+        this.doc = createPdf(jsPDF as any, { orientation: 'portrait', unit: 'mm', format: 'a4' });
+      }
+      this.marginX = DEFAULT_MARGIN_X;
+      this.marginY = DEFAULT_MARGIN_Y;
+      this.activePreset = 'default';
+    }
+
+    this.pageHeight = this.doc.internal.pageSize.getHeight();
+    this.pageWidth = this.doc.internal.pageSize.getWidth();
+    this.contentWidth = this.pageWidth - this.marginX * 2;
+    this.cursorY = this.marginY;
+  }
+
+  private getBodyFontFamily(config: ExportConfig) {
+    return this.isStandardManuscript(config) ? 'courier' : 'helvetica';
   }
 
   public async generatePdf(data: ExportData, config: ExportConfig): Promise<void> {
     try {
+      this.initializeDocument(config);
       this.renderTitlePage(data);
 
       config.sections.forEach((section) => this.renderSection(section, data, config));
@@ -70,15 +111,15 @@ export class PDFExportService {
 
   private renderSection(section: ExportSection, data: ExportData, config: ExportConfig) {
     this.doc.addPage();
-    this.cursorY = MARGIN_Y;
+    this.cursorY = this.marginY;
 
-    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFont(this.getBodyFontFamily(config), 'bold');
     this.doc.setFontSize(FONT_SIZE_HEADING);
     const sectionTitle = this.getSectionTitle(section);
-    this.doc.text(sectionTitle, MARGIN_X, this.cursorY);
+    this.doc.text(sectionTitle, this.marginX, this.cursorY);
     this.cursorY += 10;
 
-    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFont(this.getBodyFontFamily(config), 'normal');
     this.doc.setFontSize(FONT_SIZE_BODY);
 
     switch (section) {
@@ -98,20 +139,31 @@ export class PDFExportService {
   }
 
   private renderManuscript(content: string, config: ExportConfig) {
-    const fontSize = FONT_SIZE_BODY * config.manuscriptOptions.fontScale;
+    const standard = this.isStandardManuscript(config);
+    const fontSize = standard ? FONT_SIZE_BODY : FONT_SIZE_BODY * config.manuscriptOptions.fontScale;
     const text = config.manuscriptOptions.includeChapterTitles
       ? content
       : content.replace(/(?<=\n|^)Chapter[^\n]*\n?/gi, '');
-    const lineHeight = fontSize * config.manuscriptOptions.lineHeight * 0.3527;
+    const lineHeightMultiplier = standard ? 2 : config.manuscriptOptions.lineHeight;
+    const lineHeight = fontSize * lineHeightMultiplier * 0.3527;
 
     this.doc.setFontSize(fontSize);
-    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFont(this.getBodyFontFamily(config), 'normal');
 
-    const lines = this.doc.splitTextToSize(text, this.contentWidth);
-    lines.forEach((line) => {
-      this.checkPageBreak(lineHeight);
-      this.doc.text(line, MARGIN_X, this.cursorY);
-      this.cursorY += lineHeight;
+    const segments = text.split('\f');
+
+    segments.forEach((segment, segmentIndex) => {
+      if (segmentIndex > 0) {
+        this.doc.addPage();
+        this.cursorY = this.marginY;
+      }
+
+      const lines = this.doc.splitTextToSize(segment, this.contentWidth);
+      lines.forEach((line) => {
+        this.checkPageBreak(lineHeight);
+        this.doc.text(line, this.marginX, this.cursorY);
+        this.cursorY += lineHeight;
+      });
     });
   }
 
@@ -127,14 +179,14 @@ export class PDFExportService {
 
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(14);
-      this.doc.text(character.name, MARGIN_X, this.cursorY);
+      this.doc.text(character.name, this.marginX, this.cursorY);
       this.cursorY += 7;
 
       if (character.arc) {
         this.doc.setFont('helvetica', 'italic');
         this.doc.setFontSize(11);
         this.doc.setTextColor(100);
-        this.doc.text(`Arc: ${character.arc}`, MARGIN_X, this.cursorY);
+        this.doc.text(`Arc: ${character.arc}`, this.marginX, this.cursorY);
         this.doc.setTextColor(0);
         this.cursorY += 7;
       }
@@ -155,8 +207,8 @@ export class PDFExportService {
 
     rules.forEach((rule) => {
       this.checkPageBreak(10);
-      this.doc.text('•', MARGIN_X, this.cursorY);
-      this.renderWrappedText(rule, 7, MARGIN_X + 5);
+      this.doc.text('•', this.marginX, this.cursorY);
+      this.renderWrappedText(rule, 7, this.marginX + 5);
       this.cursorY += 3;
     });
   }
@@ -197,7 +249,7 @@ export class PDFExportService {
     this.checkPageBreak(12);
     this.doc.setFont('helvetica', 'bold');
     this.doc.setFontSize(13);
-    this.doc.text(title, MARGIN_X, this.cursorY);
+    this.doc.text(title, this.marginX, this.cursorY);
     this.cursorY += 7;
     this.doc.setFont('helvetica', 'normal');
   }
@@ -215,8 +267,8 @@ export class PDFExportService {
     this.renderWrappedText(content, 6);
   }
 
-  private renderWrappedText(text: string, lineHeight = 6, startX = MARGIN_X) {
-    const lines = this.doc.splitTextToSize(text, this.contentWidth - (startX - MARGIN_X));
+  private renderWrappedText(text: string, lineHeight = 6, startX = this.marginX) {
+    const lines = this.doc.splitTextToSize(text, this.contentWidth - (startX - this.marginX));
     lines.forEach((line) => {
       this.checkPageBreak(lineHeight);
       this.doc.text(line, startX, this.cursorY);
@@ -225,9 +277,9 @@ export class PDFExportService {
   }
 
   private checkPageBreak(heightNeeded: number) {
-    if (this.cursorY + heightNeeded > this.pageHeight - MARGIN_Y) {
+    if (this.cursorY + heightNeeded > this.pageHeight - this.marginY) {
       this.doc.addPage();
-      this.cursorY = MARGIN_Y;
+      this.cursorY = this.marginY;
     }
   }
 

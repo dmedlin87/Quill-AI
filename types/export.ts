@@ -10,10 +10,13 @@ export enum ExportSection {
   // QueryLetter = 'query-letter',
 }
 
+ export type ManuscriptPreset = 'standard_manuscript';
+
 export interface ManuscriptExportOptions {
   includeChapterTitles: boolean;
   fontScale: number; // 1.0 = 12pt roughly
   lineHeight: number; // e.g. 1.5
+  preset?: ManuscriptPreset;
 }
 
 export interface AnalysisExportOptions {

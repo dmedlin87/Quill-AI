@@ -141,6 +141,9 @@ describe('ContextService', () => {
       const smartResult = await service.getSmartAgentContext(mockState, null, mockOptions);
       expect(smartResult.context).toBe('Fixed smart context');
       expect(service.getCompressedContext(mockState)).toBe('Fixed compressed context');
+      expect(service.getNavigationContext(mockState)).toBe('Fixed navigation context');
+      expect(service.getEditingContext(mockState)).toBe('Fixed editing context');
+      expect(await service.getAgentContextWithMemory(mockState, null)).toBe('Fixed context with memory');
     });
   });
 });

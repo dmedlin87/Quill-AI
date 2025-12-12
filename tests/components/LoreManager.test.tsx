@@ -390,5 +390,192 @@ describe('LoreManager', () => {
       const nameInput = findInputByLabel('Name');
       expect(nameInput.value).toBe('Drafty');
     });
+
+    it('handles partial draft character with defaults', () => {
+      const onDraftConsumed = vi.fn();
+      const partialDraft = { name: 'Partial' } as CharacterProfile;
+
+      mockedUseProjectStore.mockReturnValue({
+        currentProject: { id: 'p1', lore: { characters: [], worldRules: [] } },
+        updateProjectLore,
+      } as any);
+
+      render(<LoreManager draftCharacter={partialDraft} onDraftConsumed={onDraftConsumed} />);
+      
+      const bioInput = findInputByLabel('Biography', 'textarea') as HTMLTextAreaElement;
+      expect(bioInput.value).toBe(''); // Default
+    });
+  });
+
+  describe('Validation & Guards', () => {
+      it('does not add world rule if empty', () => {
+          renderLoreManager();
+          fireEvent.click(screen.getByRole('button', { name: /world rules/i }));
+          
+          const addButton = screen.getByRole('button', { name: /^add$/i });
+          
+          // Verify input is empty initially
+          const input = screen.getByPlaceholderText(/add a world rule/i) as HTMLInputElement;
+          expect(input.value).toBe('');
+
+          fireEvent.click(addButton);
+          expect(updateProjectLore).not.toHaveBeenCalled();
+      });
+
+      it('does not add relationship if incomplete', () => {
+          renderLoreManager();
+          fireEvent.click(screen.getByRole('button', { name: /add character manually/i }));
+
+          const addButtons = screen.getAllByRole('button', { name: 'Add' });
+          const addRelButton = addButtons[0];
+
+          // Empty check
+          fireEvent.click(addRelButton);
+          
+          // Partial check
+          const relNameInput = screen.getByPlaceholderText('Name');
+          fireEvent.change(relNameInput, { target: { value: 'Incomplete' } });
+          fireEvent.click(addRelButton);
+
+          // Should not see the relationship added to the list
+          expect(screen.queryByText('Incomplete')).not.toBeInTheDocument();
+      });
+
+    it('invokes interview from Editor view', () => {
+        const onInterview = vi.fn();
+        mockedUseProjectStore.mockReturnValue({
+            currentProject: { id: 'p1', lore: { characters: [baseCharacter], worldRules: [] } },
+            updateProjectLore,
+        } as any);
+
+        render(<LoreManager onInterviewCharacter={onInterview} />);
+        
+        // Enter editor
+        fireEvent.click(screen.getByText(baseCharacter.name));
+        
+        // Find interview button in editor
+        const interviewButton = screen.getByRole('button', { name: /interview alice/i });
+        fireEvent.click(interviewButton);
+        
+        expect(onInterview).toHaveBeenCalled();
+    });
+
+    it('preserves other characters when editing one', () => {
+        const charA = { ...baseCharacter, name: 'Alice' };
+        const charB = { ...baseCharacter, name: 'Bob' };
+        
+        mockedUseProjectStore.mockReturnValue({
+            currentProject: { id: 'p1', lore: { characters: [charA, charB], worldRules: [] } },
+            updateProjectLore,
+        } as any);
+
+        render(<LoreManager />);
+        
+        // Edit Bob
+        fireEvent.click(screen.getByText('Bob'));
+        
+        // Change name
+        const nameInput = findInputByLabel('Name') as HTMLInputElement;
+        fireEvent.change(nameInput, { target: { value: 'Bobby' } });
+        
+        // Save
+        fireEvent.click(screen.getByRole('button', { name: /save character/i }));
+        
+        expect(updateProjectLore).toHaveBeenCalledWith(
+            'p1',
+            expect.objectContaining({
+                characters: [
+                    charA, // Alice should remain
+                    expect.objectContaining({ name: 'Bobby' }) // Bob updated
+                ]
+            })
+        );
+    });
+
+
+
+    it('renders relationship dynamic', () => {
+        const charWithDynamic = {
+            ...baseCharacter,
+            relationships: [{ name: 'Bob', type: 'Rival', dynamic: 'Friendly Competition' }]
+        };
+        mockedUseProjectStore.mockReturnValue({
+            currentProject: { id: 'p1', lore: { characters: [charWithDynamic], worldRules: [] } },
+            updateProjectLore,
+        } as any);
+
+        render(<LoreManager />);
+        // Enter editor to see detailed list
+        fireEvent.click(screen.getByText('Alice'));
+        expect(screen.getByText(/Friendly Competition/)).toBeInTheDocument();
+    });
+
+    it('does not submit on non-Enter key press', () => {
+        renderLoreManager();
+        fireEvent.click(screen.getByRole('button', { name: /world rules/i }));
+        
+        const input = screen.getByPlaceholderText(/add a world rule/i);
+        fireEvent.change(input, { target: { value: 'Pending Rule' } });
+        fireEvent.keyDown(input, { key: 'Escape', code: 'Escape' });
+        
+        expect(updateProjectLore).not.toHaveBeenCalled();
+    });
+
+      it('does not add plot thread if empty', () => {
+          renderLoreManager();
+          fireEvent.click(screen.getByRole('button', { name: /add character manually/i }));
+
+          const addButtons = screen.getAllByRole('button', { name: 'Add' });
+          const addPlotButton = addButtons[1];
+          
+          fireEvent.click(addPlotButton); // Empty
+          
+          // Should not see empty badge
+          const badges = screen.queryAllByText('×');
+          expect(badges).toHaveLength(0);
+      });
+
+      it('does not crash if onInterview is undefined', () => {
+        // Render without onInterview prop
+        // The mock store setup is handled by renderLoreManager helper which we can reuse but override via rerender if needed, 
+        // but here we just call render directly to control props exactly.
+        mockedUseProjectStore.mockReturnValue({
+            currentProject: { id: 'p1', lore: { characters: [baseCharacter], worldRules: [] } },
+            updateProjectLore,
+        } as any);
+
+        render(<LoreManager />); 
+        // Should show character card but NO interview button
+        expect(screen.getByText('Alice')).toBeInTheDocument();
+        expect(screen.queryByText(/interview/i)).not.toBeInTheDocument();
+
+        // Also check editor mode
+        fireEvent.click(screen.getByText('Alice'));
+        expect(screen.queryByText(/interview/i)).not.toBeInTheDocument();
+      });
+
+      it('safely handles null project when saving', () => {
+          mockedUseProjectStore.mockReturnValue({
+              currentProject: null,
+              updateProjectLore,
+          } as any);
+
+          render(<LoreManager />);
+          // There is no UI to add/save really if project is null (usually) but let's try to invoke save mechanics if possible
+          // The component initializes state effects based on currentProject.
+          // If currentProject is null, lists are empty.
+          
+          // Actually if currentProject is null, `characters` derived from it is undefined/empty array fallback?
+          // The code says: const characters = currentProject?.lore?.characters || [];
+          
+          // Tricky to trigger 'save' if we can't switch tabs or see buttons.
+          // But if we simulate a "Add Manual" while project is null (if button exists):
+          // The button exists if characters array is empty.
+          
+          fireEvent.click(screen.getByRole('button', { name: /add character manually/i }));
+          fireEvent.click(screen.getByRole('button', { name: /save character/i }));
+          
+          expect(updateProjectLore).not.toHaveBeenCalled();
+      });
   });
 });

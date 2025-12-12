@@ -570,4 +570,76 @@ describe('useAgentOrchestrator', () => {
 
         expect(result2.current.state.status).not.toBe('thinking');
     });
+
+    it('handles activeChapter fallback in error path when chapter not found', async () => {
+        (getSmartAgentContext as any).mockRejectedValue(new Error('Context fail'));
+        
+        // Setup state where activeChapterId invalid
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            manuscript: {
+                ...defaultState.manuscript,
+                activeChapterId: 'invalid-id'
+            }
+        }));
+
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        await act(async () => { await result.current.sendMessage('Hi'); });
+
+        // Should proceed without error using chapters[0]
+        expect(result.current.state.status).toBe('idle');
+    });
+
+    it('handles missing content in activeChapter during fallback', async () => {
+        (getSmartAgentContext as any).mockRejectedValue(new Error('Context fail'));
+        
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            manuscript: {
+                ...defaultState.manuscript,
+                chapters: [{ id: 'c1', title: 'T', content: undefined as any }]
+            }
+        }));
+
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        await act(async () => { await result.current.sendMessage('Hi'); });
+
+        expect(result.current.state.status).toBe('idle');
+    });
+
+    it('handles initSession when activeChapterId does not match any chapter', async () => {
+        // Setup state where activeChapterId invalid for init logging
+        (useAppBrainState as any).mockImplementation((selector: any) => selector({
+            ...defaultState,
+            manuscript: {
+                ...defaultState.manuscript,
+                activeChapterId: 'invalid-id'
+            }
+        }));
+
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        expect(mockSendMessage).toHaveBeenCalled();
+    });
+
+    it('does not nullify abortController if a new request started', async () => {
+        const { result } = renderHook(() => useAgentOrchestrator());
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+
+        (runAgentToolLoop as any).mockImplementation(async () => {
+            // Wait a bit
+            await new Promise(r => setTimeout(r, 10));
+            return { text: 'Done' };
+        });
+
+        const p1 = result.current.sendMessage('Req 1');
+        const p2 = result.current.sendMessage('Req 2');
+        
+        await act(async () => { await Promise.all([p1, p2]); });
+    });
 });

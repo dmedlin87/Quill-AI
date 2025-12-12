@@ -160,4 +160,110 @@ describe('driftDetector', () => {
     const conflicts = checkNarrativeDrift(intelligence, plan);
     expect(conflicts).toHaveLength(0);
   });
+
+  it('returns empty array when plan has no currentFocus and no activeGoals', () => {
+    const intelligence = mockIntelligence({
+      structural: { stats: { avgTension: 0.99 } } as any,
+      timeline: { promises: [{ description: 'Anything', resolved: true } as any] } as any,
+    });
+
+    const plan: BedsideNoteContent = {};
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(0);
+  });
+
+  it('skips non-active goals when checking for stale goals', () => {
+    const intelligence = mockIntelligence({
+      timeline: {
+        promises: [{ description: 'Find the lost key', resolved: true } as any],
+      } as any,
+    });
+
+    const plan: BedsideNoteContent = {
+      activeGoals: [{ title: 'Find the lost key', status: 'completed', progress: 100 }],
+    };
+
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(0);
+  });
+
+  it('does not flag stale goals when promise is not resolved', () => {
+    const intelligence = mockIntelligence({
+      timeline: {
+        promises: [{ description: 'Find the lost key', resolved: false } as any],
+      } as any,
+    });
+
+    const plan: BedsideNoteContent = {
+      activeGoals: [{ title: 'Find the lost key', status: 'active', progress: 50 }],
+    };
+
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(0);
+  });
+
+  it('flags stale goals when promise description includes the goal title', () => {
+    const intelligence = mockIntelligence({
+      timeline: {
+        promises: [{ description: 'Find the lost key beneath the altar', resolved: true } as any],
+      } as any,
+    });
+
+    const plan: BedsideNoteContent = {
+      activeGoals: [{ title: 'lost key', status: 'active', progress: 0 }],
+    };
+
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].current).toContain('resolved promise');
+  });
+
+  it('treats intent as both slow and fast when both keyword sets appear, but does not flag at mid tension', () => {
+    const intelligence = mockIntelligence({
+      structural: { stats: { avgTension: 0.5 } } as any,
+    });
+
+    const plan: BedsideNoteContent = {
+      currentFocus: 'quiet calm before the fight',
+      activeGoals: [],
+    };
+
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(0);
+  });
+
+  it('handles character nodes with undefined aliases and still matches by name', () => {
+    const intelligence = mockIntelligence({
+      entities: {
+        nodes: [
+          {
+            id: 'n1',
+            name: 'Seth',
+            type: 'character',
+            firstMention: 0,
+            mentionCount: 1,
+            mentions: [],
+            attributes: {},
+          },
+          {
+            id: 'n2',
+            name: 'Tower',
+            type: 'location',
+            aliases: ['tower'],
+            firstMention: 0,
+            mentionCount: 1,
+            mentions: [],
+            attributes: {},
+          },
+        ],
+      } as any,
+    });
+
+    const plan: BedsideNoteContent = {
+      activeGoals: [{ title: "Develop Seth's backstory", status: 'active', progress: 0 }],
+    };
+
+    const conflicts = checkNarrativeDrift(intelligence, plan);
+    expect(conflicts).toHaveLength(0);
+  });
 });

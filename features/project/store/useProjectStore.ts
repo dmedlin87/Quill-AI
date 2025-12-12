@@ -145,7 +145,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     });
 
     const timer = setTimeout(() => {
-      void persistChapter(chapterId, resolveFn);
+      void persistChapter(chapterId, resolveFn).catch(() => undefined);
     }, WRITE_DEBOUNCE_MS);
 
     pendingChapterWrites.set(chapterId, { timer, promise, resolve: resolveFn });

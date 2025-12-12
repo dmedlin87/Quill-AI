@@ -442,7 +442,7 @@ export const LoreManager: React.FC<LoreManagerProps> = ({
                   setIsCreatingNew(false);
                 }}
                 onDelete={isCreatingNew ? undefined : handleDeleteCharacter}
-                onInterview={beginInterview}
+                onInterview={onInterviewCharacter ? beginInterview : undefined}
               />
             </div>
           ) : (
@@ -475,7 +475,7 @@ export const LoreManager: React.FC<LoreManagerProps> = ({
                     key={i}
                     character={char}
                     onEdit={() => setEditingCharacter(char)}
-                    onInterview={() => beginInterview(char)}
+                    onInterview={onInterviewCharacter ? () => beginInterview(char) : undefined}
                     isSelected={false}
                   />
                   ))}

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { RecentFile } from '@/types';
+import { extractRawTextFromDocxArrayBuffer } from '@/services/io/docxImporter';
 
 interface FileUploadProps {
   onTextLoaded: (text: string, fileName: string) => void;
@@ -28,11 +29,20 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
         const text = await file.text();
         onTextLoaded(text, file.name);
         event.target.value = '';
-      } else {
-        alert("Please upload a .txt or .md file.");
+        return;
       }
+
+      if (file.name.endsWith('.docx')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const text = await extractRawTextFromDocxArrayBuffer(arrayBuffer);
+        onTextLoaded(text, file.name);
+        event.target.value = '';
+        return;
+      }
+
+      alert("Please upload a .txt, .md, or .docx file.");
     } catch (e) {
-      alert("Could not read file. Please try a standard .txt or .md file.");
+      alert("Could not read file. Please try a standard .txt, .md, or .docx file.");
     }
   }, [onTextLoaded]);
 
@@ -43,7 +53,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
         {/* Header */}
         <div className="text-center">
             <h3 className="text-2xl font-serif font-bold text-gray-900">Upload Manuscript</h3>
-            <p className="text-gray-500 mt-2 text-sm">Supported formats: .txt, .md (Max 10MB)</p>
+            <p className="text-gray-500 mt-2 text-sm">Supported formats: .txt, .md, .docx (Max 10MB)</p>
         </div>
 
         {/* Upload Box */}
@@ -55,12 +65,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
                     </svg>
                 </div>
                 <p className="mb-1 text-sm text-gray-700 font-medium">Click to upload draft</p>
-                <p className="text-xs text-gray-400">TXT, MD (Max 10MB)</p>
+                <p className="text-xs text-gray-400">TXT, MD, DOCX (Max 10MB)</p>
             </div>
             <input 
                 type="file" 
                 className="hidden" 
-                accept=".txt,.md" 
+                accept=".txt,.md,.docx" 
                 onChange={handleFileChange} 
             />
         </label>

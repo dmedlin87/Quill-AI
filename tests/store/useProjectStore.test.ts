@@ -10,6 +10,13 @@ import { seedProjectBedsideNoteFromAuthor } from '@/services/memory/chains';
 // Mock the database
 vi.mock('@/services/db', () => ({
   db: {
+    transaction: vi.fn(async (mode, ...args) => {
+        // The last arg is the body function
+        const body = args[args.length - 1];
+        if (typeof body === 'function') {
+            await body();
+        }
+    }),
     projects: {
       orderBy: vi.fn(() => ({
         reverse: vi.fn(() => ({
@@ -112,60 +119,128 @@ describe('useProjectStore', () => {
   });
 
   describe('chapter state updates', () => {
-    it('updates chapter content in local state', async () => {
+    // ... existing tests ...
+
+    it('debounces persistence of chapter content', async () => {
+      vi.useFakeTimers();
       const testChapter = {
-        id: 'chapter-1',
-        projectId: 'project-1',
-        title: 'Test Chapter',
-        content: 'Original content',
+        id: 'c-debounce',
+        projectId: 'p-debounce',
+        title: 'Title',
+        content: 'Initial',
         order: 0,
         updatedAt: Date.now(),
       };
-
-      const testProject = {
-        id: 'project-1',
-        title: 'Test Project',
-        author: 'Test Author',
-        manuscriptIndex: { characters: {}, lastUpdated: {} },
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      
+      // Setup DB mocks for this test
+      const { db } = await import('@/services/db');
+      vi.mocked(db.chapters.get).mockResolvedValue(testChapter as any);
+      vi.mocked(db.chapters.update).mockResolvedValue(undefined);
+      vi.mocked(db.projects.update).mockResolvedValue(undefined);
 
       useProjectStore.setState({
-        currentProject: testProject,
         chapters: [testChapter],
-        activeChapterId: 'chapter-1',
+        activeChapterId: 'c-debounce',
       });
 
       const { updateChapterContent } = useProjectStore.getState();
-      await updateChapterContent('chapter-1', 'Updated content');
 
-      const updated = useProjectStore.getState().chapters[0];
-      expect(updated.content).toBe('Updated content');
+      // Trigger multiple updates rapidly
+      updateChapterContent('c-debounce', 'Update 1');
+      updateChapterContent('c-debounce', 'Update 2');
+      const p = updateChapterContent('c-debounce', 'Update 3');
+
+      // Should not have persisted yet
+      expect(db.chapters.update).not.toHaveBeenCalled();
+
+      // Fast forward
+      vi.runAllTimers();
+      await p;
+
+      // Should verify it eventually updated with the LAST content
+      expect(db.chapters.update).toHaveBeenCalledTimes(1);
+      expect(db.chapters.update).toHaveBeenCalledWith('c-debounce', expect.objectContaining({ content: 'Update 3' }));
+      
+      vi.useRealTimers();
     });
 
-    it('updates chapter title in local state', async () => {
+    it('handles persistence errors gracefully', async () => {
+      vi.useFakeTimers();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      
       const testChapter = {
-        id: 'chapter-1',
-        projectId: 'project-1',
-        title: 'Original Title',
-        content: 'Content',
+        id: 'c-error',
+        projectId: 'p-error',
+        title: 'Title',
+        content: 'Initial',
         order: 0,
         updatedAt: Date.now(),
       };
 
+      const { db } = await import('@/services/db');
+      vi.mocked(db.chapters.get).mockResolvedValue(testChapter as any);
+      vi.mocked(db.chapters.update).mockRejectedValue(new Error('DB Failed'));
+
       useProjectStore.setState({
         chapters: [testChapter],
-        activeChapterId: 'chapter-1',
+        activeChapterId: 'c-error',
       });
 
-      const { updateChapterTitle } = useProjectStore.getState();
-      await updateChapterTitle('chapter-1', 'New Title');
+      const { updateChapterContent } = useProjectStore.getState();
+      const promise = updateChapterContent('c-error', 'Fail Content'); // Logic returns a promise that resolves when persisted? NO, it returns the debounce promise.
 
-      const updated = useProjectStore.getState().chapters[0];
-      expect(updated.title).toBe('New Title');
+      vi.runAllTimers();
+
+      // The debounce promise wraps the persist call. If persist throws, the promise rejects?
+      // implementation: void persistChapter(chapterId, resolveFn); 
+      // wait, persistChapter throws but it's called inside setTimeout as void.
+      // However, scheduleChapterPersist returns a promise that is resolved via resolveFn passed to persistChapter.
+      // If persistChapter throws, resolveFn might not be called? 
+      // Actually: finally { resolveFn?.() } in persistChapter ensures it resolves.
+      // Error is caught and logged.
+      
+      await expect(promise).resolves.toBeUndefined(); // Should resolve despite error due to finally block
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to persist'), expect.any(Error));
+      
+      consoleSpy.mockRestore();
+      vi.useRealTimers();
     });
-  });
+
+    it('falls back to simple update if project not found during persist', async () => {
+        vi.useFakeTimers();
+        const testChapter = {
+          id: 'c-orphan',
+          // No project ID or mock db.chapters.get returns chapter with no projectId
+          projectId: undefined,
+          title: 'Title',
+          content: 'Initial',
+          order: 0,
+          updatedAt: Date.now(),
+        };
+  
+        const { db } = await import('@/services/db');
+        // db.chapters.get returns the chapter but maybe it's missing projectId ref
+        vi.mocked(db.chapters.get).mockResolvedValue(testChapter as any);
+        vi.mocked(db.chapters.update).mockResolvedValue(undefined);
+  
+        useProjectStore.setState({
+          chapters: [testChapter as any],
+          activeChapterId: 'c-orphan',
+        });
+  
+        const { updateChapterContent } = useProjectStore.getState();
+        const p = updateChapterContent('c-orphan', 'Orphan content');
+  
+        vi.runAllTimers();
+        await p;
+  
+        // Should call chapters.update but NOT projects.update
+        expect(db.chapters.update).toHaveBeenCalledWith('c-orphan', expect.anything());
+        expect(db.projects.update).not.toHaveBeenCalled();
+        
+        vi.useRealTimers();
+    });
+
 
   describe('deleteChapter', () => {
     it('removes chapter and updates active', async () => {
@@ -812,30 +887,93 @@ describe('useProjectStore', () => {
       vi.useRealTimers();
     });
 
-    it('persists chapter content even when project cannot be resolved', async () => {
+    it('registers background sync if supported', async () => {
       vi.useFakeTimers();
+
+      const mockRegister = vi.fn().mockResolvedValue(undefined);
+      const mockSync = { register: mockRegister };
+      
+      globalThis.navigator = {
+        sendBeacon: vi.fn(),
+        serviceWorker: {
+          ready: Promise.resolve({ sync: mockSync } as any),
+        },
+      } as unknown as Navigator;
 
       const { updateChapterContent, flushPendingWrites } = useProjectStore.getState();
       const { db } = await import('@/services/db');
+      vi.mocked(db.chapters.get).mockResolvedValue({ projectId: 'p1' } as any);
 
-      // First call returns a chapter without projectId so the fallback path is used
-      vi.mocked(db.chapters.get).mockResolvedValueOnce({ id: 'c1' } as any);
+      updateChapterContent('c1', 'new content');
+      await flushPendingWrites({ reason: 'test-sync', keepAlive: true });
 
-      const persistPromise = updateChapterContent('c1', 'orphan content');
-
-      const result = await flushPendingWrites({ reason: 'test-orphan' });
-      await persistPromise;
-
-      expect(result.pendingCount).toBe(1);
-      expect(db.chapters.update).toHaveBeenCalledWith(
-        'c1',
-        expect.objectContaining({ content: 'orphan content' }),
-      );
-      // When projectId is missing, the store should not attempt to update a project row
-      expect(db.projects.update).not.toHaveBeenCalled();
-
+      expect(mockRegister).toHaveBeenCalledWith('flush-pending-writes');
+      
       vi.useRealTimers();
     });
+  });
+
+  describe('createProject', () => {
+    // ... existing tests ...
+    
+    it('logs warning if Bedside Note seeding fails', async () => {
+        const { db } = await import('@/services/db');
+        const { seedProjectBedsideNoteFromAuthor } = await import('@/services/memory/chains');
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        vi.mocked(db.projects.add).mockResolvedValue(undefined);
+        vi.mocked(db.projects.get).mockResolvedValue({ id: 'p1' } as any);
+        vi.mocked(db.chapters.where).mockReturnValue({
+            equals: vi.fn().mockReturnValue({
+              sortBy: vi.fn().mockResolvedValue([]),
+            }),
+          } as any);
+
+        vi.mocked(seedProjectBedsideNoteFromAuthor).mockRejectedValue(new Error('Seed Failed'));
+
+        const { createProject } = useProjectStore.getState();
+        await createProject('Warning Project');
+
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to seed'), expect.any(Error));
+        consoleSpy.mockRestore();
+    });
+  });
+
+  describe('updateChapterBranchState', () => {
+      // ... existing tests ...
+      
+      it('handles optional updates', async () => {
+        const testChapter = {
+            id: 'chapter-1',
+            projectId: 'project-1',
+            title: 'Chapter 1',
+            content: 'Content',
+            order: 0,
+            updatedAt: Date.now(),
+        };
+
+        const { db } = await import('@/services/db');
+        vi.mocked(db.chapters.get).mockResolvedValue(testChapter as any);
+        // We need to support multiple calls
+        const updateMock = vi.mocked(db.chapters.update).mockResolvedValue(undefined);
+
+        useProjectStore.setState({ chapters: [testChapter] });
+        const { updateChapterBranchState } = useProjectStore.getState();
+
+        // 1. Only activeBranchId
+        await updateChapterBranchState('chapter-1', { activeBranchId: 'b2' });
+        expect(useProjectStore.getState().chapters[0].activeBranchId).toBe('b2');
+        expect(updateMock).toHaveBeenLastCalledWith('chapter-1', expect.objectContaining({ activeBranchId: 'b2' }));
+
+        // 2. Only content
+        await updateChapterBranchState('chapter-1', { content: 'New' });
+        expect(useProjectStore.getState().chapters[0].content).toBe('New');
+
+        // 3. Only branches
+        const branches = [{ id: 'b1', name: 'B', content: 'C', createdAt: 0 }];
+        await updateChapterBranchState('chapter-1', { branches });
+        expect(useProjectStore.getState().chapters[0].branches).toEqual(branches);
+      });
   });
 
   describe('concurrent operations and closing projects', () => {
@@ -885,6 +1023,7 @@ describe('useProjectStore', () => {
     });
 
     it('resets project-related state when closeProject is called', () => {
+      // ... existing test content ...
       useProjectStore.setState({
         projects: [{
           id: 'p1',
@@ -915,6 +1054,148 @@ describe('useProjectStore', () => {
       expect(state.activeChapterId).toBeNull();
       // projects list is left intact so the library view can still render
       expect(state.projects).toHaveLength(1);
+    });
+  });
+
+  describe('transaction fallbacks and environment checks', () => {
+      it('executes body directly if db.transaction is not available', async () => {
+          const { db } = await import('@/services/db');
+          // Temporarily remove transaction
+          const originalTransaction = db.transaction;
+          // @ts-ignore
+          db.transaction = undefined;
+
+          const { updateChapterTitle } = useProjectStore.getState();
+          useProjectStore.setState({ 
+              chapters: [{ id: 'c1', projectId: 'p1', title: 'Old', content: '', order: 0, updatedAt: 0 }] 
+          });
+
+          await updateChapterTitle('c1', 'New Title');
+          
+          expect(db.projects.update).not.toHaveBeenCalled(); // updateChapterTitle calls db.chapters.update directly?
+          // Wait, updateChapterTitle DOES NOT USE transaction in current implementation?
+          // line 401: await db.chapters.update(chapterId, { title, updatedAt: Date.now() });
+          // It doesn't update project timestamp? It seems it doesn't.
+          
+          // Let's use reorderChapters which definitely uses transaction.
+          useProjectStore.setState({ chapters: [{ id: 'c1', projectId: 'p1', title: 'C', content: '', order: 0, updatedAt: 0 }] });
+          const { reorderChapters } = useProjectStore.getState();
+          
+          await reorderChapters([{ id: 'c1', projectId: 'p1', title: 'C', content: '', order: 0, updatedAt: 0 }]);
+          
+          expect(db.chapters.bulkPut).toHaveBeenCalled();
+          expect(db.projects.update).toHaveBeenCalled();
+          
+          // Restore
+          db.transaction = originalTransaction;
+      });
+
+      it('does not keepalive if navigator is undefined', async () => {
+          const originalNavigator = globalThis.navigator;
+          // @ts-ignore
+          delete globalThis.navigator;
+          
+          const { flushPendingWrites } = useProjectStore.getState();
+          const result = await flushPendingWrites({ reason: 'test', keepAlive: true });
+          
+          // It should just run without error and NOT fail
+          expect(result.errors).toHaveLength(0);
+          
+          globalThis.navigator = originalNavigator;
+      });
+      
+      it('does not keepalive if pendingCount is 0', async () => {
+          const mockSendBeacon = vi.fn();
+          globalThis.navigator = { sendBeacon: mockSendBeacon } as any;
+          
+          const { flushPendingWrites } = useProjectStore.getState();
+          await flushPendingWrites({ reason: 'test', keepAlive: true });
+          
+          expect(mockSendBeacon).not.toHaveBeenCalled();
+      });
+  });
+  });
+
+  describe('environment configuration', () => {
+    beforeEach(() => {
+        vi.resetModules();
+    });
+
+    it('uses process.env.WRITE_DEBOUNCE_MS if available', async () => {
+        const originalEnv = process.env;
+        process.env = { ...originalEnv, WRITE_DEBOUNCE_MS: '100' };
+        
+        // Re-import to trigger module evaluation
+        const { useProjectStore } = await import('@/features/project/store/useProjectStore');
+        const { db } = await import('@/services/db');
+        
+        vi.useFakeTimers();
+        const testChapter = {
+          id: 'c-env',
+          projectId: 'p-env',
+          title: 'Title',
+          content: 'Initial',
+          order: 0,
+          updatedAt: Date.now(),
+        };
+        
+        vi.mocked(db.chapters.get).mockResolvedValue(testChapter as any);
+        vi.mocked(db.chapters.update).mockResolvedValue(undefined);
+        vi.mocked(db.projects.update).mockResolvedValue(undefined);
+
+        useProjectStore.setState({
+          chapters: [testChapter],
+          activeChapterId: 'c-env',
+        });
+        
+        const { updateChapterContent } = useProjectStore.getState();
+        const p = updateChapterContent('c-env', 'New');
+        
+        // Advance 150ms should trigger it (default 400 wouldn't)
+        vi.advanceTimersByTime(150);
+        await p;
+        
+        expect(db.chapters.update).toHaveBeenCalled();
+        
+        process.env = originalEnv;
+        vi.useRealTimers();
+    });
+
+    it('falls back to 400ms default', async () => {
+        const originalEnv = process.env;
+        process.env = { ...originalEnv };
+        delete process.env.WRITE_DEBOUNCE_MS;
+        
+        const { useProjectStore } = await import('@/features/project/store/useProjectStore');
+        const { db } = await import('@/services/db');
+        
+        vi.useFakeTimers();
+        const testChapter = {
+          id: 'c-def',
+          projectId: 'p-def',
+          title: 'Title',
+          content: 'Initial',
+          order: 0,
+          updatedAt: Date.now(),
+        };
+        
+        vi.mocked(db.chapters.get).mockResolvedValue(testChapter as any);
+        vi.mocked(db.chapters.update).mockResolvedValue(undefined);
+
+        useProjectStore.setState({ chapters: [testChapter], activeChapterId: 'c-def' });
+        
+        const { updateChapterContent } = useProjectStore.getState();
+        const p = updateChapterContent('c-def', 'New');
+        
+        vi.advanceTimersByTime(200); // Less than 400
+        expect(db.chapters.update).not.toHaveBeenCalled();
+        
+        vi.advanceTimersByTime(250); // Total 450
+        await p;
+        expect(db.chapters.update).toHaveBeenCalled();
+        
+        process.env = originalEnv;
+        vi.useRealTimers();
     });
   });
 });

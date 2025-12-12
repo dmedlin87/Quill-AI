@@ -21,6 +21,33 @@ vi.mock('@/features/layout/store/useLayoutStore', () => ({
   useLayoutStore: (selector: any) => selector(mockUseLayoutStore()),
 }));
 
+// Mock project store
+const mockUseProjectStore = vi.fn();
+vi.mock('@/features/project/store/useProjectStore', () => ({
+  useProjectStore: (selector: any) => selector(mockUseProjectStore()),
+}));
+
+vi.mock('@/services/pdfExport', () => ({
+  pdfExportService: {
+    generatePdf: vi.fn(async () => undefined),
+  },
+}));
+
+vi.mock('@/services/io/docxExporter', () => ({
+  exportStandardManuscriptDocx: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/services/io/manuscriptExport', () => ({
+  createManuscriptExportData: vi.fn(() => ({
+    title: 'Test Book',
+    author: 'Author Name',
+    content: 'content',
+    lore: { characters: [], worldRules: [] },
+    analysis: null,
+  })),
+  toManuscriptExportChapters: vi.fn(() => [{ title: 'Chapter 1', content: 'content' }]),
+}));
+
 // Mock child components
 vi.mock('@/features/shared', () => ({
   UsageBadge: () => <div data-testid="usage-badge">UsageBadge</div>,
@@ -38,6 +65,11 @@ describe('EditorHeader', () => {
       isHeaderHovered: false,
       setHeaderHovered: mockSetHeaderHovered,
     });
+
+    mockUseProjectStore.mockReturnValue({
+      currentProject: { title: 'Test Book', author: 'Author Name' },
+      chapters: [{ id: 'c1', projectId: 'p1', title: 'Chapter 1', content: 'content', order: 0, updatedAt: Date.now() }],
+    });
   });
 
   it('renders UsageBadge and VoiceCommandButton', () => {
@@ -45,6 +77,12 @@ describe('EditorHeader', () => {
     
     expect(screen.getByTestId('usage-badge')).toBeInTheDocument();
     expect(screen.getByTestId('voice-btn')).toBeInTheDocument();
+  });
+
+  it('renders Export Manuscript button when a project is available', () => {
+    render(<EditorHeader isZenMode={false} />);
+
+    expect(screen.getByRole('button', { name: 'Export Manuscript' })).toBeInTheDocument();
   });
 
   it('has banner role', () => {

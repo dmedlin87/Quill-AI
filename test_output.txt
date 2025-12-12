@@ -1,118 +1,33 @@
 
 [1m[46m RUN [49m[22m [36mv4.0.15 [39m[90mC:/Users/dmedl/Projects/Quill AI[39m
 
- [31mΓ¥»[39m tests/services/appBrain/contextBuilder.test.ts [2m([22m[2m23 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 32[2mms[22m[39m
-     [32mΓ£ô[39m builds a rich markdown context with manuscript, ui, hud, analysis, lore, events, history and session[32m 13[2mms[22m[39m
-     [32mΓ£ô[39m omits optional sections when data is missing[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m serializes context as JSON when using the API template[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m renders an XML context when requested[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m skips HUD and session data when those sections are absent[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m includes voice fingerprint metrics when deep analysis is requested[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m handles alternate UI states (zen mode off, no scene, no transcript, zen off)[32m 1[2mms[22m[39m
-[31m     [31m├ù[31m handles partial analysis results[39m[32m 8[2mms[22m[39m
-     [32mΓ£ô[39m handles lore inconsistencies[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m returns base context unchanged when projectId is null[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m replaces memory placeholder with formatted memories and goals in markdown[32m 1[2mms[22m[39m
-     [32mΓ£ô[39m injects memory into JSON template and falls back when parsing fails[32m 1[2mms[22m[39m
-     [32mΓ£ô[39m injects memory into XML template[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m handles memory service failures gracefully by leaving placeholder or warning[32m 1[2mms[22m[39m
-     [32mΓ£ô[39m builds compressed context with key markers[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m builds navigation context with chapters, characters, and scene types[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m builds editing context with selection, style, and branch info[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m omits HUD-specific markers in compressed context when HUD is missing[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m builds navigation context even without intelligence entities or structural data[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m gracefully builds editing context without selection or branch info[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m creates a context builder bound to getState[32m 0[2mms[22m[39m
-     [32mΓ£ô[39m builds relevance from state when not provided and calls adaptive context helpers[32m 1[2mms[22m[39m
-     [32mΓ£ô[39m honors explicit relevance overrides and model role[32m 0[2mms[22m[39m
-
-ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 1 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
-
- FAIL  tests/services/appBrain/contextBuilder.test.ts > contextBuilder - coverage gaps > handles partial analysis results
-AssertionError: expected '[MANUSCRIPT STATE]\nProject: Novel\nCΓÇª' to contain '[ANALYSIS INSIGHTS]'
-
-- Expected
-+ Received
-
-- [ANALYSIS INSIGHTS]
-+ [MANUSCRIPT STATE]
-+ Project: Novel
-+ Chapters: 2
-+ Active Chapter: "One" (20 chars)
-+ Setting: Now, Here
-+ Branches: 1 (on branch)
-+
-+ [CURRENT USER STATE]
-+ Cursor Position: 10 (intro scene)
-+ Selection: "Hello world, this is a longish selection." [0-5]
-+ Active Panel: chat
-+ View Mode: editor (Zen Mode)
-+ Mic: idle (heard: "Dictated note here that is somewhat long")
-+
-+ [INTELLIGENCE HUD]
-+ Scene: intro, POV: Alice, Location: Hall
-+ Tension: MEDIUM
-+ Pacing: steady
-+ Progress: Scene 1 of 3 (33%)
-+
-+ Active Characters:
-+ ΓÇó Alice (character) - 3 mentions
-+ ΓÇó Bob (character) - 1 mentions
-+
-+ Key Relationships:
-+ ΓÇó Alice ΓåÉallyΓåÆ Bob
-+
-+ Open Plot Threads:
-+ ΓÜí [MYSTERY] Who is the stranger?...
-+
-+ Style Alerts:
-+ ΓÜá∩╕Å Watch for repetition
-+
-+ Priority Issues:
-+ ≡ƒö┤ Slow start
-+
-+ [INLINE COMMENTS]
-+ Active Inline Comments: 1
-+
-+ [LORE BIBLE]
-+ Characters (1):
-+ ΓÇó Alice: Hero of the tale...
-+
-+ World Rules (1):
-+ ΓÇó Magic is rare...
-+
-+ [RECENT ACTIVITY]
-+ Evt 1
-+ Evt 2
-+
-+ [RECENT AGENT ACTIONS]
-+ Cmd 1
-+ Cmd 2
-+
-+ [AGENT MEMORY]
-+ (Memory context loaded separately - see buildAgentContextWithMemory)
-+
-+ [LAST AGENT ACTION]
-+ rewrite: Rewrote opening paragraph
-+ Result: Success
-+
-+ [STATS]
-+ Words: 1,000 | Reading: ~5 min | Dialogue: 20% | Avg Sentence: 12 words
-
- Γ¥» tests/services/appBrain/contextBuilder.test.ts:306:18
-    304|      
-    305|      const ctx = buildAgentContext(state);
-    306|      expect(ctx).toContain('[ANALYSIS INSIGHTS]');
-       |                  ^
-    307|      // Should be empty or just headers? 
-    308|      // Code: if (result.summary) ... if (strengths) ...
-
-ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/1]ΓÄ»
-
+ [31mΓ¥»[39m tests/components/LoreManager.test.tsx [2m([22m[2m22 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 313[2mms[22m[39m
+       [32mΓ£ô[39m switches to World Rules tab and shows empty state[32m 67[2mms[22m[39m
+       [32mΓ£ô[39m adds a new world rule[32m 18[2mms[22m[39m
+       [32mΓ£ô[39m adds a new world rule via Enter key[32m 9[2mms[22m[39m
+       [32mΓ£ô[39m edits an existing world rule[32m 8[2mms[22m[39m
+       [32mΓ£ô[39m deletes a world rule[32m 10[2mms[22m[39m
+       [32mΓ£ô[39m opens the create character form[32m 16[2mms[22m[39m
+       [32mΓ£ô[39m creates a new character with all fields[32m 29[2mms[22m[39m
+       [32mΓ£ô[39m removes a relationship[32m 14[2mms[22m[39m
+       [32mΓ£ô[39m removes a plot thread[32m 13[2mms[22m[39m
+       [32mΓ£ô[39m edits an existing character[32m 11[2mms[22m[39m
+       [32mΓ£ô[39m deletes a character[32m 12[2mms[22m[39m
+       [32mΓ£ô[39m cancels creating a new character[32m 13[2mms[22m[39m
+       [32mΓ£ô[39m cancels editing a character[32m 10[2mms[22m[39m
+       [32mΓ£ô[39m navigates back to list using "Back to list" button[32m 8[2mms[22m[39m
+       [32mΓ£ô[39m invokes onInterviewCharacter when interview button is clicked[32m 6[2mms[22m[39m
+       [32mΓ£ô[39m initializes editor from draftCharacter and consumes draft[32m 4[2mms[22m[39m
+       [32mΓ£ô[39m handles partial draft character with defaults[32m 4[2mms[22m[39m
+       [32mΓ£ô[39m does not add world rule if empty[32m 7[2mms[22m[39m
+       [32mΓ£ô[39m does not add relationship if incomplete[32m 15[2mms[22m[39m
+       [32mΓ£ô[39m does not add plot thread if empty[32m 14[2mms[22m[39m
+[31m       [31m├ù[31m does not crash if onInterview is undefined[39m[32m 7[2mms[22m[39m
+       [32mΓ£ô[39m safely handles null project when saving[32m 16[2mms[22m[39m
 
 [2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m22 passed[39m[22m[90m (23)[39m
-[2m   Start at [22m 16:16:45
-[2m   Duration [22m 1.80s[2m (transform 414ms, setup 408ms, import 454ms, tests 32ms, environment 712ms)[22m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m21 passed[39m[22m[90m (22)[39m
+[2m   Start at [22m 20:07:25
+[2m   Duration [22m 1.66s[2m (transform 149ms, setup 410ms, import 114ms, tests 313ms, environment 646ms)[22m
 
 JSON report written to C:/Users/dmedl/Projects/Quill AI/coverage/vitest-report.json

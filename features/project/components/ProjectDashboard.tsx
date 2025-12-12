@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 import { parseManuscript, ParsedChapter } from '@/services/manuscriptParser';
+import { extractRawTextFromDocxArrayBuffer } from '@/services/io/docxImporter';
 import { ImportWizard } from './ImportWizard';
 import { Project } from '@/types/schema';
 
@@ -226,7 +227,9 @@ export const ProjectDashboard: React.FC = () => {
       if (!file) return;
 
       try {
-          const text = await file.text();
+          const text = file.name.endsWith('.docx')
+            ? await extractRawTextFromDocxArrayBuffer(await file.arrayBuffer())
+            : await file.text();
           const cleanName = file.name.replace(/\.[^/.]+$/, ""); // remove extension
           
           setImportedContent(text);
@@ -395,7 +398,7 @@ export const ProjectDashboard: React.FC = () => {
             <div className="relative">
                 <input 
                     type="file" 
-                    accept=".txt,.md"
+                    accept=".txt,.md,.docx"
                     className="hidden"
                     ref={fileInputRef}
                     onChange={handleFileSelect}
@@ -410,7 +413,7 @@ export const ProjectDashboard: React.FC = () => {
                         </svg>
                     </div>
                     <span className="font-medium text-gray-400 group-hover:text-white transition-colors">Import Draft</span>
-                    <span className="text-xs text-gray-500 mt-1">.txt / .md</span>
+                    <span className="text-xs text-gray-500 mt-1">.txt / .md / .docx</span>
                 </button>
             </div>
 

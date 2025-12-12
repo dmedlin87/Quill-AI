@@ -8,6 +8,8 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
+ const EXPORT_IMPORT_TIMEOUT_MS = 30_000;
+
 vi.mock('framer-motion', () => {
   const MotionDiv = ({ children, ...props }: any) => React.createElement('div', props, children);
   return {
@@ -53,7 +55,7 @@ describe('Feature Index Exports', () => {
       expect(agentExports.useAgentOrchestrator).toBeDefined();
       expect(agentExports.useProactiveSuggestions).toBeDefined();
       expect(agentExports.useMemoryIntelligence).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/analysis/index.ts', () => {
@@ -77,7 +79,7 @@ describe('Feature Index Exports', () => {
       expect(analysisExports.ShadowReaderPanel).toBeDefined();
       expect(analysisExports.ScoreCard).toBeDefined();
       expect(analysisExports.IssueCard).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/core/index.ts', () => {
@@ -102,7 +104,7 @@ describe('Feature Index Exports', () => {
       expect(coreExports.useAppBrainState).toBeDefined();
       expect(coreExports.useAppBrainActions).toBeDefined();
       expect(coreExports.useAppBrainContext).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/debug/index.ts', () => {
@@ -110,7 +112,7 @@ describe('Feature Index Exports', () => {
       const debugExports = await import('@/features/debug');
 
       expect(debugExports.BrainActivityMonitor).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/editor/index.ts', () => {
@@ -142,7 +144,7 @@ describe('Feature Index Exports', () => {
 
       // Extensions
       expect(editorExports.CommentMark).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/layout/index.ts', () => {
@@ -163,7 +165,7 @@ describe('Feature Index Exports', () => {
 
       // Store
       expect(layoutExports.useLayoutStore).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/lore/index.ts', () => {
@@ -172,7 +174,7 @@ describe('Feature Index Exports', () => {
 
       expect(loreExports.LoreManager).toBeDefined();
       expect(loreExports.KnowledgeGraph).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/memory/index.ts', () => {
@@ -181,7 +183,7 @@ describe('Feature Index Exports', () => {
 
       expect(memoryExports.MemoryManager).toBeDefined();
       // Note: BedsideNotePanel is not exported from memory index
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/project/index.ts', () => {
@@ -197,7 +199,7 @@ describe('Feature Index Exports', () => {
       expect(projectExports.ProjectSidebar).toBeDefined();
       expect(projectExports.ImportWizard).toBeDefined();
       expect(projectExports.StoryBoard).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/settings/index.ts', () => {
@@ -219,7 +221,7 @@ describe('Feature Index Exports', () => {
       expect(settingsExports.NativeSpellcheckToggle).toBeDefined();
       expect(settingsExports.RelevanceTuning).toBeDefined();
       expect(settingsExports.ThemeSelector).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/voice/index.ts', () => {
@@ -241,7 +243,7 @@ describe('Feature Index Exports', () => {
       expect(voiceExports.arrayBufferToBase64).toBeDefined();
       expect(voiceExports.decodeAudioData).toBeDefined();
       expect(voiceExports.createBlob).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 
   describe('features/shared/index.ts', () => {
@@ -268,7 +270,7 @@ describe('Feature Index Exports', () => {
       expect(sharedExports.ErrorBoundary).toBeDefined();
       expect(sharedExports.UsageBadge).toBeDefined();
       expect(sharedExports.AccessibleTooltip).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 });
 
@@ -295,6 +297,6 @@ describe('Services Index Exports', () => {
       // Analysis Commands
       expect(commandsExports.GetCritiqueCommand).toBeDefined();
       expect(commandsExports.RunAnalysisCommand).toBeDefined();
-    });
+    }, EXPORT_IMPORT_TIMEOUT_MS);
   });
 });

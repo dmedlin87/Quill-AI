@@ -3,6 +3,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { FileUpload } from '@/features/project/components/FileUpload';
 
+vi.mock('@/services/io/docxImporter', () => ({
+  extractRawTextFromDocxArrayBuffer: vi.fn(async () => 'Extracted docx text'),
+}));
+
+import { extractRawTextFromDocxArrayBuffer } from '@/services/io/docxImporter';
+
 describe('FileUpload', () => {
   const mockOnTextLoaded = vi.fn();
 
@@ -70,9 +76,30 @@ describe('FileUpload', () => {
     fireEvent.change(input, { target: { files: [file] } });
     
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('Please upload a .txt or .md file.');
+      expect(window.alert).toHaveBeenCalledWith('Please upload a .txt, .md, or .docx file.');
     });
     expect(mockOnTextLoaded).not.toHaveBeenCalled();
+  });
+
+  it('handles .docx file upload', async () => {
+    render(<FileUpload onTextLoaded={mockOnTextLoaded} />);
+
+    const arrayBuffer = new ArrayBuffer(8);
+    const file = new File([arrayBuffer], 'manuscript.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: vi.fn().mockResolvedValue(arrayBuffer),
+    });
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(extractRawTextFromDocxArrayBuffer).toHaveBeenCalledWith(arrayBuffer);
+      expect(mockOnTextLoaded).toHaveBeenCalledWith('Extracted docx text', 'manuscript.docx');
+    });
   });
 
   it('handles pasted text in textarea', () => {
@@ -141,7 +168,7 @@ describe('FileUpload', () => {
     fireEvent.change(input, { target: { files: [file] } });
     
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('Could not read file. Please try a standard .txt or .md file.');
+      expect(window.alert).toHaveBeenCalledWith('Could not read file. Please try a standard .txt, .md, or .docx file.');
     });
   });
 
