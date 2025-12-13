@@ -12,6 +12,18 @@ interface UsageContextValue {
   resetUsage: () => void;
 }
 
+interface StoredUsageStats {
+  prompt?: number;
+  response?: number;
+  requests?: number;
+  cost?: number;
+}
+
+// Helper to check if an object is a valid StoredUsageStats
+function isStoredUsageStats(obj: unknown): obj is StoredUsageStats {
+  return typeof obj === 'object' && obj !== null;
+}
+
 const UsageContext = createContext<UsageContextValue | undefined>(undefined);
 
 export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -28,22 +40,22 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const parsed = JSON.parse(stored);
 
-      if (typeof parsed !== 'object' || parsed === null) {
+      if (!isStoredUsageStats(parsed)) {
         console.warn('Invalid usage stats shape in localStorage, resetting.');
         return;
       }
 
-      const prompt = typeof (parsed as any).prompt === 'number' && Number.isFinite((parsed as any).prompt)
-        ? (parsed as any).prompt
+      const prompt = typeof parsed.prompt === 'number' && Number.isFinite(parsed.prompt)
+        ? parsed.prompt
         : 0;
-      const response = typeof (parsed as any).response === 'number' && Number.isFinite((parsed as any).response)
-        ? (parsed as any).response
+      const response = typeof parsed.response === 'number' && Number.isFinite(parsed.response)
+        ? parsed.response
         : 0;
-      const requests = typeof (parsed as any).requests === 'number' && Number.isFinite((parsed as any).requests)
-        ? (parsed as any).requests
+      const requests = typeof parsed.requests === 'number' && Number.isFinite(parsed.requests)
+        ? parsed.requests
         : 0;
-      const cost = typeof (parsed as any).cost === 'number' && Number.isFinite((parsed as any).cost)
-        ? (parsed as any).cost
+      const cost = typeof parsed.cost === 'number' && Number.isFinite(parsed.cost)
+        ? parsed.cost
         : 0;
 
       setPromptTokens(prompt);
@@ -69,10 +81,16 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!usage) return;
 
     const promptDelta = usage.promptTokenCount || 0;
-    // Use type assertion to access candidatesTokenCount if missing from type definition
-    // Fallback to calculation from totalTokenCount if needed
-    const candidates = (usage as any).candidatesTokenCount ??
-                       ((usage.totalTokenCount || 0) - (usage.promptTokenCount || 0));
+
+    // Check if candidatesTokenCount exists (some versions of the SDK might have it)
+    // or calculate from total - prompt
+    let candidates = 0;
+    if ('candidatesTokenCount' in usage && typeof (usage as any).candidatesTokenCount === 'number') {
+        candidates = (usage as any).candidatesTokenCount;
+    } else {
+        candidates = (usage.totalTokenCount || 0) - (usage.promptTokenCount || 0);
+    }
+
     const responseDelta = candidates || 0;
 
     // Always track raw token usage and request count

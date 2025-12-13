@@ -9,6 +9,12 @@ import { InlineComment } from '@/types/schema';
 import { useTiptapSync, useDebouncedUpdate, type HighlightItem } from '../hooks/useTiptapSync';
 import { useSettingsStore } from '@/features/settings';
 
+// Define the storage interface locally if not exported correctly or to avoid deep imports
+// Based on tiptap-markdown definitions
+interface MarkdownStorage {
+  getMarkdown(): string;
+}
+
 interface RichTextEditorProps {
   content: string;
   onUpdate: (text: string) => void;
@@ -83,7 +89,7 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
     if (editor.isDestroyed) return;
 
     // Safety check for markdown extension
-    const markdownStorage = (editor.storage as any).markdown;
+    const markdownStorage = editor.storage.markdown as MarkdownStorage | undefined;
     if (!markdownStorage?.getMarkdown) return;
 
     const markdown = markdownStorage.getMarkdown();
@@ -176,7 +182,7 @@ const RichTextEditorComponent: React.FC<RichTextEditorProps> = ({
     if (isEditorFocused) return;
 
     // Use safe access for markdown storage
-    const currentMarkdown = (editor.storage as any)?.markdown?.getMarkdown?.() ?? '';
+    const currentMarkdown = (editor.storage.markdown as MarkdownStorage | undefined)?.getMarkdown?.() ?? '';
 
     if (currentMarkdown === content) return;
 

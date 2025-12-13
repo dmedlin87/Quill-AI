@@ -6,6 +6,11 @@ import { ParsedChapter } from '@/services/manuscriptParser';
 import { createEmptyIndex } from '@/services/manuscriptIndexer';
 import { seedProjectBedsideNoteFromAuthor } from '@/services/memory/chains';
 
+interface ImportMetaEnv {
+  VITE_WRITE_DEBOUNCE_MS?: string;
+  [key: string]: any;
+}
+
 interface ProjectState {
   // State
   projects: Project[];
@@ -44,8 +49,8 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     (typeof globalThis !== 'undefined' &&
       (globalThis as { __QUILL_WRITE_DEBOUNCE_MS?: number }).__QUILL_WRITE_DEBOUNCE_MS) ||
     (typeof import.meta !== 'undefined' &&
-      (import.meta as any).env?.VITE_WRITE_DEBOUNCE_MS &&
-      Number((import.meta as any).env.VITE_WRITE_DEBOUNCE_MS)) ||
+      (import.meta.env as unknown as ImportMetaEnv)?.VITE_WRITE_DEBOUNCE_MS &&
+      Number((import.meta.env as unknown as ImportMetaEnv).VITE_WRITE_DEBOUNCE_MS)) ||
     (typeof process !== 'undefined' &&
       process.env?.WRITE_DEBOUNCE_MS &&
       Number(process.env.WRITE_DEBOUNCE_MS)) ||
@@ -96,7 +101,9 @@ export const useProjectStore = create<ProjectState>((set, get) => {
   const runProjectChapterTransaction = async (
     body: () => Promise<void>,
   ): Promise<void> => {
-    const anyDb: any = db as any;
+    // We cast to specific Dexie type if possible, or keep as any but documented
+    // In this codebase, db is likely a Dexie instance.
+    const anyDb = db as any;
     if (typeof anyDb.transaction === 'function') {
       await anyDb.transaction('rw', anyDb.projects, anyDb.chapters, body);
     } else {

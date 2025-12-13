@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { generateSpeech } from '@/services/gemini/audio';
 
+// Extend Window interface for Webkit AudioContext
+interface WindowWithWebkitAudio extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
 export function useTextToSpeech() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +44,8 @@ export function useTextToSpeech() {
         const AudioContextCtor =
           // eslint-disable-next-line no-restricted-globals
           (typeof globalThis !== 'undefined' && ((globalThis as any).AudioContext || (globalThis as any).webkitAudioContext)) ||
-          (typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext));
+          (typeof window !== 'undefined' && (window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext));
+
         if (!AudioContextCtor) {
           throw new Error('Web Audio API not supported in this environment.');
         }
@@ -60,7 +66,7 @@ export function useTextToSpeech() {
         setIsPlaying(false);
         return;
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (abortControllerRef.current?.signal.aborted) return;
       console.error(e);
       setError("Could not read text aloud.");
