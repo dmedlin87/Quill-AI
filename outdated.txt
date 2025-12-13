@@ -1,0 +1,18 @@
+Package                      Current   Wanted  Latest  Location                                  Depended by
+@testing-library/react        14.3.1   14.3.1  16.3.0  node_modules/@testing-library/react       app
+@tiptap/core                  2.27.1   2.27.1  3.13.0  node_modules/@tiptap/core                 app
+@tiptap/extension-highlight   2.27.1   2.27.1  3.13.0  node_modules/@tiptap/extension-highlight  app
+@tiptap/pm                    2.27.1   2.27.1  3.13.0  node_modules/@tiptap/pm                   app
+@tiptap/react                 2.27.1   2.27.1  3.13.0  node_modules/@tiptap/react                app
+@tiptap/starter-kit           2.27.1   2.27.1  3.13.0  node_modules/@tiptap/starter-kit          app
+@types/node                  22.19.1  22.19.2  25.0.1  node_modules/@types/node                  app
+@vitejs/plugin-react           4.7.0    4.7.0   5.1.2  node_modules/@vitejs/plugin-react         app
+cross-env                      7.0.3    7.0.3  10.1.0  node_modules/cross-env                    app
+dexie                          3.2.4    3.2.4   4.2.1  node_modules/dexie                        app
+diff                           5.2.0    5.2.0   8.0.2  node_modules/diff                         app
+jsdom                         24.1.3   24.1.3  27.3.0  node_modules/jsdom                        app
+react                         18.3.1   18.3.1  19.2.3  node_modules/react                        app
+react-dom                     18.3.1   18.3.1  19.2.3  node_modules/react-dom                    app
+tiptap-markdown               0.8.10   0.8.10   0.9.0  node_modules/tiptap-markdown              app
+vite                           6.4.1    6.4.1   7.2.7  node_modules/vite                         app
+zustand                        4.5.2    4.5.2   5.0.9  node_modules/zustand                      app
