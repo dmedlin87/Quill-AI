@@ -57,6 +57,18 @@ vi.mock('./index', () => {
 
 const { processManuscriptCached } = await import('./index');
 
+type ChunkManagerTestView = {
+  index: {
+    applyEdit: (range: unknown, text: string) => void;
+    registerScenesForChapter: (...args: unknown[]) => void;
+    hasDirtyChunks: (...args: unknown[]) => boolean;
+  };
+  scheduleProcessing: () => void;
+  editDebounceTimer: ReturnType<typeof setTimeout> | null;
+  processingTimer: ReturnType<typeof setTimeout> | null;
+  pendingEditRange: unknown | null;
+};
+
 describe('ChunkManager handleEdit/applyEdit', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -87,21 +99,23 @@ describe('ChunkManager handleEdit/applyEdit', () => {
       hasDirtyChunks: vi.fn().mockReturnValue(true),
     };
 
+    const managerView = manager as unknown as ChunkManagerTestView;
+
     // Replace the internal index to isolate handleEdit/applyEdit behavior
-    (manager as unknown as { index: typeof mockIndex }).index = mockIndex as never;
+    managerView.index = mockIndex;
 
     const scheduleSpy = vi
-      .spyOn(manager as never, 'scheduleProcessing')
+      .spyOn(manager as unknown as { scheduleProcessing: () => void }, 'scheduleProcessing')
       .mockImplementation(() => undefined);
 
     // Clear any timers created during construction
     vi.clearAllTimers();
 
     manager.handleEdit('chapter-1', 'First draft', 0, 5);
-    const initialDebounce = (manager as never).editDebounceTimer;
+    const initialDebounce = managerView.editDebounceTimer;
 
     manager.handleEdit('chapter-1', 'Revised draft', 4, 9);
-    const restartedDebounce = (manager as never).editDebounceTimer;
+    const restartedDebounce = managerView.editDebounceTimer;
 
     // Debounce timer should restart
     expect(restartedDebounce).not.toBe(initialDebounce);
@@ -119,12 +133,12 @@ describe('ChunkManager handleEdit/applyEdit', () => {
     const manualProcessingTimer = setTimeout(() => undefined, 1000);
     (manager as unknown as { processingTimer: ReturnType<typeof setTimeout> | null }).processingTimer = manualProcessingTimer;
     manager.handleEdit('chapter-1', 'Final draft', 2, 3);
-    expect((manager as never).processingTimer).toBeNull();
+    expect(managerView.processingTimer).toBeNull();
 
     vi.advanceTimersByTime(25);
 
     // pendingEditRange resets after apply
-    expect((manager as never).pendingEditRange).toBeNull();
+    expect(managerView.pendingEditRange).toBeNull();
   });
 });
 
@@ -153,7 +167,7 @@ describe('ChunkManager processing callbacks', () => {
     );
 
     // Make the mocked processor throw for the scene chunk to trigger onError
-    (processManuscriptCached as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+    vi.mocked(processManuscriptCached).mockImplementationOnce(() => {
       throw new Error('analysis failure');
     });
 
@@ -172,8 +186,8 @@ describe('ChunkManager processing callbacks', () => {
     expect(callbacks.onChunkProcessed).toHaveBeenCalled();
 
     // processingTimer should be cleared after processing completes
-    expect((manager as never).processingTimer).toBeNull();
+    expect((manager as unknown as ChunkManagerTestView).processingTimer).toBeNull();
     // Debounce timer should not persist
-    expect((manager as never).editDebounceTimer).toBeNull();
+    expect((manager as unknown as ChunkManagerTestView).editDebounceTimer).toBeNull();
   });
 });
