@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { vi, type Mock } from 'vitest';
 import { MainView, SidebarTab } from '@/types';
 import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
@@ -19,12 +19,26 @@ vi.mock('@/features/project', () => ({
       <button onClick={toggleCollapsed}>collapse</button>
     </div>
   ),
+  // StoryBoard is lazy loaded, so we might need to mock the import itself or just this export if it was static.
+  // But since it is now lazy loaded via import(), the static mock here might not work if we don't mock the module resolution.
+  // However, since we are mocking `@/features/project`, the import inside MainLayout `import { ... } from '@/features/project'` uses this.
+  // BUT `MainLayout` uses `import('@/features/project/components/StoryBoard')` for lazy load.
+  // We need to mock that specific path.
   StoryBoard: ({ onSwitchToEditor }: { onSwitchToEditor: () => void }) => (
     <div data-testid="storyboard">
       <button onClick={onSwitchToEditor}>switch</button>
     </div>
   ),
   useProjectStore: vi.fn(),
+}));
+
+// Mock the lazy loaded component path
+vi.mock('@/features/project/components/StoryBoard', () => ({
+  StoryBoard: ({ onSwitchToEditor }: { onSwitchToEditor: () => void }) => (
+    <div data-testid="storyboard">
+      <button onClick={onSwitchToEditor}>switch</button>
+    </div>
+  ),
 }));
 
 vi.mock('@/features/editor', () => ({
@@ -59,6 +73,10 @@ vi.mock('@/features/layout/ZenModeOverlay', () => ({
 
 vi.mock('@/features/layout/UploadLayout', () => ({
   UploadLayout: () => <div data-testid="upload-layout" />,
+}));
+
+vi.mock('@/features/shared/components/LoadingScreen', () => ({
+  LoadingScreen: () => <div data-testid="loading-screen">Loading...</div>,
 }));
 
 vi.mock('@/features/shared', () => ({
@@ -152,11 +170,17 @@ describe('features/layout/MainLayout', () => {
     expect(screen.queryByTestId('project-sidebar')).not.toBeInTheDocument();
   });
 
-  it('switches between storyboard and editor views', () => {
+  it('switches between storyboard and editor views', async () => {
     useLayoutStore.setState({ activeView: MainView.STORYBOARD } as Partial<ReturnType<typeof useLayoutStore.getState>>);
     render(<MainLayout />);
 
-    expect(screen.getByTestId('storyboard')).toBeInTheDocument();
+    // Since StoryBoard is lazy loaded, we might see the fallback first.
+    // However, with the mock immediately available, it might render synchronously or in next tick.
+    // Let's waitFor it.
+    await waitFor(() => {
+      expect(screen.getByTestId('storyboard')).toBeInTheDocument();
+    });
+
     fireEvent.click(screen.getByText('switch'));
     expect(screen.getByTestId('editor-workspace')).toBeInTheDocument();
   });
@@ -232,4 +256,3 @@ describe('features/layout/MainLayout', () => {
     expect(screen.getByTestId('tools-panel')).toBeInTheDocument();
   });
 });
-
