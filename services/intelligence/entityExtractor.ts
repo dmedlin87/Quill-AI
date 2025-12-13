@@ -233,8 +233,25 @@ const extractLocations = (text: string): RawEntity[] => {
   LOCATIONS_PREPOSITIONS_REGEX.lastIndex = 0;
   let match;
   while ((match = LOCATIONS_PREPOSITIONS_REGEX.exec(text)) !== null) {
-    // match[1] is preposition, match[2] is location
-    const name = normalizeEntityName(match[2]);
+    // match[1] is preposition, match[2] is location (potentially greedy)
+    const rawMatch = match[2];
+    // Split by whitespace and stop at first "stop word" (like "and", "then", "said")
+    const words = rawMatch.split(/\s+/);
+    const validWords: string[] = [];
+
+    for (const word of words) {
+      const normalizedWord = normalizeEntityName(word.toLowerCase());
+      if (FALSE_POSITIVES.has(normalizedWord)) {
+        break;
+      }
+      validWords.push(word);
+    }
+
+    if (validWords.length === 0) continue;
+
+    const truncatedName = validWords.join(' ');
+    const name = normalizeEntityName(truncatedName);
+
     if (isValidEntityName(name) && name.length > 2) {
       entities.push({
         name,
