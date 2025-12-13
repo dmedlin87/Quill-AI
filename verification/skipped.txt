@@ -1,0 +1,1 @@
+Skipping frontend verification as I am unable to start the dev server and test client-side file uploads without extensive setup in this environment.

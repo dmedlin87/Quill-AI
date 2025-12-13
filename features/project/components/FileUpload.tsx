@@ -1,26 +1,26 @@
 import React, { useCallback, useState } from 'react';
 import { RecentFile } from '@/types';
 import { extractRawTextFromDocxArrayBuffer } from '@/services/io/docxImporter';
+import { MAX_UPLOAD_SIZE } from '@/config/security';
 
 interface FileUploadProps {
   onTextLoaded: (text: string, fileName: string) => void;
   recentFiles?: RecentFile[];
 }
 
-// 10MB limit to prevent browser crash/DoS
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
 export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFiles = [] }) => {
-
   const [pastedText, setPastedText] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    setError(null);
     if (!file) return;
 
     try {
-      if (file.size > MAX_FILE_SIZE) {
-        alert("File too large. Please upload a file smaller than 10MB.");
+      // Security Check: Size Limit
+      if (file.size > MAX_UPLOAD_SIZE) {
+        setError(`File too large. Max size is ${MAX_UPLOAD_SIZE / 1024 / 1024}MB.`);
         event.target.value = '';
         return;
       }
@@ -40,9 +40,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
         return;
       }
 
-      alert("Please upload a .txt, .md, or .docx file.");
+      setError("Unsupported file format. Please upload .txt, .md, or .docx.");
+      event.target.value = '';
     } catch (e) {
-      alert("Could not read file. Please try a standard .txt, .md, or .docx file.");
+      setError("Could not read file. Please ensure it is a valid text document.");
+      console.error('File read error:', e);
+      event.target.value = '';
     }
   }, [onTextLoaded]);
 
@@ -55,6 +58,16 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onTextLoaded, recentFile
             <h3 className="text-2xl font-serif font-bold text-gray-900">Upload Manuscript</h3>
             <p className="text-gray-500 mt-2 text-sm">Supported formats: .txt, .md, .docx (Max 10MB)</p>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-100 rounded-lg flex items-center gap-2 text-sm text-red-600 animate-in fade-in slide-in-from-top-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 shrink-0">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+            {error}
+          </div>
+        )}
 
         {/* Upload Box */}
         <label className={`relative flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-indigo-400 hover:bg-gray-50 transition-all duration-200 group bg-gray-50/50`}>
