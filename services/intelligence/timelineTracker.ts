@@ -52,22 +52,29 @@ const TIME_OF_DAY_PATTERNS = [
 // CAUSAL PATTERNS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CAUSAL_MARKERS: Array<{ pattern: RegExp; confidence: number }> = [
-  // Strong causal indicators (allow comma/semicolon after marker)
-  { pattern: /\bbecause[,;\s]+(.{10,100})\b/gi, confidence: 0.9 },
-  { pattern: /\btherefore[,;\s]+(.{10,100})\b/gi, confidence: 0.9 },
-  { pattern: /\bas a result[,;\s]+(.{10,100})\b/gi, confidence: 0.9 },
-  { pattern: /\bconsequently[,;\s]+(.{10,100})\b/gi, confidence: 0.9 },
+// Direction:
+// 'forward' means cause is in the capture group (after marker), effect is before marker.
+// 'backward' means cause is before marker, effect is in the capture group (after marker).
+const CAUSAL_MARKERS: Array<{ pattern: RegExp; confidence: number; direction: 'forward' | 'backward' }> = [
+  // Strong causal indicators
+  { pattern: /\bbecause[,;\s]+(.{10,100})\b/gi, confidence: 0.9, direction: 'forward' }, // Effect BECAUSE Cause
+  { pattern: /\btherefore[,;\s]+(.{10,100})\b/gi, confidence: 0.9, direction: 'backward' }, // Cause THEREFORE Effect
+  { pattern: /\bas a result[,;\s]+(.{10,100})\b/gi, confidence: 0.9, direction: 'backward' }, // Cause AS A RESULT Effect
+  { pattern: /\bconsequently[,;\s]+(.{10,100})\b/gi, confidence: 0.9, direction: 'backward' }, // Cause CONSEQUENTLY Effect
   
   // Medium causal indicators
-  { pattern: /\bso[,;\s]+(.{10,80})\b/gi, confidence: 0.7 },
-  { pattern: /\bthus[,;\s]+(.{10,80})\b/gi, confidence: 0.7 },
-  { pattern: /\bhence[,;\s]+(.{10,80})\b/gi, confidence: 0.7 },
-  { pattern: /\bsince[,;\s]+(.{10,100}),/gi, confidence: 0.6 },
+  { pattern: /\bso[,;\s]+(.{10,80})\b/gi, confidence: 0.7, direction: 'backward' }, // Cause SO Effect
+  { pattern: /\bthus[,;\s]+(.{10,80})\b/gi, confidence: 0.7, direction: 'backward' }, // Cause THUS Effect
+  { pattern: /\bhence[,;\s]+(.{10,80})\b/gi, confidence: 0.7, direction: 'backward' }, // Cause HENCE Effect
+  { pattern: /\bsince[,;\s]+(.{10,100}),/gi, confidence: 0.6, direction: 'forward' }, // SINCE Cause, Effect (Note: this is complex, usually 'Since Cause, Effect'. If marker is 'Since', capture is Cause. Effect follows.)
   
   // Weaker causal indicators
-  { pattern: /\bif\s+(.{10,80}),\s*then\s+(.{10,80})\b/gi, confidence: 0.5 },
-  { pattern: /\bwhen\s+(.{10,80}),\s+(.{10,80})\b/gi, confidence: 0.4 },
+  // Note: 'if' and 'when' patterns capture two groups which are joined by getMatchedContent.
+  // The current extraction logic treats the capture as one entity and the previous sentence as another.
+  // This works well for conjunctive adverbs (Therefore) and subordinating conjunctions (Because),
+  // but matches like "If A then B" are structurally different and may require specialized parsing in the future.
+  { pattern: /\bif\s+(.{10,80}),\s*then\s+(.{10,80})\b/gi, confidence: 0.5, direction: 'forward' },
+  { pattern: /\bwhen\s+(.{10,80}),\s+(.{10,80})\b/gi, confidence: 0.4, direction: 'forward' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -356,33 +363,40 @@ export const extractCausalChains = (
 ): CausalChain[] => {
   const chains: CausalChain[] = [];
   
-  for (const { pattern: basePattern, confidence } of CAUSAL_MARKERS) {
+  for (const { pattern: basePattern, confidence, direction } of CAUSAL_MARKERS) {
     const pattern = clonePattern(basePattern);
     let match;
     while ((match = pattern.exec(text)) !== null) {
       const offset = match.index;
       
-      // Find cause (the previous sentence before the marker)
-      let causeEnd = offset - 1;
+      // Find the sentence before the marker
+      let beforeMarkerEnd = offset - 1;
       // Skip whitespace and punctuation between sentences
-      while (causeEnd > 0 && /[\s.!?,;]/.test(text[causeEnd])) {
-        causeEnd--;
+      while (beforeMarkerEnd > 0 && /[\s.!?,;]/.test(text[beforeMarkerEnd])) {
+        beforeMarkerEnd--;
       }
-      // Find the start of the cause sentence
-      let causeStart = causeEnd;
-      while (causeStart > 0 && !/[.!?]/.test(text[causeStart - 1])) {
-        causeStart--;
+      // Find the start of the previous sentence/clause
+      let beforeMarkerStart = beforeMarkerEnd;
+      while (beforeMarkerStart > 0 && !/[.!?]/.test(text[beforeMarkerStart - 1])) {
+        beforeMarkerStart--;
       }
       
-      const causeQuote = text.slice(causeStart, causeEnd + 1).trim();
-      const effectQuote = getMatchedContent(match);
+      const beforeMarkerQuote = text.slice(beforeMarkerStart, beforeMarkerEnd + 1).trim();
+      const afterMarkerQuote = getMatchedContent(match);
       
+      // Determine cause and effect based on direction
+      const causeQuote = direction === 'forward' ? afterMarkerQuote : beforeMarkerQuote;
+      const effectQuote = direction === 'forward' ? beforeMarkerQuote : afterMarkerQuote;
+
+      const causeOffset = direction === 'forward' ? offset : beforeMarkerStart;
+      const effectOffset = direction === 'forward' ? beforeMarkerStart : offset;
+
       // Find related events
       const causeEvent = events.find(e => 
-        Math.abs(e.offset - causeStart) < 100
+        Math.abs(e.offset - causeOffset) < 100
       );
       const effectEvent = events.find(e => 
-        Math.abs(e.offset - offset) < 100
+        Math.abs(e.offset - effectOffset) < 100
       );
       
       // Extract marker word without punctuation (preserve original case)
@@ -393,12 +407,12 @@ export const extractCausalChains = (
         cause: {
           eventId: causeEvent?.id || '',
           quote: truncate(causeQuote, 100),
-          offset: causeStart,
+          offset: causeOffset,
         },
         effect: {
           eventId: effectEvent?.id || '',
           quote: truncate(effectQuote, 100),
-          offset: offset,
+          offset: effectOffset,
         },
         confidence,
         marker: markerWord,
