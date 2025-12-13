@@ -27,6 +27,10 @@ interface ToolRunnerOptions {
   onToolCallEnd?: (payload: { id: string; name: string; result: ToolResult }) => void;
 }
 
+interface ToolRunnerProcessOptions {
+  abortSignal?: AbortSignal | null;
+}
+
 export class ToolRunner {
   private readonly toolExecutor: AgentToolExecutor;
   private readonly getProjectId: () => string | null;
@@ -97,6 +101,7 @@ export class ToolRunner {
 
   async processToolCalls(
     functionCalls: FunctionCall[],
+    options: ToolRunnerProcessOptions = {},
   ): Promise<Array<{ id: string; name: string; response: { result: string } }>> {
     const responses: Array<{
       id: string;
@@ -104,7 +109,13 @@ export class ToolRunner {
       response: { result: string };
     }> = [];
 
+    const abortSignal = options.abortSignal ?? null;
+
     for (const call of functionCalls) {
+      if (abortSignal?.aborted) {
+        break;
+      }
+
       const callId =
         call.id ||
         (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
@@ -121,7 +132,9 @@ export class ToolRunner {
 
       try {
         const args = (call.args || {}) as Record<string, unknown>;
-        const result = await this.toolExecutor.execute(call.name, args);
+        const result = abortSignal
+          ? await this.toolExecutor.execute(call.name, args, { abortSignal })
+          : await this.toolExecutor.execute(call.name, args);
 
         const reflection = this.buildBedsideReflectionMessage(call.name);
         const actionResult = reflection
@@ -169,6 +182,10 @@ export class ToolRunner {
           name: call.name,
           result: { success: false, message: fallbackResult, error: errorMessage },
         });
+      }
+
+      if (abortSignal?.aborted) {
+        break;
       }
     }
 

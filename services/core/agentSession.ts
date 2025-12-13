@@ -13,10 +13,11 @@ import { searchBedsideHistory, type BedsideHistoryMatch } from '@/services/memor
 export const buildManuscriptContext = (
   chapters: AgentContextInput['chapters'],
   fullText: string,
+  activeChapterId?: string | null,
 ): string =>
   chapters
     .map(chapter => {
-      const isActive = chapter.content === fullText;
+      const isActive = activeChapterId ? chapter.id === activeChapterId : chapter.content === fullText;
       return `[CHAPTER: ${chapter.title}]${
         isActive
           ? ' (ACTIVE - You can edit this)'
@@ -61,7 +62,7 @@ export const fetchBedsideHistoryContext = async (
     const lines: string[] = ['## Long-Term Memory (Bedside Notes)'];
     for (const match of matches) {
       const relevance = Math.round(match.similarity * 100);
-      const date = new Date(match.note.createdAt).toLocaleDateString();
+      const date = new Date(match.note.createdAt).toISOString().slice(0, 10);
       lines.push(`- [${relevance}% match, ${date}]: ${match.note.text.slice(0, 200)}${match.note.text.length > 200 ? '...' : ''}`);
     }
 
@@ -133,7 +134,11 @@ export const createChatSessionFromContext = async ({
   memoryProvider?: MemoryProvider;
   projectId?: string | null;
 }): Promise<{ chat: Chat; memoryContext: string }> => {
-  const fullManuscriptContext = buildManuscriptContext(context.chapters, context.fullText);
+  const fullManuscriptContext = buildManuscriptContext(
+    context.chapters,
+    context.fullText,
+    context.activeChapterId ?? null,
+  );
   const resolvedProjectId = projectId ?? context.projectId ?? null;
   const memoryContext = memoryProvider
     ? await buildMemoryContext(memoryProvider, resolvedProjectId)

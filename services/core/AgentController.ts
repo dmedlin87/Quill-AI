@@ -32,6 +32,8 @@ export interface AgentContextInput {
   /** All chapters in the project, including which one is active. */
   chapters: Chapter[];
 
+  activeChapterId?: string | null;
+
   /** Optional lore bible used to prime the agent. */
   lore?: Lore;
 
@@ -60,7 +62,11 @@ export interface AgentContextInput {
 // ---- Tool execution abstraction (wired to toolExecutor.ts or custom) ----
 
 export interface AgentToolExecutor {
-  execute(toolName: string, args: Record<string, unknown>): Promise<ToolResult>;
+  execute(
+    toolName: string,
+    args: Record<string, unknown>,
+    options?: { abortSignal?: AbortSignal | null },
+  ): Promise<ToolResult>;
 }
 
 // ---- Memory abstraction (wraps getMemoriesForContext + getActiveGoals) ----
@@ -266,16 +272,20 @@ export class DefaultAgentController implements AgentController {
     this.chat = chat;
 
     // Silent initialization message with persona and memory status (no UI message)
-    this.chat
-      ?.sendMessage({
-        message: buildInitializationMessage({
-          chapters: this.context.chapters,
-          fullText: this.context.fullText,
-          memoryContext,
-          persona,
-        }),
-      })
-      .catch(console.error);
+    if (this.chat) {
+      try {
+        await this.chat.sendMessage({
+          message: buildInitializationMessage({
+            chapters: this.context.chapters,
+            fullText: this.context.fullText,
+            memoryContext,
+            persona,
+          }),
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    }
   }
 
   async sendMessage(input: {
@@ -301,32 +311,37 @@ export class DefaultAgentController implements AgentController {
     );
     this.currentAbortController = internalController;
 
-    // Ensure we have an initialized chat session
-    if (!this.chat && this.currentPersona) {
-      try {
-        await this.initializeChat(this.currentPersona, this.context.projectId ?? null);
-      } catch (error) {
-        console.warn('Failed to initialize chat session:', error);
-      }
-    }
-    const chat = this.chat;
-    if (!chat) {
-      // If initialization still failed, bail out gracefully.
-      this.updateState({ status: 'error', lastError: 'Agent session is not initialized.' });
-      return;
-    }
-
-    // Emit user message immediately (mirrors original hook behavior).
-    const userMessage: ChatMessage = {
-      role: 'user',
-      text: input.text,
-      timestamp: new Date(),
-    };
-    this.events?.onMessage?.(userMessage);
-
     const abortSignal = internalController.signal;
 
     try {
+      // Ensure we have an initialized chat session
+      if (!this.chat && this.currentPersona) {
+        try {
+          await this.initializeChat(this.currentPersona, this.context.projectId ?? null);
+        } catch (error) {
+          console.warn('Failed to initialize chat session:', error);
+        }
+      }
+      const chat = this.chat;
+      if (!chat) {
+        // If initialization still failed, bail out gracefully.
+        this.updateState({ status: 'error', lastError: 'Agent session is not initialized.' });
+        return;
+      }
+
+      // Emit user message immediately (mirrors original hook behavior).
+      const userMessage: ChatMessage = {
+        role: 'user',
+        text: input.text,
+        timestamp: new Date(),
+      };
+      this.events?.onMessage?.(userMessage);
+
+      if (abortSignal.aborted) {
+        this.updateState({ status: 'idle', lastError: undefined });
+        return;
+      }
+
       const { streamHandlers } = input.options || {};
       if (streamHandlers) {
         // Streaming not yet implemented; fail fast with a friendly message and callback
@@ -350,6 +365,7 @@ export class DefaultAgentController implements AgentController {
         const appBrainState = buildAppBrainStateFromAgentContext({
           projectId: this.context.projectId ?? null,
           chapters: this.context.chapters,
+          activeChapterId: this.context.activeChapterId ?? null,
           fullText: this.context.fullText,
           intelligenceHUD: this.context.intelligenceHUD,
           analysis: this.context.analysis,
@@ -392,13 +408,15 @@ export class DefaultAgentController implements AgentController {
         chat,
         initialResult,
         abortSignal,
-        processToolCalls: functionCalls => this.toolRunner.processToolCalls(functionCalls),
+        processToolCalls: functionCalls =>
+          this.toolRunner.processToolCalls(functionCalls, { abortSignal }),
         onThinkingRoundStart: () => {
           this.updateState({ status: 'thinking', lastError: undefined });
         },
       });
 
       if (abortSignal.aborted) {
+        this.updateState({ status: 'idle', lastError: undefined });
         return;
       }
 

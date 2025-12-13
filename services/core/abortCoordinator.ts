@@ -70,7 +70,19 @@ export function createAbortCoordination(
  * @returns True if the error is an abort error
  */
 export function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
+  if (!error) {
+    return false;
+  }
+
+  if (error instanceof DOMException) {
+    return error.name === 'AbortError';
+  }
+
+  if (typeof error === 'object' && 'name' in error) {
+    return (error as { name?: unknown }).name === 'AbortError';
+  }
+
+  return false;
 }
 
 /**

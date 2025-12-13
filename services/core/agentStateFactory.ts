@@ -28,6 +28,8 @@ export interface AgentStateFactoryInput {
   projectId: string | null;
   /** All chapters in the project */
   chapters: Chapter[];
+  /** Active chapter identifier (preferred over content heuristics) */
+  activeChapterId?: string | null;
   /** Full text of active chapter */
   fullText: string;
   /** Optional intelligence HUD data */
@@ -48,13 +50,20 @@ export interface AgentStateFactoryInput {
 export function buildManuscriptState(input: {
   projectId: string | null;
   chapters: Chapter[];
+  activeChapterId?: string | null;
   fullText: string;
 }): ManuscriptState {
+  const resolvedActiveChapterId =
+    input.activeChapterId ??
+    input.chapters.find(chapter => chapter.content === input.fullText)?.id ??
+    input.chapters[0]?.id ??
+    null;
+
   return {
     projectId: input.projectId,
     projectTitle: '',
     chapters: input.chapters,
-    activeChapterId: input.chapters[0]?.id ?? null,
+    activeChapterId: resolvedActiveChapterId,
     activeArcId: null,
     currentText: input.fullText,
     branches: [],
@@ -180,6 +189,7 @@ export function buildAppBrainStateFromAgentContext(
     manuscript: buildManuscriptState({
       projectId: input.projectId,
       chapters: input.chapters,
+      activeChapterId: input.activeChapterId,
       fullText: input.fullText,
     }),
     intelligence: buildIntelligenceState(input.intelligenceHUD),

@@ -71,6 +71,12 @@ describe('abortCoordinator', () => {
       expect(isAbortError(error)).toBe(true);
     });
 
+    it("returns true for Error with AbortError name", () => {
+      const error = new Error('The operation was aborted');
+      error.name = 'AbortError';
+      expect(isAbortError(error)).toBe(true);
+    });
+
     it('returns false for regular Error', () => {
       const error = new Error('Something went wrong');
       expect(isAbortError(error)).toBe(false);

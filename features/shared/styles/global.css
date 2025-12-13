@@ -812,6 +812,8 @@ pre,
   line-height: var(--prose-line-height);
   color: var(--text-primary);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   max-width: var(--prose-max-width);
   margin: 0 auto;
 
@@ -832,6 +834,12 @@ pre,
 
 .ProseMirror p:last-child {
   margin-bottom: 0;
+}
+
+.ProseMirror pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ProseMirror-selectednode {
