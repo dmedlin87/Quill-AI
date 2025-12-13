@@ -51,6 +51,7 @@ const BookCoverCard: React.FC<{
       onClick={onClick}
       className="group relative flex flex-col h-64 rounded-lg overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02]"
       style={{ perspective: '1000px' }}
+      aria-label={`Open project ${project.title} by ${project.author}`}
     >
       {/* Book Spine Effect (left edge) */}
       <div 
@@ -289,19 +290,25 @@ export const ProjectDashboard: React.FC = () => {
                   
                   <div className="space-y-4">
                       <div>
-                          <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Book Title</label>
+                          <label htmlFor="new-book-title" className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                            Book Title <span className="text-red-400" aria-hidden="true">*</span>
+                          </label>
                           <input 
+                            id="new-book-title"
                             className="w-full bg-gray-800 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none placeholder-gray-500"
                             placeholder="e.g. The Winds of Winter"
                             value={newTitle}
                             onChange={e => setNewTitle(e.target.value)}
                             autoFocus
+                            required
+                            aria-required="true"
                           />
                       </div>
 
                       <div>
-                          <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Author Name</label>
+                          <label htmlFor="new-book-author" className="block text-xs font-bold text-gray-400 uppercase mb-1">Author Name</label>
                           <input
+                            id="new-book-author"
                             className="w-full bg-gray-800 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none placeholder-gray-500"
                             placeholder="e.g. George R.R. Martin"
                             value={authorName}
@@ -311,25 +318,29 @@ export const ProjectDashboard: React.FC = () => {
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Time Period</label>
+                            <label htmlFor="new-book-time" className="block text-xs font-bold text-gray-400 uppercase mb-1">Time Period</label>
                             <input 
+                                id="new-book-time"
                                 className="w-full bg-gray-800 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm placeholder-gray-500"
                                 placeholder="e.g. 1890s, 2050"
                                 value={newTime}
                                 onChange={e => setNewTime(e.target.value)}
+                                aria-describedby="setting-helper"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Location</label>
+                            <label htmlFor="new-book-location" className="block text-xs font-bold text-gray-400 uppercase mb-1">Location</label>
                             <input 
+                                id="new-book-location"
                                 className="w-full bg-gray-800 border border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm placeholder-gray-500"
                                 placeholder="e.g. London, Mars"
                                 value={newLocation}
                                 onChange={e => setNewLocation(e.target.value)}
+                                aria-describedby="setting-helper"
                             />
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500">Defining the setting helps the AI detect anachronisms and tone mismatches.</p>
+                      <p id="setting-helper" className="text-xs text-gray-500">Defining the setting helps the AI detect anachronisms and tone mismatches.</p>
                   </div>
 
                   <div className="flex justify-end gap-3 mt-8">
