@@ -28,6 +28,10 @@ interface SettingsState {
   setDeveloperModeEnabled: (enabled: boolean) => void;
   automatedThinkingEnabled: boolean;
   setAutomatedThinkingEnabled: (enabled: boolean) => void;
+  advancedFeaturesEnabled: boolean;
+  setAdvancedFeaturesEnabled: (enabled: boolean) => void;
+  experimentalFeaturesEnabled: boolean;
+  setExperimentalFeaturesEnabled: (enabled: boolean) => void;
   suggestionWeights: SuggestionWeights;
   updateSuggestionWeight: (category: string, weight: number) => void;
   resetSuggestionWeights: () => void;
@@ -48,6 +52,8 @@ const initialState: Omit<SettingsState, keyof SettingsActions> = {
   nativeSpellcheckEnabled: true,
   developerModeEnabled: false,
   automatedThinkingEnabled: false,
+  advancedFeaturesEnabled: false,
+  experimentalFeaturesEnabled: false,
   suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
   // Model and API key defaults
   modelBuild: 'default',
@@ -64,6 +70,8 @@ type SettingsActions = Pick<
   | 'setNativeSpellcheckEnabled'
   | 'setDeveloperModeEnabled'
   | 'setAutomatedThinkingEnabled'
+  | 'setAdvancedFeaturesEnabled'
+  | 'setExperimentalFeaturesEnabled'
   | 'updateSuggestionWeight'
   | 'resetSuggestionWeights'
   | 'setModelBuild'
@@ -130,6 +138,18 @@ export const useSettingsStore = create<SettingsState>()(
           state.automatedThinkingEnabled === enabled
             ? state
             : { ...state, automatedThinkingEnabled: enabled }
+        ),
+      setAdvancedFeaturesEnabled: (enabled) =>
+        set((state) =>
+          state.advancedFeaturesEnabled === enabled
+            ? state
+            : { ...state, advancedFeaturesEnabled: enabled }
+        ),
+      setExperimentalFeaturesEnabled: (enabled) =>
+        set((state) =>
+          state.experimentalFeaturesEnabled === enabled
+            ? state
+            : { ...state, experimentalFeaturesEnabled: enabled }
         ),
       updateSuggestionWeight: (category, weight) =>
         set((state) => ({

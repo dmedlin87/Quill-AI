@@ -32,6 +32,19 @@ vi.mock('@/features/layout/store/useLayoutStore', () => ({
   ),
 }));
 
+let mockAdvancedFeaturesEnabled = false;
+let mockExperimentalFeaturesEnabled = false;
+
+vi.mock('@/features/settings/store/useSettingsStore', () => ({
+  useSettingsStore: vi.fn((selector) => {
+    const state = {
+      advancedFeaturesEnabled: mockAdvancedFeaturesEnabled,
+      experimentalFeaturesEnabled: mockExperimentalFeaturesEnabled,
+    };
+    return typeof selector === 'function' ? selector(state) : state;
+  }),
+}));
+
 // Mock framer-motion
 vi.mock('framer-motion', () => ({
   motion: {
@@ -60,6 +73,8 @@ describe('NavigationRail', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAdvancedFeaturesEnabled = false;
+    mockExperimentalFeaturesEnabled = false;
     // Reset window.location for home button tests
     Object.defineProperty(window, 'location', {
       value: { reload: vi.fn() },
@@ -86,11 +101,26 @@ describe('NavigationRail', () => {
       expect(screen.getByTestId('ai-orb')).toBeInTheDocument();
     });
 
-    it('renders all navigation items', () => {
+    it('hides advanced and experimental navigation items when disabled', () => {
       render(<NavigationRail {...defaultProps} />);
 
       expect(screen.getByLabelText('Analysis')).toBeInTheDocument();
+      expect(screen.getByLabelText('Memory')).toBeInTheDocument();
+
+      expect(screen.queryByLabelText('History')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Story Versions')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Voice')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Graph')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Lore Bible')).not.toBeInTheDocument();
+    });
+
+    it('renders advanced and experimental navigation items when enabled', () => {
+      mockAdvancedFeaturesEnabled = true;
+      mockExperimentalFeaturesEnabled = true;
+      render(<NavigationRail {...defaultProps} />);
+
       expect(screen.getByLabelText('History')).toBeInTheDocument();
+      expect(screen.getByLabelText('Story Versions')).toBeInTheDocument();
       expect(screen.getByLabelText('Voice')).toBeInTheDocument();
       expect(screen.getByLabelText('Graph')).toBeInTheDocument();
       expect(screen.getByLabelText('Lore Bible')).toBeInTheDocument();
@@ -176,6 +206,7 @@ describe('NavigationRail', () => {
     });
 
     it('calls openTabWithPanel with HISTORY when History is clicked', () => {
+      mockAdvancedFeaturesEnabled = true;
       render(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('History'));
@@ -184,6 +215,7 @@ describe('NavigationRail', () => {
     });
 
     it('calls openTabWithPanel with VOICE when Voice is clicked', () => {
+      mockExperimentalFeaturesEnabled = true;
       render(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Voice'));
@@ -200,6 +232,7 @@ describe('NavigationRail', () => {
     });
 
     it('calls openTabWithPanel with GRAPH when Graph is clicked', () => {
+      mockExperimentalFeaturesEnabled = true;
       render(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Graph'));
@@ -208,6 +241,7 @@ describe('NavigationRail', () => {
     });
 
     it('calls openTabWithPanel with LORE when Lore Bible is clicked', () => {
+      mockExperimentalFeaturesEnabled = true;
       render(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Lore Bible'));
@@ -241,8 +275,8 @@ describe('NavigationRail', () => {
     it('does not mark inactive tabs with aria-current', () => {
       render(<NavigationRail {...defaultProps} />);
 
-      const historyButton = screen.getByLabelText('History');
-      expect(historyButton).not.toHaveAttribute('aria-current');
+      const memoryButton = screen.getByLabelText('Memory');
+      expect(memoryButton).not.toHaveAttribute('aria-current');
     });
   });
 });

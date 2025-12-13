@@ -4,6 +4,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CommandPalette } from '@/features/shared/components/CommandPalette';
 import { SidebarTab } from '@/types';
 
+let mockAdvancedFeaturesEnabled = false;
+let mockExperimentalFeaturesEnabled = false;
+
+vi.mock('@/features/settings/store/useSettingsStore', () => ({
+  useSettingsStore: vi.fn((selector) => {
+    const state = {
+      advancedFeaturesEnabled: mockAdvancedFeaturesEnabled,
+      experimentalFeaturesEnabled: mockExperimentalFeaturesEnabled,
+    };
+    return typeof selector === 'function' ? selector(state) : state;
+  }),
+}));
+
 // Mock layout store
 const mockOpenTabWithPanel = vi.fn();
 const mockToggleView = vi.fn();
@@ -11,16 +24,21 @@ const mockToggleTheme = vi.fn();
 const mockToggleSidebar = vi.fn();
 const mockSetToolsCollapsed = vi.fn();
 const mockResetToProjectDashboard = vi.fn();
+const mockUseLayoutStore = vi.fn();
+
+const createLayoutStoreMock = (overrides = {}) => ({
+  openTabWithPanel: mockOpenTabWithPanel,
+  toggleView: mockToggleView,
+  toggleTheme: mockToggleTheme,
+  toggleSidebar: mockToggleSidebar,
+  setToolsCollapsed: mockSetToolsCollapsed,
+  resetToProjectDashboard: mockResetToProjectDashboard,
+  isToolsCollapsed: false,
+  ...overrides,
+});
 
 vi.mock('@/features/layout/store/useLayoutStore', () => ({
-  useLayoutStore: vi.fn(() => ({
-    openTabWithPanel: mockOpenTabWithPanel,
-    toggleView: mockToggleView,
-    toggleTheme: mockToggleTheme,
-    toggleSidebar: mockToggleSidebar,
-    setToolsCollapsed: mockSetToolsCollapsed,
-    resetToProjectDashboard: mockResetToProjectDashboard,
-  })),
+  useLayoutStore: () => mockUseLayoutStore(),
 }));
 
 // Mock editor actions
@@ -54,6 +72,9 @@ describe('CommandPalette', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAdvancedFeaturesEnabled = false;
+    mockExperimentalFeaturesEnabled = false;
+    mockUseLayoutStore.mockReturnValue(createLayoutStoreMock());
   });
 
   describe('Visibility', () => {
@@ -88,6 +109,16 @@ describe('CommandPalette', () => {
       expect(screen.getByText('Open Analysis Panel')).toBeInTheDocument();
       expect(screen.getByText('Toggle Zen Mode')).toBeInTheDocument();
       expect(screen.getByText('Toggle Dark/Light Mode')).toBeInTheDocument();
+    });
+
+    it('hides advanced and experimental navigation commands when disabled', () => {
+      render(<CommandPalette isOpen={true} onClose={mockOnClose} />);
+
+      expect(screen.queryByText('Open History')).not.toBeInTheDocument();
+      expect(screen.queryByText('Open Character Graph')).not.toBeInTheDocument();
+      expect(screen.queryByText('Open Lore Bible')).not.toBeInTheDocument();
+      expect(screen.queryByText('Open Voice Mode')).not.toBeInTheDocument();
+      expect(screen.queryByText('Open Story Versions')).not.toBeInTheDocument();
     });
 
     it('filters commands by label', () => {
@@ -289,6 +320,7 @@ describe('CommandPalette', () => {
     });
 
     it('executes Open History command', () => {
+      mockAdvancedFeaturesEnabled = true;
       render(<CommandPalette isOpen={true} onClose={mockOnClose} />);
       
       const button = screen.getByText('Open History').closest('button')!;
@@ -309,6 +341,7 @@ describe('CommandPalette', () => {
     });
 
     it('executes Open Character Graph command', () => {
+      mockExperimentalFeaturesEnabled = true;
       render(<CommandPalette isOpen={true} onClose={mockOnClose} />);
       
       const button = screen.getByText('Open Character Graph').closest('button')!;
@@ -319,6 +352,7 @@ describe('CommandPalette', () => {
     });
 
     it('executes Open Lore Bible command', () => {
+      mockExperimentalFeaturesEnabled = true;
       render(<CommandPalette isOpen={true} onClose={mockOnClose} />);
       
       const button = screen.getByText('Open Lore Bible').closest('button')!;
@@ -329,12 +363,24 @@ describe('CommandPalette', () => {
     });
 
     it('executes Open Voice Mode command', () => {
+      mockExperimentalFeaturesEnabled = true;
       render(<CommandPalette isOpen={true} onClose={mockOnClose} />);
       
       const button = screen.getByText('Open Voice Mode').closest('button')!;
       fireEvent.click(button);
 
       expect(mockOpenTabWithPanel).toHaveBeenCalledWith(SidebarTab.VOICE);
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+
+    it('executes Open Story Versions command', () => {
+      mockExperimentalFeaturesEnabled = true;
+      render(<CommandPalette isOpen={true} onClose={mockOnClose} />);
+
+      const button = screen.getByText('Open Story Versions').closest('button')!;
+      fireEvent.click(button);
+
+      expect(mockOpenTabWithPanel).toHaveBeenCalledWith(SidebarTab.BRANCHES);
       expect(mockOnClose).toHaveBeenCalled();
     });
 
@@ -395,6 +441,17 @@ describe('CommandPalette', () => {
       fireEvent.click(button);
 
       expect(mockSetToolsCollapsed).toHaveBeenCalledWith(true);
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+
+    it('opens tools panel when already collapsed', () => {
+      mockUseLayoutStore.mockReturnValue(createLayoutStoreMock({ isToolsCollapsed: true }));
+      render(<CommandPalette isOpen={true} onClose={mockOnClose} />);
+
+      const button = screen.getByText('Toggle Tools Panel').closest('button')!;
+      fireEvent.click(button);
+
+      expect(mockSetToolsCollapsed).toHaveBeenCalledWith(false);
       expect(mockOnClose).toHaveBeenCalled();
     });
 

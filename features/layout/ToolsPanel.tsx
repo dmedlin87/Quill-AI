@@ -10,7 +10,15 @@ import { MemoryManager } from '@/features/memory';
 import { StoryVersionsPanel } from '@/features/editor';
 import { Branch, Contradiction, Lore, Chapter } from '@/types/schema';
 import { useLayoutStore } from './store/useLayoutStore';
-import { DeveloperModeToggle, ThemeSelector, ModelBuildSelector, ApiKeyManager, AutomatedThinkingToggle } from '@/features/settings';
+import {
+  DeveloperModeToggle,
+  ThemeSelector,
+  ModelBuildSelector,
+  ApiKeyManager,
+  AutomatedThinkingToggle,
+  AdvancedFeaturesToggle,
+  ExperimentalFeaturesToggle,
+} from '@/features/settings';
 import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning';
 import { DesignSystemKitchenSink } from '@/features/shared/components/DesignSystemKitchenSink';
 import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
@@ -108,6 +116,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
     handleFixRequest,
     handleSelectGraphCharacter,
     handleInterviewCharacter,
+    openTabWithPanel,
     toolsPanelWidth,
     isToolsPanelExpanded,
     setToolsPanelWidth,
@@ -124,6 +133,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
     handleFixRequest: state.handleFixRequest,
     handleSelectGraphCharacter: state.handleSelectGraphCharacter,
     handleInterviewCharacter: state.handleInterviewCharacter,
+    openTabWithPanel: state.openTabWithPanel,
     toolsPanelWidth: state.toolsPanelWidth,
     isToolsPanelExpanded: state.isToolsPanelExpanded,
     setToolsPanelWidth: state.setToolsPanelWidth,
@@ -166,6 +176,19 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
   }, [isResizing, setToolsPanelWidth]);
 
   const isDeveloperMode = useSettingsStore((state) => state.developerModeEnabled);
+  const advancedFeaturesEnabled = useSettingsStore((state) => state.advancedFeaturesEnabled);
+  const experimentalFeaturesEnabled = useSettingsStore((state) => state.experimentalFeaturesEnabled);
+
+  const isAdvancedTab = activeTab === SidebarTab.HISTORY;
+  const isExperimentalTab =
+    activeTab === SidebarTab.BRANCHES ||
+    activeTab === SidebarTab.VOICE ||
+    activeTab === SidebarTab.GRAPH ||
+    activeTab === SidebarTab.LORE;
+
+  const isTabDisabledBySettings =
+    (isAdvancedTab && !advancedFeaturesEnabled) ||
+    (isExperimentalTab && !experimentalFeaturesEnabled);
 
   const shouldShow = !isToolsCollapsed && !isZenMode;
   const panelWidth = isToolsPanelExpanded ? '100%' : toolsPanelWidth;
@@ -193,9 +216,16 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
           )}
           {/* Panel Header */}
           <div className="h-14 border-b border-[var(--glass-border)] flex items-center justify-between px-5 shrink-0">
-            <h3 className="text-[var(--text-sm)] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-              {activeTabLabel}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[var(--text-sm)] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
+                {activeTabLabel}
+              </h3>
+              {isExperimentalTab && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-primary)] border border-[var(--border-primary)] text-[var(--text-tertiary)]">
+                  Experimental
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {activeTab === SidebarTab.ANALYSIS && (
                 <div className="flex bg-[var(--surface-secondary)] rounded-lg p-0.5 mr-2">
@@ -244,144 +274,178 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
 
           {/* Panel Content */}
           <div className="flex-1 overflow-hidden relative">
-            {activeTab === SidebarTab.ANALYSIS && (
-              analysisMode === 'reader' ? (
-                <ShadowReaderPanel />
-              ) : (
-                <Dashboard
-                  isLoading={isAnalyzing}
-                  analysis={analysis}
-                  currentText={currentText}
-                  onFixRequest={handleFixRequest}
-                  warning={analysisWarning}
-                  onAnalyzeSelection={onAnalyzeSelection}
-                  hasSelection={hasSelection}
-                  contradictions={contradictions}
-                  derivedLore={derivedLore}
-                  onNavigateToText={onNavigateToText}
-                />
-              )
-            )}
-
-            {activeTab === SidebarTab.CHAT && (
-              <div className="flex flex-col h-full">
-                <div className="flex-1 overflow-hidden">
-                  <ChatInterface
-                    editorContext={editorContext}
-                    fullText={currentText}
-                    onAgentAction={onAgentAction}
-                    lore={lore}
-                    chapters={chapters}
-                    analysis={analysis}
-                    initialMessage={chatInitialMessage}
-                    onInitialMessageProcessed={clearChatInitialMessage}
-                    interviewTarget={interviewTarget}
-                    onExitInterview={exitInterview}
-                    projectId={projectId}
-                  />
-                </div>
-                {/* Collapsible Tuning Panel could go here or within ChatInterface.
-                    For now, I'll assume we want it accessible in Settings or a specific panel.
-                    However, the request was "In the Settings panel".
-                    Since I don't see a dedicated "Settings Panel", I will not embed it here directly.
-                    Wait, ChatInterface has ExperienceSelector and CritiqueIntensitySelector.
-                */}
-              </div>
-            )}
-
-            {activeTab === SidebarTab.HISTORY && (
-              <ActivityFeed
-                history={history}
-                onRestore={onRestore}
-                onInspect={(item) => console.log('Inspect', item)}
-              />
-            )}
-
-            {activeTab === SidebarTab.MEMORY && (
-              <MemoryManager projectId={projectId} />
-            )}
-
-            {activeTab === SidebarTab.VOICE && <VoiceMode />}
-
-            {activeTab === SidebarTab.GRAPH && (
-              <KnowledgeGraph onSelectCharacter={handleSelectGraphCharacter} />
-            )}
-
-            {activeTab === SidebarTab.LORE && (
-              <LoreManager
-                onInterviewCharacter={handleInterviewCharacter}
-                draftCharacter={loreDraftCharacter}
-                onDraftConsumed={consumeLoreDraft}
-              />
-            )}
-
-            {activeTab === SidebarTab.BRANCHES && (
-              <StoryVersionsPanel
-                branches={branches || []}
-                activeBranchId={activeBranchId ?? null}
-                mainContent={currentText}
-                chapterTitle={chapterTitle}
-                onCreateBranch={onCreateBranch || (() => {})}
-                onSwitchBranch={onSwitchBranch || (() => {})}
-                onMergeBranch={onMergeBranch || (() => {})}
-                onDeleteBranch={onDeleteBranch || (() => {})}
-                onRenameBranch={onRenameBranch || (() => {})}
-              />
-            )}
-
-            {activeTab === SidebarTab.SETTINGS && (
+            {isTabDisabledBySettings ? (
               <div className="h-full overflow-y-auto">
-                <div className="p-5 space-y-8 animate-fade-in">
-                  <header>
-                    <h2 className="text-[var(--text-lg)] font-serif font-medium text-[var(--text-primary)] mb-1">Settings</h2>
-                    <p className="text-[var(--text-sm)] text-[var(--text-muted)]">Customize your creative environment.</p>
-                  </header>
-
-                  <section>
-                    <div className="mb-4">
-                      <label className="block text-[var(--text-xs)] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                        Author Profile
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Your Pen Name"
-                        defaultValue={typeof localStorage !== 'undefined' ? localStorage.getItem('quill_author_name') || '' : ''}
-                        onChange={(e) => {
-                          if (typeof localStorage !== 'undefined') {
-                            localStorage.setItem('quill_author_name', e.target.value);
-                          }
-                        }}
-                        className="w-full px-3 py-2 bg-[var(--surface-primary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-sm)] focus:outline-none focus:ring-2 focus:ring-[var(--interactive-accent)] focus:border-transparent transition-all"
-                      />
-                      <p className="mt-1.5 text-[var(--text-xs)] text-[var(--text-tertiary)]">
-                        Used for manuscript metadata and AI interactions.
-                      </p>
-                    </div>
-                  </section>
-
-                  <section className="pt-6 border-t border-[var(--border-secondary)]">
-                    <ThemeSelector />
-                  </section>
-
-                  <section className="pt-6 border-t border-[var(--border-secondary)]">
-                    <ModelBuildSelector />
-                  </section>
-
-                  <section className="pt-6 border-t border-[var(--border-secondary)]">
-                    <ApiKeyManager />
-                  </section>
-
-                  <section className="pt-6 border-t border-[var(--border-secondary)]">
-                    <AutomatedThinkingToggle />
-                  </section>
-                  
-                  {isDeveloperMode && (
-                    <section className="pt-8 border-t border-[var(--border-secondary)]">
-                       <DesignSystemKitchenSink />
-                    </section>
-                  )}
+                <div className="p-5 space-y-4 animate-fade-in">
+                  <div>
+                    <h2 className="text-[var(--text-lg)] font-serif font-medium text-[var(--text-primary)] mb-1">
+                      Feature disabled
+                    </h2>
+                    <p className="text-[var(--text-sm)] text-[var(--text-muted)]">
+                      {isAdvancedTab
+                        ? 'Enable advanced features in Settings to use this tool.'
+                        : 'Enable experimental features in Settings to use this tool.'}
+                    </p>
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => openTabWithPanel(SidebarTab.SETTINGS)}
+                      aria-label="Open Settings"
+                      className="px-3 py-2 rounded-lg bg-[var(--interactive-accent)] text-[var(--text-inverse)] text-sm font-medium hover:bg-[var(--interactive-accent-hover)] transition-colors"
+                    >
+                      Open Settings
+                    </button>
+                  </div>
                 </div>
               </div>
+            ) : (
+              <>
+                {activeTab === SidebarTab.ANALYSIS &&
+                  (analysisMode === 'reader' ? (
+                    <ShadowReaderPanel />
+                  ) : (
+                    <Dashboard
+                      isLoading={isAnalyzing}
+                      analysis={analysis}
+                      currentText={currentText}
+                      onFixRequest={handleFixRequest}
+                      warning={analysisWarning}
+                      onAnalyzeSelection={onAnalyzeSelection}
+                      hasSelection={hasSelection}
+                      contradictions={contradictions}
+                      derivedLore={derivedLore}
+                      onNavigateToText={onNavigateToText}
+                    />
+                  ))}
+
+                {activeTab === SidebarTab.CHAT && (
+                  <div className="flex flex-col h-full">
+                    <div className="flex-1 overflow-hidden">
+                      <ChatInterface
+                        editorContext={editorContext}
+                        fullText={currentText}
+                        onAgentAction={onAgentAction}
+                        lore={lore}
+                        chapters={chapters}
+                        analysis={analysis}
+                        initialMessage={chatInitialMessage}
+                        onInitialMessageProcessed={clearChatInitialMessage}
+                        interviewTarget={interviewTarget}
+                        onExitInterview={exitInterview}
+                        projectId={projectId}
+                      />
+                    </div>
+                    {/* Collapsible Tuning Panel could go here or within ChatInterface.
+                        For now, I'll assume we want it accessible in Settings or a specific panel.
+                        However, the request was "In the Settings panel".
+                        Since I don't see a dedicated "Settings Panel", I will not embed it here directly.
+                        Wait, ChatInterface has ExperienceSelector and CritiqueIntensitySelector.
+                    */}
+                  </div>
+                )}
+
+                {activeTab === SidebarTab.HISTORY && (
+                  <ActivityFeed
+                    history={history}
+                    onRestore={onRestore}
+                    onInspect={(item) => console.log('Inspect', item)}
+                  />
+                )}
+
+                {activeTab === SidebarTab.MEMORY && <MemoryManager projectId={projectId} />}
+
+                {activeTab === SidebarTab.VOICE && <VoiceMode />}
+
+                {activeTab === SidebarTab.GRAPH && (
+                  <KnowledgeGraph onSelectCharacter={handleSelectGraphCharacter} />
+                )}
+
+                {activeTab === SidebarTab.LORE && (
+                  <LoreManager
+                    onInterviewCharacter={handleInterviewCharacter}
+                    draftCharacter={loreDraftCharacter}
+                    onDraftConsumed={consumeLoreDraft}
+                  />
+                )}
+
+                {activeTab === SidebarTab.BRANCHES && (
+                  <StoryVersionsPanel
+                    branches={branches || []}
+                    activeBranchId={activeBranchId ?? null}
+                    mainContent={currentText}
+                    chapterTitle={chapterTitle}
+                    onCreateBranch={onCreateBranch || (() => {})}
+                    onSwitchBranch={onSwitchBranch || (() => {})}
+                    onMergeBranch={onMergeBranch || (() => {})}
+                    onDeleteBranch={onDeleteBranch || (() => {})}
+                    onRenameBranch={onRenameBranch || (() => {})}
+                  />
+                )}
+
+                {activeTab === SidebarTab.SETTINGS && (
+                  <div className="h-full overflow-y-auto">
+                    <div className="p-5 space-y-8 animate-fade-in">
+                      <header>
+                        <h2 className="text-[var(--text-lg)] font-serif font-medium text-[var(--text-primary)] mb-1">Settings</h2>
+                        <p className="text-[var(--text-sm)] text-[var(--text-muted)]">Customize your creative environment.</p>
+                      </header>
+
+                      <section>
+                        <div className="mb-4">
+                          <label className="block text-[var(--text-xs)] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                            Author Profile
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Your Pen Name"
+                            defaultValue={typeof localStorage !== 'undefined' ? localStorage.getItem('quill_author_name') || '' : ''}
+                            onChange={(e) => {
+                              if (typeof localStorage !== 'undefined') {
+                                localStorage.setItem('quill_author_name', e.target.value);
+                              }
+                            }}
+                            className="w-full px-3 py-2 bg-[var(--surface-primary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-sm)] focus:outline-none focus:ring-2 focus:ring-[var(--interactive-accent)] focus:border-transparent transition-all"
+                          />
+                          <p className="mt-1.5 text-[var(--text-xs)] text-[var(--text-tertiary)]">
+                            Used for manuscript metadata and AI interactions.
+                          </p>
+                        </div>
+                      </section>
+
+                      <section className="pt-6 border-t border-[var(--border-secondary)]">
+                        <ThemeSelector />
+                      </section>
+
+                      <section className="pt-6 border-t border-[var(--border-secondary)]">
+                        <AdvancedFeaturesToggle />
+                      </section>
+
+                      <section className="pt-6 border-t border-[var(--border-secondary)]">
+                        <ExperimentalFeaturesToggle />
+                      </section>
+
+                      <section className="pt-6 border-t border-[var(--border-secondary)]">
+                        <ModelBuildSelector />
+                      </section>
+
+                      <section className="pt-6 border-t border-[var(--border-secondary)]">
+                        <ApiKeyManager />
+                      </section>
+
+                      <section className="pt-6 border-t border-[var(--border-secondary)]">
+                        <AutomatedThinkingToggle />
+                      </section>
+                      
+                      {isDeveloperMode && (
+                        <section className="pt-8 border-t border-[var(--border-secondary)]">
+                           <DesignSystemKitchenSink />
+                        </section>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </motion.aside>

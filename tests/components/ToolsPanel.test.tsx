@@ -15,6 +15,7 @@ const mockHandleSelectGraphCharacter = vi.fn();
 const mockHandleInterviewCharacter = vi.fn();
 const mockClearChatInitialMessage = vi.fn();
 const mockExitInterview = vi.fn();
+const mockOpenTabWithPanel = vi.fn();
 const mockSetToolsPanelWidth = vi.fn((width: number) => {
   mockToolsPanelWidth = width;
 });
@@ -31,6 +32,7 @@ vi.mock('@/features/layout/store/useLayoutStore', () => ({
       interviewTarget: null,
       toolsPanelWidth: mockToolsPanelWidth,
       isToolsPanelExpanded: mockIsToolsPanelExpanded,
+      openTabWithPanel: mockOpenTabWithPanel,
       clearChatInitialMessage: mockClearChatInitialMessage,
       exitInterview: mockExitInterview,
       handleFixRequest: mockHandleFixRequest,
@@ -102,6 +104,9 @@ vi.mock('@/features/settings', () => ({
   ThemeSelector: () => <div data-testid="theme-selector">Theme Selector</div>,
   ModelBuildSelector: () => <div data-testid="model-build-selector">Model Build Selector</div>,
   ApiKeyManager: () => <div data-testid="api-key-manager">API Key Manager</div>,
+  AutomatedThinkingToggle: () => <div data-testid="automated-thinking-toggle">Automated Thinking</div>,
+  AdvancedFeaturesToggle: () => <div data-testid="advanced-features-toggle">Advanced Features</div>,
+  ExperimentalFeaturesToggle: () => <div data-testid="experimental-features-toggle">Experimental Features</div>,
 }));
 
 vi.mock('@/features/settings/components/RelevanceTuning', () => ({
@@ -114,9 +119,15 @@ vi.mock('@/features/shared/components/DesignSystemKitchenSink', () => ({
 
 // Mock settings store
 let mockDeveloperModeEnabled = false;
+let mockAdvancedFeaturesEnabled = false;
+let mockExperimentalFeaturesEnabled = false;
 vi.mock('@/features/settings/store/useSettingsStore', () => ({
   useSettingsStore: vi.fn((selector) => {
-    const state = { developerModeEnabled: mockDeveloperModeEnabled };
+    const state = {
+      developerModeEnabled: mockDeveloperModeEnabled,
+      advancedFeaturesEnabled: mockAdvancedFeaturesEnabled,
+      experimentalFeaturesEnabled: mockExperimentalFeaturesEnabled,
+    };
     return typeof selector === 'function' ? selector(state) : state;
   }),
 }));
@@ -162,6 +173,8 @@ describe('ToolsPanel', () => {
     mockIsToolsPanelExpanded = false;
     mockToolsPanelWidth = 380;
     mockDeveloperModeEnabled = false;
+    mockAdvancedFeaturesEnabled = false;
+    mockExperimentalFeaturesEnabled = false;
   });
 
   describe('Visibility', () => {
@@ -234,8 +247,18 @@ describe('ToolsPanel', () => {
   });
 
   describe('Tab Content: History', () => {
+    it('renders a fallback when History is disabled', () => {
+      mockActiveTab = SidebarTab.HISTORY;
+      render(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.queryByTestId('activity-feed')).not.toBeInTheDocument();
+      expect(screen.getByText(/enable advanced features/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
+    });
+
     it('renders ActivityFeed when activeTab is HISTORY', () => {
       mockActiveTab = SidebarTab.HISTORY;
+      mockAdvancedFeaturesEnabled = true;
       render(<ToolsPanel {...defaultProps} />);
 
       expect(screen.getByTestId('activity-feed')).toBeInTheDocument();
@@ -243,6 +266,7 @@ describe('ToolsPanel', () => {
 
     it('passes history items to ActivityFeed', () => {
       mockActiveTab = SidebarTab.HISTORY;
+      mockAdvancedFeaturesEnabled = true;
       render(<ToolsPanel {...defaultProps} history={[makeHistoryItem('1'), makeHistoryItem('2')]} />);
 
       expect(screen.getByText('Activity Feed (2 items)')).toBeInTheDocument();
@@ -250,8 +274,18 @@ describe('ToolsPanel', () => {
   });
 
   describe('Tab Content: Voice', () => {
+    it('renders a fallback when Voice is disabled', () => {
+      mockActiveTab = SidebarTab.VOICE;
+      render(<ToolsPanel {...defaultProps} />);
+
+      expect(screen.queryByTestId('voice-mode')).not.toBeInTheDocument();
+      expect(screen.getByText(/enable experimental features/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
+    });
+
     it('renders VoiceMode when activeTab is VOICE', () => {
       mockActiveTab = SidebarTab.VOICE;
+      mockExperimentalFeaturesEnabled = true;
       render(<ToolsPanel {...defaultProps} />);
 
       expect(screen.getByTestId('voice-mode')).toBeInTheDocument();
@@ -270,6 +304,7 @@ describe('ToolsPanel', () => {
   describe('Tab Content: Graph', () => {
     it('renders KnowledgeGraph when activeTab is GRAPH', () => {
       mockActiveTab = SidebarTab.GRAPH;
+      mockExperimentalFeaturesEnabled = true;
       render(<ToolsPanel {...defaultProps} />);
 
       expect(screen.getByTestId('knowledge-graph')).toBeInTheDocument();
@@ -279,6 +314,7 @@ describe('ToolsPanel', () => {
   describe('Tab Content: Lore', () => {
     it('renders LoreManager when activeTab is LORE', () => {
       mockActiveTab = SidebarTab.LORE;
+      mockExperimentalFeaturesEnabled = true;
       render(<ToolsPanel {...defaultProps} />);
 
       expect(screen.getByTestId('lore-manager')).toBeInTheDocument();
@@ -369,6 +405,7 @@ describe('ToolsPanel', () => {
   describe('Tab Content: Branches', () => {
     it('renders StoryVersionsPanel when activeTab is BRANCHES', () => {
       mockActiveTab = SidebarTab.BRANCHES;
+      mockExperimentalFeaturesEnabled = true;
       render(<ToolsPanel {...defaultProps} />);
       expect(screen.getByTestId('story-versions-panel')).toBeInTheDocument();
     });
@@ -448,6 +485,7 @@ describe('ToolsPanel', () => {
   describe('Default Callbacks & Inline Handlers', () => {
     it('handles ActivityFeed inspect callback with console.log', () => {
       mockActiveTab = SidebarTab.HISTORY;
+      mockAdvancedFeaturesEnabled = true;
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
       render(<ToolsPanel {...defaultProps} history={[makeHistoryItem('1')]} />);
@@ -460,6 +498,7 @@ describe('ToolsPanel', () => {
 
     it('uses default no-op handlers for branch actions when not provided', () => {
       mockActiveTab = SidebarTab.BRANCHES;
+      mockExperimentalFeaturesEnabled = true;
       // Render without branch callbacks
       render(<ToolsPanel {...defaultProps} onCreateBranch={undefined} onSwitchBranch={undefined} onMergeBranch={undefined} onDeleteBranch={undefined} onRenameBranch={undefined} />);
       
@@ -473,6 +512,7 @@ describe('ToolsPanel', () => {
 
     it('passes provided branch callbacks correctly', () => {
       mockActiveTab = SidebarTab.BRANCHES;
+      mockExperimentalFeaturesEnabled = true;
       const onCreate = vi.fn();
       const onSwitch = vi.fn();
       const onMerge = vi.fn();

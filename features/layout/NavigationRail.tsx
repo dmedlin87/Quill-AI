@@ -5,6 +5,7 @@ import { DEFAULT_PERSONAS } from '@/types/personas';
 import { AIPresenceOrb, type OrbStatus } from '@/features/agent';
 import { useLayoutStore } from './store/useLayoutStore';
 import { AccessibleTooltip } from '@/features/shared/components/AccessibleTooltip';
+import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
 import {
   ZenIcon,
   AnalysisIcon,
@@ -62,6 +63,22 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
     toggleView: state.toggleView,
     toggleTheme: state.toggleTheme,
   }));
+
+  const advancedFeaturesEnabled = useSettingsStore((state) => state.advancedFeaturesEnabled);
+  const experimentalFeaturesEnabled = useSettingsStore((state) => state.experimentalFeaturesEnabled);
+
+  const visibleNavItems = NAV_ITEMS.filter(({ tab }) => {
+    if (tab === SidebarTab.HISTORY) return advancedFeaturesEnabled;
+    if (
+      tab === SidebarTab.BRANCHES ||
+      tab === SidebarTab.VOICE ||
+      tab === SidebarTab.GRAPH ||
+      tab === SidebarTab.LORE
+    ) {
+      return experimentalFeaturesEnabled;
+    }
+    return true;
+  });
 
   const currentPersona = DEFAULT_PERSONAS[currentPersonaIndex];
 
@@ -126,7 +143,14 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
       />
 
       {/* Navigation Items */}
-      {NAV_ITEMS.map(({ tab, Icon, label, description }) => (
+      {visibleNavItems.map(({ tab, Icon, label, description }) => {
+        const isExperimentalTab =
+          tab === SidebarTab.BRANCHES ||
+          tab === SidebarTab.VOICE ||
+          tab === SidebarTab.GRAPH ||
+          tab === SidebarTab.LORE;
+
+        return (
         <AccessibleTooltip key={tab} content={<><strong>{label}</strong><br/><span className="text-[var(--text-muted)]">{description}</span></>} position="right">
           <button
             onClick={() => openTabWithPanel(tab)}
@@ -139,6 +163,14 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
             }`}
           >
             <Icon />
+            {isExperimentalTab && (
+              <span
+                className="absolute top-0 right-0 translate-x-1/3 -translate-y-1/3 text-[8px] px-1 py-0.5 rounded bg-[var(--surface-primary)] border border-[var(--border-primary)] text-[var(--text-tertiary)]"
+                aria-hidden="true"
+              >
+                EXP
+              </span>
+            )}
             {activeTab === tab && (
               <div
                 className="absolute right-[-13px] top-1/2 -translate-y-1/2 w-1 h-5 bg-[var(--interactive-accent)] rounded-l-sm"
@@ -147,7 +179,8 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
             )}
           </button>
         </AccessibleTooltip>
-      ))}
+        );
+      })}
 
       {/* Bottom Actions */}
       <div className="mt-auto flex flex-col items-center gap-2">

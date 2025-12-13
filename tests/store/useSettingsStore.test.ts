@@ -21,6 +21,8 @@ describe('useSettingsStore', () => {
       developerModeEnabled: false,
       budgetThreshold: 1.0,
       automatedThinkingEnabled: false,
+      advancedFeaturesEnabled: false,
+      experimentalFeaturesEnabled: false,
       suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
     });
   });
@@ -35,6 +37,8 @@ describe('useSettingsStore', () => {
     expect(state.developerModeEnabled).toBe(false);
     expect(state.budgetThreshold).toBe(1.0);
     expect(state.automatedThinkingEnabled).toBe(false);
+    expect(state.advancedFeaturesEnabled).toBe(false);
+    expect(state.experimentalFeaturesEnabled).toBe(false);
     expect(state.suggestionWeights).toEqual(DEFAULT_SUGGESTION_WEIGHTS);
   });
 
@@ -76,6 +80,22 @@ describe('useSettingsStore', () => {
     setDeveloperModeEnabled(true);
 
     expect(useSettingsStore.getState().developerModeEnabled).toBe(true);
+  });
+
+  it('toggles advanced features preference', () => {
+    const { setAdvancedFeaturesEnabled } = useSettingsStore.getState();
+
+    setAdvancedFeaturesEnabled(true);
+
+    expect(useSettingsStore.getState().advancedFeaturesEnabled).toBe(true);
+  });
+
+  it('toggles experimental features preference', () => {
+    const { setExperimentalFeaturesEnabled } = useSettingsStore.getState();
+
+    setExperimentalFeaturesEnabled(true);
+
+    expect(useSettingsStore.getState().experimentalFeaturesEnabled).toBe(true);
   });
 
   it('updates budgetThreshold via setBudgetThreshold', () => {

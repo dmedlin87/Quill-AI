@@ -5,6 +5,8 @@ export { ExperienceSelector, ExperienceBadge } from './components/ExperienceSele
 export { NativeSpellcheckToggle } from './components/NativeSpellcheckToggle';
 export { DeveloperModeToggle } from './components/DeveloperModeToggle';
 export { AutomatedThinkingToggle } from './components/AutomatedThinkingToggle';
+export { AdvancedFeaturesToggle } from './components/AdvancedFeaturesToggle';
+export { ExperimentalFeaturesToggle } from './components/ExperimentalFeaturesToggle';
 export { RelevanceTuning } from './components/RelevanceTuning';
 export { ThemeSelector } from './components/ThemeSelector';
 export { ModelBuildSelector, ModelBuildBadge } from './components/ModelBuildSelector';

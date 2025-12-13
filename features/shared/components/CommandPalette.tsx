@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SidebarTab, MainView } from '@/types';
 import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
 import { useEditorActions } from '@/features/core/context/EditorContext';
+import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
 
 interface Command {
   id: string;
@@ -42,133 +43,208 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     toggleSidebar,
     setToolsCollapsed,
     resetToProjectDashboard,
+    isToolsCollapsed,
   } = useLayoutStore();
 
   const { toggleZenMode } = useEditorActions();
 
+  const advancedFeaturesEnabled = useSettingsStore((state) => state.advancedFeaturesEnabled);
+  const experimentalFeaturesEnabled = useSettingsStore((state) => state.experimentalFeaturesEnabled);
+
   // Define all available commands
-  const commands: Command[] = useMemo(() => [
-    // Navigation
-    {
-      id: 'nav-chat',
-      label: 'Open AI Chat',
-      description: 'Talk to your AI writing assistant',
-      category: 'navigation',
-      shortcut: '',
-      action: () => { openTabWithPanel(SidebarTab.CHAT); onClose(); },
-    },
-    {
-      id: 'nav-analysis',
-      label: 'Open Analysis Panel',
-      description: 'View manuscript analysis results',
-      category: 'navigation',
-      action: () => { openTabWithPanel(SidebarTab.ANALYSIS); onClose(); },
-    },
-    {
-      id: 'nav-history',
-      label: 'Open History',
-      description: 'Browse edit history and versions',
-      category: 'navigation',
-      action: () => { openTabWithPanel(SidebarTab.HISTORY); onClose(); },
-    },
-    {
-      id: 'nav-memory',
-      label: 'Open Memory Manager',
-      description: 'View AI memory and context',
-      category: 'navigation',
-      action: () => { openTabWithPanel(SidebarTab.MEMORY); onClose(); },
-    },
-    {
-      id: 'nav-graph',
-      label: 'Open Character Graph',
-      description: 'Visualize character relationships',
-      category: 'navigation',
-      action: () => { openTabWithPanel(SidebarTab.GRAPH); onClose(); },
-    },
-    {
-      id: 'nav-lore',
-      label: 'Open Lore Bible',
-      description: 'Manage world-building details',
-      category: 'navigation',
-      action: () => { openTabWithPanel(SidebarTab.LORE); onClose(); },
-    },
-    {
-      id: 'nav-voice',
-      label: 'Open Voice Mode',
-      description: 'Dictate and transcribe',
-      category: 'navigation',
-      action: () => { openTabWithPanel(SidebarTab.VOICE); onClose(); },
-    },
-    {
-      id: 'nav-settings',
-      label: 'Open Settings',
-      description: 'Configure your workspace',
-      category: 'navigation',
-      action: () => { openTabWithPanel(SidebarTab.SETTINGS); onClose(); },
-    },
-    {
-      id: 'nav-storyboard',
-      label: 'Toggle Storyboard View',
-      description: 'Switch between editor and storyboard',
-      category: 'navigation',
-      action: () => { toggleView(); onClose(); },
-    },
-    {
-      id: 'nav-library',
-      label: 'Return to Library',
-      description: 'Go back to project selection',
-      category: 'navigation',
-      action: () => { resetToProjectDashboard(); onClose(); },
-    },
-    {
-      id: 'nav-versions',
-      label: 'Open Story Versions',
-      description: 'Try alternate story directions',
-      category: 'navigation',
-      action: () => { openTabWithPanel(SidebarTab.BRANCHES); onClose(); },
-    },
+  const commands: Command[] = useMemo(
+    () => [
+      // Navigation
+      {
+        id: 'nav-chat',
+        label: 'Open AI Chat',
+        description: 'Talk to your AI writing assistant',
+        category: 'navigation',
+        shortcut: '',
+        action: () => {
+          openTabWithPanel(SidebarTab.CHAT);
+          onClose();
+        },
+      },
+      {
+        id: 'nav-analysis',
+        label: 'Open Analysis Panel',
+        description: 'View manuscript analysis results',
+        category: 'navigation',
+        action: () => {
+          openTabWithPanel(SidebarTab.ANALYSIS);
+          onClose();
+        },
+      },
+      ...(advancedFeaturesEnabled
+        ? [
+            {
+              id: 'nav-history',
+              label: 'Open History',
+              description: 'Browse edit history and versions',
+              category: 'navigation' as const,
+              action: () => {
+                openTabWithPanel(SidebarTab.HISTORY);
+                onClose();
+              },
+            },
+          ]
+        : []),
+      {
+        id: 'nav-memory',
+        label: 'Open Memory Manager',
+        description: 'View AI memory and context',
+        category: 'navigation',
+        action: () => {
+          openTabWithPanel(SidebarTab.MEMORY);
+          onClose();
+        },
+      },
+      ...(experimentalFeaturesEnabled
+        ? [
+            {
+              id: 'nav-graph',
+              label: 'Open Character Graph',
+              description: 'Visualize character relationships',
+              category: 'navigation' as const,
+              action: () => {
+                openTabWithPanel(SidebarTab.GRAPH);
+                onClose();
+              },
+            },
+            {
+              id: 'nav-lore',
+              label: 'Open Lore Bible',
+              description: 'Manage world-building details',
+              category: 'navigation' as const,
+              action: () => {
+                openTabWithPanel(SidebarTab.LORE);
+                onClose();
+              },
+            },
+            {
+              id: 'nav-voice',
+              label: 'Open Voice Mode',
+              description: 'Dictate and transcribe',
+              category: 'navigation' as const,
+              action: () => {
+                openTabWithPanel(SidebarTab.VOICE);
+                onClose();
+              },
+            },
+            {
+              id: 'nav-versions',
+              label: 'Open Story Versions',
+              description: 'Try alternate story directions',
+              category: 'navigation' as const,
+              action: () => {
+                openTabWithPanel(SidebarTab.BRANCHES);
+                onClose();
+              },
+            },
+          ]
+        : []),
+      {
+        id: 'nav-settings',
+        label: 'Open Settings',
+        description: 'Configure your workspace',
+        category: 'navigation',
+        action: () => {
+          openTabWithPanel(SidebarTab.SETTINGS);
+          onClose();
+        },
+      },
+      {
+        id: 'nav-storyboard',
+        label: 'Toggle Storyboard View',
+        description: 'Switch between editor and storyboard',
+        category: 'navigation',
+        action: () => {
+          toggleView();
+          onClose();
+        },
+      },
+      {
+        id: 'nav-library',
+        label: 'Return to Library',
+        description: 'Go back to project selection',
+        category: 'navigation',
+        action: () => {
+          resetToProjectDashboard();
+          onClose();
+        },
+      },
 
-    // Editor
-    {
-      id: 'editor-zen',
-      label: 'Toggle Zen Mode',
-      description: 'Distraction-free writing',
-      category: 'editor',
-      shortcut: 'Ctrl+Shift+Z',
-      action: () => { toggleZenMode(); onClose(); },
-    },
-    {
-      id: 'editor-find',
-      label: 'Find & Replace',
-      description: 'Search and replace text',
-      category: 'editor',
-      shortcut: 'Ctrl+F',
-      action: () => { onClose(); /* Will trigger via keyboard */ },
-    },
-    {
-      id: 'editor-sidebar',
-      label: 'Toggle Chapter Sidebar',
-      description: 'Show or hide the chapter list',
-      category: 'editor',
-      action: () => { toggleSidebar(); onClose(); },
-    },
-    {
-      id: 'editor-tools',
-      label: 'Toggle Tools Panel',
-      description: 'Show or hide the right panel',
-      category: 'editor',
-      action: () => { setToolsCollapsed(true); onClose(); },
-    },
+      // Editor
+      {
+        id: 'editor-zen',
+        label: 'Toggle Zen Mode',
+        description: 'Distraction-free writing',
+        category: 'editor',
+        shortcut: 'Ctrl+Shift+Z',
+        action: () => {
+          toggleZenMode();
+          onClose();
+        },
+      },
+      {
+        id: 'editor-find',
+        label: 'Find & Replace',
+        description: 'Search and replace text',
+        category: 'editor',
+        shortcut: 'Ctrl+F',
+        action: () => {
+          onClose();
+          /* Will trigger via keyboard */
+        },
+      },
+      {
+        id: 'editor-sidebar',
+        label: 'Toggle Chapter Sidebar',
+        description: 'Show or hide the chapter list',
+        category: 'editor',
+        action: () => {
+          toggleSidebar();
+          onClose();
+        },
+      },
+      {
+        id: 'editor-tools',
+        label: 'Toggle Tools Panel',
+        description: 'Show or hide the right panel',
+        category: 'editor',
+        action: () => {
+          setToolsCollapsed(!isToolsCollapsed);
+          onClose();
+        },
+      },
 
-    // Settings
-    {
-      id: 'settings-theme',
-      label: 'Toggle Dark/Light Mode',
-      description: 'Switch color theme',
-      category: 'settings',
-      action: () => { toggleTheme(); onClose(); },
-    },
-  ], [openTabWithPanel, toggleView, toggleTheme, toggleSidebar, setToolsCollapsed, resetToProjectDashboard, toggleZenMode, onClose]);
+      // Settings
+      {
+        id: 'settings-theme',
+        label: 'Toggle Dark/Light Mode',
+        description: 'Switch color theme',
+        category: 'settings',
+        action: () => {
+          toggleTheme();
+          onClose();
+        },
+      },
+    ],
+    [
+      openTabWithPanel,
+      toggleView,
+      toggleTheme,
+      toggleSidebar,
+      setToolsCollapsed,
+      resetToProjectDashboard,
+      toggleZenMode,
+      onClose,
+      isToolsCollapsed,
+      advancedFeaturesEnabled,
+      experimentalFeaturesEnabled,
+    ]
+  );
 
   // Filter commands based on query
   const filteredCommands = useMemo(() => {
