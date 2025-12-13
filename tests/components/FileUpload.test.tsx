@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { FileUpload } from '@/features/project/components/FileUpload';
+import { MAX_UPLOAD_SIZE } from '@/config/security';
 
 vi.mock('@/services/io/docxImporter', () => ({
   extractRawTextFromDocxArrayBuffer: vi.fn(async () => 'Extracted docx text'),
@@ -14,7 +15,6 @@ describe('FileUpload', () => {
 
   beforeEach(() => {
     mockOnTextLoaded.mockClear();
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -76,7 +76,7 @@ describe('FileUpload', () => {
     fireEvent.change(input, { target: { files: [file] } });
     
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('Please upload a .txt, .md, or .docx file.');
+      expect(screen.getByText('Unsupported file format. Please upload .txt, .md, or .docx.')).toBeInTheDocument();
     });
     expect(mockOnTextLoaded).not.toHaveBeenCalled();
   });
@@ -168,7 +168,7 @@ describe('FileUpload', () => {
     fireEvent.change(input, { target: { files: [file] } });
     
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('Could not read file. Please try a standard .txt, .md, or .docx file.');
+      expect(screen.getByText('Could not read file. Please ensure it is a valid text document.')).toBeInTheDocument();
     });
   });
 
@@ -179,5 +179,30 @@ describe('FileUpload', () => {
     fireEvent.change(input, { target: { files: [] } });
     
     expect(mockOnTextLoaded).not.toHaveBeenCalled();
+  });
+
+  it('rejects files exceeding MAX_UPLOAD_SIZE', async () => {
+    render(<FileUpload onTextLoaded={mockOnTextLoaded} />);
+
+    const fileSize = MAX_UPLOAD_SIZE + 1024; // Exceed limit
+    const file = {
+      name: 'large_file.txt',
+      type: 'text/plain',
+      size: fileSize,
+      text: vi.fn(),
+      arrayBuffer: vi.fn(),
+    } as unknown as File; // Mocking a large file
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    // We need to bypass the read-only file input restriction for testing
+    // or just mock the event
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(`File too large. Max size is ${MAX_UPLOAD_SIZE / 1024 / 1024}MB.`)).toBeInTheDocument();
+    });
+    expect(mockOnTextLoaded).not.toHaveBeenCalled();
+    // Ensure file.text() was NOT called
+    expect(file.text).not.toHaveBeenCalled();
   });
 });
