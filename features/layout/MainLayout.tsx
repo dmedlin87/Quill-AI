@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MainView } from '@/types';
-import { ProjectSidebar, StoryBoard, useProjectStore } from '@/features/project';
+import { ProjectSidebar, useProjectStore } from '@/features/project';
 import { EditorWorkspace } from '@/features/editor';
 import { UploadLayout } from './UploadLayout';
 import { type OrbStatus } from '@/features/agent';
@@ -14,6 +14,10 @@ import { ZenModeOverlay } from './ZenModeOverlay';
 import { useLayoutStore } from './store/useLayoutStore';
 import { BrainActivityMonitor } from '@/features/debug';
 import { CommandPalette } from '@/features/shared/components/CommandPalette';
+import { LoadingScreen } from '@/features/shared/components/LoadingScreen';
+
+// Lazy load StoryBoard to reduce initial bundle size
+const StoryBoard = React.lazy(() => import('@/features/project/components/StoryBoard').then(module => ({ default: module.StoryBoard })));
 
 /**
  * Derive orb status from engine state
@@ -114,7 +118,9 @@ export const MainLayout: React.FC = () => {
 
       {/* 3. Main Content Area */}
       {activeView === MainView.STORYBOARD ? (
-        <StoryBoard onSwitchToEditor={() => setActiveView(MainView.EDITOR)} />
+        <React.Suspense fallback={<div className="flex-1 bg-[#1a1a2e]"><LoadingScreen variant="inline" message="Loading Story Board..." /></div>}>
+          <StoryBoard onSwitchToEditor={() => setActiveView(MainView.EDITOR)} />
+        </React.Suspense>
       ) : (
         <div className={`flex-1 flex flex-col min-w-0 transition-all duration-500 ${isZenMode ? 'items-center' : ''}`}>
           <EditorHeader isZenMode={isZenMode} />
