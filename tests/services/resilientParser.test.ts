@@ -207,6 +207,19 @@ describe('safeParseJsonWithValidation', () => {
     expect(result.success).toBe(false);
     expect(result.data).toEqual(['default']);
   });
+
+  it('returns fallback with a defined error when response is JSON null', () => {
+    const result = safeParseJsonWithValidation(
+      'null',
+      isStringArray,
+      ['default']
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.data).toEqual(['default']);
+    expect(result.error).toBeTypeOf('string');
+    expect(result.error?.length).toBeGreaterThan(0);
+  });
 });
 
 describe('validators', () => {

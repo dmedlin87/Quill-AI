@@ -115,6 +115,21 @@ describe('features/layout/MainLayout', () => {
     mockUseEditorActions.mockReturnValue({ toggleZenMode });
   });
 
+  it('does not clobber the visual theme attribute with the mode', () => {
+    const setAttributeSpy = vi.spyOn(document.documentElement, 'setAttribute');
+
+    useLayoutStore.setState((state) => ({
+      ...state,
+      theme: 'light',
+      visualTheme: 'parchment',
+    }));
+
+    render(<MainLayout />);
+
+    expect(setAttributeSpy).not.toHaveBeenCalledWith('data-theme', 'light');
+    expect(setAttributeSpy).not.toHaveBeenCalledWith('data-theme', 'dark');
+  });
+
   it('shows upload layout when no project is available', () => {
     setupProjectStore(false);
     render(<MainLayout />);

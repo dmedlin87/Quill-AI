@@ -61,7 +61,7 @@ export const MainLayout: React.FC = () => {
   useEffect(() => {
     if (typeof document === 'undefined') return;
 
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-mode', theme);
   }, [theme]);
 
   // Command palette keyboard shortcut (Ctrl+K / Cmd+K)

@@ -1,9 +1,25 @@
-# Bug FDocumentation edits
-“For non‑generated docs, verify any file paths, tool names, and APIs against the code before changing text.”
-“Prefer short, code‑anchored checklists and links over duplicating implementation details in prose.”
-Auto‑generated docs
-“Never hand‑edit auto‑generated docs (e.g. docs/TEST_COVERAGE.md, docs/TEST_AUDIT.md); only update via their scripts.”ixes
+WINDSURF WORKSPACE RULES (RECOMMENDED)
 
-- Always run code to verify fixes. Never claim something works based on reading alone.
-- For non-trivial bugs, write a failing test first, then fix, then confirm the test passes.
-- Keep reproduction tests as regression coverage unless redundant.
+GROUND TRUTH (NO GUESSING)
+- Before editing any non-generated doc text, verify file paths, script names, tool names, and API behavior in the repo (e.g., ripgrep, package.json scripts, actual imports/usages). If it isn’t verifiable in-code, label it as “needs verification” or don’t say it.
+
+DOCS: GENERATED VS HAND-WRITTEN
+- Never hand-edit auto-generated docs (examples: docs/TEST_COVERAGE.md, docs/TEST_AUDIT.md, or any file that states “generated” in a header).
+  - Only update them by running the generating script/tool, then commit the output.
+  - Always include the exact command used to regenerate.
+- For hand-written docs, prefer short, code-anchored checklists and pointers to source (file paths + symbols) over duplicating implementation details in prose.
+
+VERIFICATION (NO “SHOULD WORK” CLAIMS)
+- Never claim a fix works based on reading alone. Run code/tests to verify.
+- When reporting results, include the exact command(s) used and a crisp failure/pass summary (copy the key error line(s), not a novel).
+
+BUGFIX DISCIPLINE (STRICT TDD FOR REAL BUGS)
+- For any non-trivial bug: write a failing test first → confirm it fails for the right reason → make the smallest production change → rerun the same test → then run relevant suite(s) + typecheck/lint (if available).
+- Keep the repro test as regression coverage unless truly redundant; if removed, state what already covers it and where.
+
+DETERMINISM & FLAKE DEFENSE
+- Tests must be deterministic: no network, no real time, no randomness without control (fake timers/injected clock, seeded RNG, stable fixtures).
+
+SCOPE CONTROL
+- Fix only what the failing test proves. No drive-by refactors, renames, formatting sweeps, or “while I’m here” improvements unless required to make the testable fix possible.
+- Stop when green: once the regression test and relevant suites pass, stop.

@@ -96,11 +96,19 @@ const applyTheme = (mode: Theme, visualTheme: string) => {
   }
 };
 
+const isTheme = (value: unknown): value is Theme => value === 'light' || value === 'dark';
+
+const isVisualTheme = (value: unknown): value is LayoutState['visualTheme'] =>
+  value === 'parchment' || value === 'modern' || value === 'classic';
+
 const getInitialState = () => {
   if (typeof window === 'undefined') return { mode: 'light' as Theme, visualTheme: 'parchment' as const };
   
-  const savedMode = (localStorage.getItem('quillai-mode') || localStorage.getItem('quillai-theme') || 'light') as Theme;
-  const savedVisualTheme = (localStorage.getItem('quillai-visual-theme') || 'parchment') as 'parchment' | 'modern' | 'classic';
+  const rawMode = localStorage.getItem('quillai-mode') || localStorage.getItem('quillai-theme') || 'light';
+  const savedMode: Theme = isTheme(rawMode) ? rawMode : 'light';
+
+  const rawVisualTheme = localStorage.getItem('quillai-visual-theme') || 'parchment';
+  const savedVisualTheme: LayoutState['visualTheme'] = isVisualTheme(rawVisualTheme) ? rawVisualTheme : 'parchment';
   
   return { mode: savedMode, visualTheme: savedVisualTheme };
 };
@@ -202,7 +210,8 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     handleSelectGraphCharacter: (character) => {
       set({
         selectedGraphCharacter: character,
-        activeTab: SidebarTab.LORE
+        activeTab: SidebarTab.LORE,
+        isToolsCollapsed: false
       });
     },
 

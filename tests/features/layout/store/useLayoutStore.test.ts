@@ -40,6 +40,22 @@ describe('useLayoutStore', () => {
     expect(documentStub.documentElement.setAttribute).toHaveBeenCalledWith('data-mode', 'light');
   });
 
+  it('falls back to light mode when persisted mode is invalid', async () => {
+    localStorageStub.getItem.mockImplementation((key: string) => {
+      if (key === 'quillai-mode') return 'banana';
+      return null;
+    });
+
+    documentStub.documentElement.setAttribute.mockClear();
+
+    vi.resetModules();
+
+    const { useLayoutStore: freshLayoutStore } = await import('@/features/layout/store/useLayoutStore');
+
+    expect(freshLayoutStore.getState().theme).toBe('light');
+    expect(documentStub.documentElement.setAttribute).toHaveBeenCalledWith('data-mode', 'light');
+  });
+
   // ... (keeping other tests as they are not targeting this replacement, 
   // but since replace_file_content replaces the block, I need to match carefully or just target the specific lines)
   // I will target the specific blocks cleanly.
@@ -114,6 +130,18 @@ describe('useLayoutStore', () => {
 
     exitInterview();
     expect(useLayoutStore.getState().interviewTarget).toBeNull();
+  });
+
+  it('opens the tools panel when selecting a graph character', () => {
+    const { handleSelectGraphCharacter } = useLayoutStore.getState();
+
+    useLayoutStore.setState({ isToolsCollapsed: true } as Partial<ReturnType<typeof useLayoutStore.getState>>);
+
+    const character = { id: 'c1', name: 'Alice' } as any;
+    handleSelectGraphCharacter(character);
+
+    expect(useLayoutStore.getState().activeTab).toBe(SidebarTab.LORE);
+    expect(useLayoutStore.getState().isToolsCollapsed).toBe(false);
   });
 
   it('toggles and persists theme', () => {

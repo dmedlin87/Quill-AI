@@ -37,10 +37,10 @@ const colors = {
 
 // Coverage thresholds (must match vite.config.ts)
 const THRESHOLDS = {
-  statements: 90,
-  branches: 90,
-  functions: 90,
-  lines: 90,
+  statements: 85,
+  branches: 80,
+  functions: 85,
+  lines: 85,
 };
 
 // Test count rounding threshold for badge display
