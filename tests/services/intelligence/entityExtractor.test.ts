@@ -269,6 +269,36 @@ describe('entityExtractor', () => {
       // Should detect multi-word capitalized names as potential locations/entities
       expect(result.nodes.length).toBeGreaterThan(0);
     });
+
+    it('stops extracting location name at first stop word (greedy regex fix)', () => {
+      // Previously, "Paris and London" would be extracted as one location
+      const text = `He traveled through Paris and London yesterday.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+      const locations = result.nodes.filter(n => n.type === 'location');
+
+      const garbage = locations.find(n => n.name.includes('Paris and London'));
+      expect(garbage).toBeUndefined();
+
+      const paris = locations.find(n => n.name === 'Paris');
+      expect(paris).toBeDefined();
+    });
+
+    it('stops extracting greedy phrase at first verb', () => {
+      const text = `He walked into the large room and sat down.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+      const locations = result.nodes.filter(n => n.type === 'location');
+
+      const garbage = locations.find(n => n.name.includes('and sat down'));
+      expect(garbage).toBeUndefined();
+
+      // "large room" is valid as generic location if validEntityName allows it
+      const room = locations.find(n => n.name === 'large room');
+      expect(room).toBeDefined();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
