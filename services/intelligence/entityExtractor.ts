@@ -33,6 +33,7 @@ const FALSE_POSITIVES = new Set([
   'chapter', 'part', 'book', 'section', 'act', 'scene',
   'said', 'asked', 'replied', 'answered', 'thought', 'knew', 'felt', 'saw',
   'but', 'and', 'or', 'if', 'when', 'then', 'now', 'here', 'there',
+  'with', 'from', 'for', 'to', 'about', 'without',
   'yes', 'no', 'maybe', 'perhaps', 'certainly', 'definitely',
   'one', 'two', 'three', 'four', 'five', 'first', 'second', 'third', 'last',
 ]);
@@ -131,12 +132,6 @@ export const getCanonicalEntityKey = (
 
   const surname = nonTitleTokens[nonTitleTokens.length - 1];
   const info = surnameMap.get(surname);
-
-  // If the bare surname appears somewhere in the text, consolidate all
-  // references that share this surname under a single key.
-  if (info?.hasBare) {
-    return surname;
-  }
 
   // Otherwise, keep the full non-title name as the key so distinct characters
   // with the same surname remain separate.

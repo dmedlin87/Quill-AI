@@ -426,6 +426,13 @@ describe('Timeline Tracker', () => {
         const becauseChain = chains.find(c => c.marker === 'because');
         expect(becauseChain).toBeDefined();
         expect(becauseChain?.confidence).toBeGreaterThanOrEqual(0.9);
+
+        // Verify correct directionality (Effect BECAUSE Cause)
+        // Effect: He stayed home
+        // Cause: it was raining heavily outside
+        // Note: The extraction logic includes surrounding context, so we check for key phrases
+        expect(becauseChain?.effect.quote).toContain('He stayed home');
+        expect(becauseChain?.cause.quote).toContain('it was raining heavily');
       });
 
       it('should detect "therefore" causality', () => {
@@ -437,6 +444,12 @@ describe('Timeline Tracker', () => {
         const thereforeChain = chains.find(c => c.marker === 'Therefore');
         expect(thereforeChain).toBeDefined();
         expect(thereforeChain?.confidence).toBe(0.9);
+
+        // Verify correct directionality (Cause THEREFORE Effect)
+        // Cause: It was cold
+        // Effect: they lit a fire
+        expect(thereforeChain?.cause.quote).toContain('It was cold');
+        expect(thereforeChain?.effect.quote).toContain('they lit a fire');
       });
 
       it('should detect "as a result" causality', () => {
