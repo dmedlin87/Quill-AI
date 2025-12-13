@@ -7,9 +7,13 @@ interface UseSpeechIntentOptions {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognition;
 
+interface WindowWithWebkitSpeech extends Window {
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+}
+
 const getSpeechRecognition = (): SpeechRecognitionConstructor | null => {
   if (typeof window === 'undefined') return null;
-  return (window.SpeechRecognition || (window as any).webkitSpeechRecognition || null) as SpeechRecognitionConstructor | null;
+  return (window.SpeechRecognition || (window as WindowWithWebkitSpeech).webkitSpeechRecognition || null) as SpeechRecognitionConstructor | null;
 };
 
 export const useSpeechIntent = (options: UseSpeechIntentOptions = {}) => {

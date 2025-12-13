@@ -21,6 +21,10 @@ interface UseTiptapSyncOptions {
   onCommentClick?: (comment: InlineComment, position: { top: number; left: number }) => void;
 }
 
+interface PluginWithKey extends Plugin {
+  key: string;
+}
+
 /**
  * Maps color strings to CSS decoration classes.
  * Falls back to 'warning' for unknown colors.
@@ -165,9 +169,17 @@ export function useTiptapSync(options: UseTiptapSyncOptions) {
 
     const state = editor.state;
     const existingPlugins = state.plugins.filter((p: Plugin) => {
-      const keyObj = p.spec.key as PluginKey | undefined;
-      const keyName = (keyObj as any)?.key ?? (p as any)?.key;
-      return keyName !== 'analysis-decorations' && keyName !== 'comment-decorations';
+      // Use type assertion for plugin key access, or checking spec.key
+      // Prosemirror plugins usually have a `key` property if assigned one, or it's in `spec.key`
+      const key = (p as any).key;
+      // Also check spec.key which might be a PluginKey object or string
+      const specKey = (p.spec as any).key;
+      const keyName = key || (specKey instanceof PluginKey ? (specKey as any).key : specKey);
+
+      return keyName !== 'analysis-decorations$1' &&
+             keyName !== 'comment-decorations$1' &&
+             keyName !== 'analysis-decorations' &&
+             keyName !== 'comment-decorations';
     });
 
     const newState = state.reconfigure({
@@ -189,7 +201,7 @@ export function useTiptapSync(options: UseTiptapSyncOptions) {
  * @param callback - The function to call
  * @param delay - Debounce delay in milliseconds (default: 300)
  */
-export function useDebouncedUpdate<T extends (...args: any[]) => void>(
+export function useDebouncedUpdate<T extends (...args: unknown[]) => void>(
   callback: T,
   delay: number = 300
 ) {
