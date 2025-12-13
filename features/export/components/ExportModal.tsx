@@ -14,11 +14,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
   const [includeAuthor, setIncludeAuthor] = useState(true);
   const [includeChapterTitles, setIncludeChapterTitles] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   if (!isOpen || !currentProject) return null;
 
   const handleExport = async () => {
     try {
+      setExportError(null);
       setIsExporting(true);
       await generateExport(
         { title: currentProject.title, author: currentProject.author },
@@ -34,7 +36,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
       onClose();
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
+      setExportError('Export failed. Please try again.');
     } finally {
       setIsExporting(false);
     }
@@ -51,6 +53,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
         </div>
 
         <div className="p-6 space-y-6">
+          {exportError && (
+            <div
+              role="alert"
+              className="px-3 py-2 rounded-lg border border-[var(--error-500)]/30 bg-[var(--error-100)] text-[var(--error-500)] text-sm"
+            >
+              {exportError}
+            </div>
+          )}
           {/* Format Selection */}
           <div>
             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Format</label>

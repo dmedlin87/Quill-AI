@@ -8,6 +8,7 @@ import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
 vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));

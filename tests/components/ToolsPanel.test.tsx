@@ -2,7 +2,8 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ToolsPanel } from '@/features/layout/ToolsPanel';
-import { SidebarTab } from '@/types';
+import { SidebarTab, type HistoryItem } from '@/types';
+import type { Lore } from '@/types/schema';
 
 // Mock layout store with configurable activeTab
 let mockActiveTab = SidebarTab.ANALYSIS;
@@ -120,6 +121,20 @@ vi.mock('@/features/settings/store/useSettingsStore', () => ({
   }),
 }));
 
+const mockLore: Lore = {
+  characters: [],
+  worldRules: [],
+};
+
+const makeHistoryItem = (id: string): HistoryItem => ({
+  id,
+  timestamp: Date.now(),
+  description: 'test',
+  author: 'User',
+  previousContent: 'before',
+  newContent: 'after',
+});
+
 describe('ToolsPanel', () => {
   const defaultProps = {
     isZenMode: false,
@@ -130,13 +145,13 @@ describe('ToolsPanel', () => {
       totalLength: 100,
     },
     projectId: 'project-1',
-    lore: {},
+    lore: mockLore,
     chapters: [],
-    analysis: null,
-    history: [{ id: '1', text: 'test' }],
+    analysis: undefined,
+    history: [makeHistoryItem('1')],
     isAnalyzing: false,
     analysisWarning: undefined,
-    onAgentAction: vi.fn().mockResolvedValue('success'),
+    onAgentAction: vi.fn().mockResolvedValue('success') as any,
     onRestore: vi.fn(),
   };
 
@@ -173,7 +188,7 @@ describe('ToolsPanel', () => {
 
       expect(screen.getByRole('complementary')).toHaveAttribute(
         'aria-label',
-        'ANALYSIS panel'
+        'Analysis panel'
       );
     });
   });
@@ -182,7 +197,7 @@ describe('ToolsPanel', () => {
     it('displays active tab name in header', () => {
       render(<ToolsPanel {...defaultProps} />);
 
-      expect(screen.getByText('ANALYSIS')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Analysis' })).toBeInTheDocument();
     });
   });
 
@@ -228,7 +243,7 @@ describe('ToolsPanel', () => {
 
     it('passes history items to ActivityFeed', () => {
       mockActiveTab = SidebarTab.HISTORY;
-      render(<ToolsPanel {...defaultProps} history={[{ id: '1' }, { id: '2' }]} />);
+      render(<ToolsPanel {...defaultProps} history={[makeHistoryItem('1'), makeHistoryItem('2')]} />);
 
       expect(screen.getByText('Activity Feed (2 items)')).toBeInTheDocument();
     });
@@ -289,7 +304,8 @@ describe('ToolsPanel', () => {
       mockActiveTab = SidebarTab.SETTINGS;
       render(<ToolsPanel {...defaultProps} />);
 
-      expect(screen.getByText('Settings')).toBeInTheDocument();
+      expect(screen.getByRole('complementary')).toHaveAttribute('aria-label', 'Settings panel');
+      expect(screen.getByRole('heading', { level: 2, name: 'Settings' })).toBeInTheDocument();
       expect(screen.getByTestId('theme-selector')).toBeInTheDocument();
     });
 
@@ -368,12 +384,12 @@ describe('ToolsPanel', () => {
       expect(screen.queryByTestId('shadow-reader-panel')).not.toBeInTheDocument();
       
       // Switch to Reader
-      fireEvent.click(screen.getByText('Reader'));
+      fireEvent.click(screen.getByRole('button', { name: 'Reader' }));
       expect(screen.getByTestId('shadow-reader-panel')).toBeInTheDocument();
       expect(screen.queryByTestId('analysis-dashboard')).not.toBeInTheDocument();
       
       // Switch back to Analysis
-      fireEvent.click(screen.getByText('Analysis'));
+      fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
       expect(screen.getByTestId('analysis-dashboard')).toBeInTheDocument();
     });
   });
@@ -434,11 +450,11 @@ describe('ToolsPanel', () => {
       mockActiveTab = SidebarTab.HISTORY;
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
-      render(<ToolsPanel {...defaultProps} history={[{ id: '1' }]} />);
+      render(<ToolsPanel {...defaultProps} history={[makeHistoryItem('1')]} />);
       
       fireEvent.click(screen.getByText('Inspect First'));
       
-      expect(consoleSpy).toHaveBeenCalledWith('Inspect', { id: '1' });
+      expect(consoleSpy).toHaveBeenCalledWith('Inspect', expect.objectContaining({ id: '1' }));
       consoleSpy.mockRestore();
     });
 

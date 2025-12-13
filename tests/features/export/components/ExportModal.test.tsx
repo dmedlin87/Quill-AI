@@ -129,8 +129,10 @@ describe('ExportModal', () => {
 
     await waitFor(() => {
       expect(consoleSpy).toHaveBeenCalled();
-      expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('Export failed'));
+      expect(screen.getByRole('alert')).toHaveTextContent(/export failed/i);
     });
+
+    expect(alertSpy).not.toHaveBeenCalled();
 
     // Should not close on error
     expect(mockOnClose).not.toHaveBeenCalled();

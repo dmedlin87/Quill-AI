@@ -15,6 +15,18 @@ import { RelevanceTuning } from '@/features/settings/components/RelevanceTuning'
 import { DesignSystemKitchenSink } from '@/features/shared/components/DesignSystemKitchenSink';
 import { useSettingsStore } from '@/features/settings/store/useSettingsStore';
 
+const TOOLS_PANEL_TAB_LABELS: Record<SidebarTab, string> = {
+  [SidebarTab.ANALYSIS]: 'Analysis',
+  [SidebarTab.CHAT]: 'AI Chat',
+  [SidebarTab.VOICE]: 'Voice',
+  [SidebarTab.HISTORY]: 'History',
+  [SidebarTab.MEMORY]: 'Memory',
+  [SidebarTab.GRAPH]: 'Knowledge Graph',
+  [SidebarTab.LORE]: 'Lore Bible',
+  [SidebarTab.BRANCHES]: 'Story Versions',
+  [SidebarTab.SETTINGS]: 'Settings',
+};
+
 interface ToolsPanelProps {
   isZenMode: boolean;
   // Data props
@@ -157,6 +169,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
 
   const shouldShow = !isToolsCollapsed && !isZenMode;
   const panelWidth = isToolsPanelExpanded ? '100%' : toolsPanelWidth;
+  const activeTabLabel = TOOLS_PANEL_TAB_LABELS[activeTab];
 
   return (
     <AnimatePresence mode="wait">
@@ -168,7 +181,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           className={`glass-strong border-l-0 flex flex-col z-30 shrink-0 overflow-hidden ${isToolsPanelExpanded ? 'fixed inset-0 z-50' : 'relative'} ${isResizing ? 'select-none' : ''}`}
           role="complementary"
-          aria-label={`${activeTab} panel`}
+          aria-label={`${activeTabLabel} panel`}
         >
           {/* Resize Handle */}
           {!isToolsPanelExpanded && (
@@ -181,7 +194,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({
           {/* Panel Header */}
           <div className="h-14 border-b border-[var(--glass-border)] flex items-center justify-between px-5 shrink-0">
             <h3 className="text-[var(--text-sm)] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-              {activeTab}
+              {activeTabLabel}
             </h3>
             <div className="flex items-center gap-2">
               {activeTab === SidebarTab.ANALYSIS && (

@@ -433,6 +433,41 @@ describe('ChunkManager processing and persistence flows', () => {
     manager.pause();
   });
 
+  it('retries errored chunks by scheduling background reprocessing', async () => {
+    vi.useFakeTimers();
+
+    const manager = createManager({
+      editDebounceMs: 0,
+      idleThresholdMs: 0,
+      maxBatchSize: 10,
+      processingIntervalMs: 0,
+    });
+
+    manager.registerChapter('retry-background', 'hello world');
+    await manager.processAllDirty();
+
+    // Clear any timers scheduled during initial register/process so this test
+    // only passes if retryErrors actually schedules new background work.
+    manager.pause();
+
+    processManuscriptCachedMock.mockClear();
+
+    const chunkId = createChunkId('chapter', 'retry-background');
+    const chunk = manager.getChunk(chunkId);
+    expect(chunk).toBeDefined();
+    if (!chunk) return;
+
+    chunk.status = 'error';
+    chunk.analysis = null;
+
+    manager.retryErrors();
+
+    await vi.runAllTimersAsync();
+
+    expect(processManuscriptCachedMock).toHaveBeenCalled();
+    expect(manager.getChunk(chunkId)?.status).toBe('fresh');
+  });
+
   it('emits errors when chunk text cannot be loaded', async () => {
     const errors: Array<{ chunkId: string; error: string }> = [];
     const manager = new ChunkManager(

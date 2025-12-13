@@ -66,16 +66,24 @@ export const ProjectSidebar: React.FC<Props> = ({ collapsed, toggleCollapsed }) 
            return (
              <div
                key={chapter.id}
+               role="button"
+               tabIndex={0}
                draggable
                onDragStart={(e) => handleDragStart(e, index)}
                onDragOver={(e) => handleDragOver(e, index)}
                onDrop={(e) => handleDrop(e, index)}
                onClick={() => selectChapter(chapter.id)}
+               onKeyDown={(e) => {
+                 if (e.key === 'Enter' || e.key === ' ') {
+                   e.preventDefault();
+                   selectChapter(chapter.id);
+                 }
+               }}
                className={`w-full text-left p-3 mb-1 rounded-lg flex items-center gap-2 transition-all duration-200 group cursor-pointer ${
                  chapter.id === activeChapterId 
                    ? 'bg-[var(--parchment-50)] shadow-sm border border-[var(--ink-100)]' 
                    : 'border border-transparent hover:bg-[var(--parchment-50)]'
-               } ${draggedIndex === index ? 'opacity-50' : ''}`}
+               } ${draggedIndex === index ? 'opacity-50' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--parchment-100)]`}
              >
                {/* Drag Handle */}
                <div 

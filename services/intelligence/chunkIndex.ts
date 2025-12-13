@@ -359,9 +359,8 @@ export class ChunkIndex {
     const retried: ChunkId[] = [];
     for (const chunk of this.chunks.values()) {
       if (chunk.status === 'error') {
-        chunk.status = 'dirty';
         chunk.errorMessage = undefined;
-        this.enqueueDirty(chunk.id);
+        this.markDirty(chunk.id);
         retried.push(chunk.id);
       }
     }

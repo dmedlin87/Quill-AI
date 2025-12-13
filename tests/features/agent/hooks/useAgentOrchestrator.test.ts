@@ -146,7 +146,13 @@ describe('useAgentOrchestrator', () => {
             await result.current.sendMessage('Run tool');
         });
 
-        expect(executeAgentToolCall).toHaveBeenCalledWith('my_tool', { foo: 'bar' }, mockBrainActions, 'p1');
+        expect(executeAgentToolCall).toHaveBeenCalledWith(
+            'my_tool',
+            { foo: 'bar' },
+            mockBrainActions,
+            'p1',
+            expect.objectContaining({ abortSignal: expect.anything() }),
+        );
         expect(emitToolExecuted).toHaveBeenCalledWith('my_tool', true);
         expect(result.current.messages.some(m => m.text === 'Tool Result Final')).toBe(true);
     });
@@ -167,7 +173,13 @@ describe('useAgentOrchestrator', () => {
             await result.current.sendMessage('Run fail tool');
         });
 
-        expect(executeAgentToolCall).toHaveBeenCalledWith('fail_tool', {}, mockBrainActions, 'p1');
+        expect(executeAgentToolCall).toHaveBeenCalledWith(
+            'fail_tool',
+            {},
+            mockBrainActions,
+            'p1',
+            expect.objectContaining({ abortSignal: expect.anything() }),
+        );
         expect(emitToolExecuted).toHaveBeenCalledWith('fail_tool', false);
         // Ensure state wasn't stuck
         expect(result.current.state.status).toBe('idle');

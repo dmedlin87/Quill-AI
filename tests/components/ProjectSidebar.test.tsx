@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi, type Mock } from 'vitest';
 import { ProjectSidebar } from '@/features/project/components/ProjectSidebar';
 import { useProjectStore } from '@/features/project/store/useProjectStore';
@@ -54,6 +55,17 @@ describe('ProjectSidebar', () => {
     
     fireEvent.click(screen.getByText('Chapter 2'));
     
+    expect(mockSelectChapter).toHaveBeenCalledWith('ch-2');
+  });
+
+  it('selects chapter when activated via keyboard', async () => {
+    const user = userEvent.setup();
+    render(<ProjectSidebar collapsed={false} toggleCollapsed={mockToggleCollapsed} />);
+
+    const chapter2 = screen.getByRole('button', { name: /chapter 2/i });
+    chapter2.focus();
+    await user.keyboard('{Enter}');
+
     expect(mockSelectChapter).toHaveBeenCalledWith('ch-2');
   });
 
