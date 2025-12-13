@@ -71,12 +71,12 @@ async function summarizeEpisodicMemories(
   const response = await ai.models.generateContent({
     model: ModelConfig.agent,
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.2 },
+    config: { temperature: 0.2 },
   });
 
   throwIfAborted(signal);
 
-  const text = response?.response?.text?.() ?? '';
+  const text = response.text ?? '';
   return parseDreamingResponse(text);
 }
 

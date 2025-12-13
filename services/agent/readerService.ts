@@ -46,7 +46,7 @@ export class ReaderService {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
       });
 
-      const resultText = response.response.text();
+      const resultText = response.text ?? '';
       // Simple cleaning of markdown code blocks if present
       const cleanJson = resultText.replace(/```json|```/g, '').trim();
 

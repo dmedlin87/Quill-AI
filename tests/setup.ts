@@ -221,71 +221,12 @@ vi.stubEnv('VITE_GEMINI_API_KEY', 'test-api-key-for-testing');
 
 // Global mock for EditorContext to prevent crashes when components are loaded without providers
 // Individual tests can override these mocks with vi.mock() as needed
-vi.mock('@/features/core/context/EditorContext', () => ({
-  EditorProvider: ({ children }: { children: React.ReactNode }) => children,
-  useEditor: vi.fn(() => ({
-    currentText: '',
-    updateText: vi.fn(),
-    setSelectionState: vi.fn(),
-    selectionRange: null,
-    selectionPos: null,
-    activeHighlight: null,
-    setEditor: vi.fn(),
-    clearSelection: vi.fn(),
-    editor: null,
-    history: [],
-    restore: vi.fn(),
-    handleNavigateToIssue: vi.fn(),
-  })),
-  useEditorState: vi.fn(() => ({
-    editor: null,
-    currentText: '',
-    history: [],
-    redoStack: [],
-    canUndo: false,
-    canRedo: false,
-    hasUnsavedChanges: false,
-    selectionRange: null,
-    selectionPos: null,
-    cursorPosition: 0,
-    activeHighlight: null,
-    branches: [],
-    activeBranchId: null,
-    isOnMain: true,
-    inlineComments: [],
-    visibleComments: [],
-    isZenMode: false,
-  })),
-  useEditorActions: vi.fn(() => ({
-    setEditor: vi.fn(),
-    updateText: vi.fn(),
-    commit: vi.fn(),
-    loadDocument: vi.fn(),
-    undo: vi.fn(),
-    redo: vi.fn(),
-    restore: vi.fn(),
-    setSelection: vi.fn(),
-    setSelectionState: vi.fn(),
-    clearSelection: vi.fn(),
-    handleNavigateToIssue: vi.fn(),
-    scrollToPosition: vi.fn(),
-    getEditorContext: vi.fn(),
-    createBranch: vi.fn(),
-    switchBranch: vi.fn(),
-    mergeBranch: vi.fn(),
-    deleteBranch: vi.fn(),
-    renameBranch: vi.fn(),
-    setInlineComments: vi.fn(),
-    dismissComment: vi.fn(),
-    clearComments: vi.fn(),
-    toggleZenMode: vi.fn(),
-  })),
-  useManuscript: vi.fn(() => ({
-    currentText: '',
-    updateText: vi.fn(),
-  })),
-  ManuscriptProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
+vi.mock('@/features/core/context/EditorContext', async () => {
+  const actual = await vi.importActual<typeof import('@/features/core/context/EditorContext')>(
+    '@/features/core/context/EditorContext',
+  );
+  return actual;
+});
 
 // Global mock for useProjectStore to prevent crashes
 // Creates a mock that returns safe default values, can be overridden by individual tests

@@ -1,8 +1,9 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NavigationRail } from '@/features/layout/NavigationRail';
 import { SidebarTab, MainView } from '@/types';
+import { renderWithProviders } from '../helpers/renderWithProviders';
 
 // Mock the layout store
 const mockOpenTabWithPanel = vi.fn();
@@ -84,25 +85,25 @@ describe('NavigationRail', () => {
 
   describe('Basic Rendering', () => {
     it('renders navigation rail with aria-label', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
     });
 
     it('renders home button', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       expect(screen.getByLabelText('Return to Library')).toBeInTheDocument();
     });
 
     it('renders AI presence orb', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       expect(screen.getByTestId('ai-orb')).toBeInTheDocument();
     });
 
     it('hides advanced and experimental navigation items when disabled', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       expect(screen.getByLabelText('Analysis')).toBeInTheDocument();
       expect(screen.getByLabelText('Memory')).toBeInTheDocument();
@@ -117,7 +118,7 @@ describe('NavigationRail', () => {
     it('renders advanced and experimental navigation items when enabled', () => {
       mockAdvancedFeaturesEnabled = true;
       mockExperimentalFeaturesEnabled = true;
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       expect(screen.getByLabelText('History')).toBeInTheDocument();
       expect(screen.getByLabelText('Story Versions')).toBeInTheDocument();
@@ -127,7 +128,7 @@ describe('NavigationRail', () => {
     });
 
     it('renders zen mode button', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       expect(screen.getByLabelText('Enter Zen Mode')).toBeInTheDocument();
     });
@@ -137,7 +138,7 @@ describe('NavigationRail', () => {
 
   describe('Zen Mode Behavior', () => {
     it('hides navigation when zen mode is active', () => {
-      render(<NavigationRail {...defaultProps} isZenMode={true} />);
+      renderWithProviders(<NavigationRail {...defaultProps} isZenMode={true} />);
 
       const nav = screen.getByRole('navigation', { hidden: true });
       expect(nav).toHaveAttribute('aria-hidden', 'true');
@@ -145,7 +146,7 @@ describe('NavigationRail', () => {
     });
 
     it('shows navigation when zen mode is inactive', () => {
-      render(<NavigationRail {...defaultProps} isZenMode={false} />);
+      renderWithProviders(<NavigationRail {...defaultProps} isZenMode={false} />);
 
       const nav = screen.getByRole('navigation');
       expect(nav).toHaveAttribute('aria-hidden', 'false');
@@ -155,7 +156,7 @@ describe('NavigationRail', () => {
 
   describe('Home Button', () => {
     it('calls resetToProjectDashboard when home button is clicked', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Return to Library'));
 
@@ -165,13 +166,13 @@ describe('NavigationRail', () => {
 
   describe('View Toggle', () => {
     it('shows story board toggle button', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       expect(screen.getByLabelText('Switch to Story Board')).toBeInTheDocument();
     });
 
     it('calls toggleView when view toggle is clicked', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Switch to Story Board'));
 
@@ -181,14 +182,14 @@ describe('NavigationRail', () => {
 
   describe('AI Orb', () => {
     it('passes correct props to AI orb', () => {
-      render(<NavigationRail {...defaultProps} orbStatus="thinking" analysisReady={true} />);
+      renderWithProviders(<NavigationRail {...defaultProps} orbStatus="thinking" analysisReady={true} />);
 
       const orb = screen.getByTestId('ai-orb');
       expect(orb).toHaveAttribute('data-status', 'thinking');
     });
 
     it('opens chat panel when AI orb is clicked', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByTestId('ai-orb'));
 
@@ -198,7 +199,7 @@ describe('NavigationRail', () => {
 
   describe('Navigation Items', () => {
     it('calls openTabWithPanel with ANALYSIS when Analysis is clicked', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Analysis'));
 
@@ -207,7 +208,7 @@ describe('NavigationRail', () => {
 
     it('calls openTabWithPanel with HISTORY when History is clicked', () => {
       mockAdvancedFeaturesEnabled = true;
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('History'));
 
@@ -216,7 +217,7 @@ describe('NavigationRail', () => {
 
     it('calls openTabWithPanel with VOICE when Voice is clicked', () => {
       mockExperimentalFeaturesEnabled = true;
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Voice'));
 
@@ -224,7 +225,7 @@ describe('NavigationRail', () => {
     });
 
     it('calls openTabWithPanel with MEMORY when Memory is clicked', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Memory'));
 
@@ -233,7 +234,7 @@ describe('NavigationRail', () => {
 
     it('calls openTabWithPanel with GRAPH when Graph is clicked', () => {
       mockExperimentalFeaturesEnabled = true;
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Graph'));
 
@@ -242,7 +243,7 @@ describe('NavigationRail', () => {
 
     it('calls openTabWithPanel with LORE when Lore Bible is clicked', () => {
       mockExperimentalFeaturesEnabled = true;
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       fireEvent.click(screen.getByLabelText('Lore Bible'));
 
@@ -253,7 +254,7 @@ describe('NavigationRail', () => {
   describe('Zen Mode Button', () => {
     it('calls toggleZenMode when zen button is clicked', () => {
       const toggleZenMode = vi.fn();
-      render(<NavigationRail {...defaultProps} toggleZenMode={toggleZenMode} />);
+      renderWithProviders(<NavigationRail {...defaultProps} toggleZenMode={toggleZenMode} />);
 
       fireEvent.click(screen.getByLabelText('Enter Zen Mode'));
 
@@ -266,14 +267,14 @@ describe('NavigationRail', () => {
   describe('Active Tab Indication', () => {
     it('marks active tab with aria-current', () => {
       // Analysis is active by default in mock
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       const analysisButton = screen.getByLabelText('Analysis');
       expect(analysisButton).toHaveAttribute('aria-current', 'page');
     });
 
     it('does not mark inactive tabs with aria-current', () => {
-      render(<NavigationRail {...defaultProps} />);
+      renderWithProviders(<NavigationRail {...defaultProps} />);
 
       const memoryButton = screen.getByLabelText('Memory');
       expect(memoryButton).not.toHaveAttribute('aria-current');

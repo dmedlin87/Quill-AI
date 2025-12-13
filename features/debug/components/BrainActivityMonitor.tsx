@@ -3,9 +3,7 @@ import { eventBus } from '@/services/appBrain/eventBus';
 import type { AppEvent } from '@/services/appBrain/types';
 import { useSettingsStore } from '@/features/settings';
 
-interface BrainActivityEntry extends AppEvent {
-  id: string;
-}
+type BrainActivityEntry = AppEvent & { id: string };
 
 const MAX_EVENTS = 50;
 const createEventId = (event: AppEvent, seed: number) =>

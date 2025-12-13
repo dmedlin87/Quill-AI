@@ -144,7 +144,13 @@ export const VoiceMode: React.FC = () => {
         </p>
 
         <button
-          onClick={isConnected ? stopSession : startSession}
+          onClick={() => {
+            if (isConnected) {
+              stopSession();
+              return;
+            }
+            void startSession();
+          }}
           className={`group relative flex items-center justify-center px-8 py-4 rounded-full font-semibold text-lg transition-all transform hover:scale-105 ${
             isConnected 
               ? 'bg-red-500/90 hover:bg-red-600 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)]' 

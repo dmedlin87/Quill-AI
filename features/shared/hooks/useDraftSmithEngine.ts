@@ -105,7 +105,9 @@ export function useQuillAIEngine({
   // Listen for dreaming state changes
   useEffect(() => {
     const unsubscribe = eventBus.subscribe('DREAMING_STATE_CHANGED', (event) => {
-      setIsDreaming(event.payload.active);
+      if (event.type === 'DREAMING_STATE_CHANGED') {
+        setIsDreaming(event.payload.active);
+      }
     });
 
     return () => {

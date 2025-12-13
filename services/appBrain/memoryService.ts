@@ -8,7 +8,10 @@
 
 import type { ProactiveSuggestion } from '../memory/proactive';
 import type { BedsideHistoryMatch } from '../memory/bedsideHistorySearch';
-import type { VoiceProfile } from '@/types/intelligence';
+import type { MemoryNote } from '../memory/types';
+import type { DialogueLine, EntityNode, ManuscriptIntelligence, VoiceProfile } from '@/types/intelligence';
+import type { ExtractedFact } from '../memory/factExtractor';
+import type { LoreEntityCandidate } from '../memory/relevance';
 
 /**
  * Interface for memory-related operations.
@@ -22,7 +25,7 @@ export interface MemoryService {
     projectId: string,
     observation: string,
     context?: { chapterId?: string }
-  ) => Promise<void>;
+  ) => Promise<MemoryNote>;
 
   /**
    * Gets the voice profile for a character.
@@ -38,31 +41,29 @@ export interface MemoryService {
   upsertVoiceProfile: (
     projectId: string,
     characterName: string,
-    profile: VoiceProfile
-  ) => Promise<void>;
+    dialogueLines: DialogueLine[]
+  ) => Promise<VoiceProfile>;
 
   /**
-   * Extracts facts from text content.
+   * Extracts facts from intelligence results.
    */
   extractFacts: (
-    text: string,
-    options?: { maxFacts?: number }
-  ) => Promise<string[]>;
+    intelligence: ManuscriptIntelligence
+  ) => Promise<ExtractedFact[]>;
 
   /**
    * Filters lore entities to only novel ones.
    */
   filterNovelLoreEntities: (
-    projectId: string,
-    entities: Array<{ name: string; type: string }>
-  ) => Promise<Array<{ name: string; type: string }>>;
+    entities: EntityNode[],
+    existingGraphNames?: string[]
+  ) => Promise<LoreEntityCandidate[]>;
 
   /**
    * Gets important reminders for the current context.
    */
   getImportantReminders: (
-    projectId: string,
-    context: { chapterId?: string; cursorPosition?: number }
+    projectId: string
   ) => Promise<ProactiveSuggestion[]>;
 
   /**
@@ -91,24 +92,24 @@ export function createDefaultMemoryService(): MemoryService {
       return getVoiceProfileForCharacter(projectId, characterName);
     },
 
-    upsertVoiceProfile: async (projectId, characterName, profile) => {
+    upsertVoiceProfile: async (projectId, characterName, dialogueLines) => {
       const { upsertVoiceProfile } = await import('../memory');
-      return upsertVoiceProfile(projectId, characterName, profile);
+      return upsertVoiceProfile(projectId, characterName, dialogueLines);
     },
 
-    extractFacts: async (text, options) => {
+    extractFacts: async (intelligence) => {
       const { extractFacts } = await import('../memory/factExtractor');
-      return extractFacts(text, options);
+      return extractFacts(intelligence);
     },
 
-    filterNovelLoreEntities: async (projectId, entities) => {
+    filterNovelLoreEntities: async (entities, existingGraphNames) => {
       const { filterNovelLoreEntities } = await import('../memory/relevance');
-      return filterNovelLoreEntities(projectId, entities);
+      return filterNovelLoreEntities(entities, existingGraphNames);
     },
 
-    getImportantReminders: async (projectId, context) => {
+    getImportantReminders: async (projectId) => {
       const { getImportantReminders } = await import('../memory/proactive');
-      return getImportantReminders(projectId, context);
+      return getImportantReminders(projectId);
     },
 
     searchBedsideHistory: async (projectId, query, options) => {
@@ -124,11 +125,16 @@ export function createDefaultMemoryService(): MemoryService {
  */
 export function createNoOpMemoryService(): MemoryService {
   return {
-    evolveBedsideNote: async () => {},
+    evolveBedsideNote: async () => {
+      throw new Error('createNoOpMemoryService.evolveBedsideNote is not implemented');
+    },
     getVoiceProfileForCharacter: async () => null,
-    upsertVoiceProfile: async () => {},
+    upsertVoiceProfile: async () => {
+      throw new Error('createNoOpMemoryService.upsertVoiceProfile is not implemented');
+    },
     extractFacts: async () => [],
-    filterNovelLoreEntities: async (_, entities) => entities,
+    filterNovelLoreEntities: async (entities) =>
+      entities.map((entity) => ({ name: entity.name, type: entity.type, firstMention: entity.firstMention })),
     getImportantReminders: async () => [],
     searchBedsideHistory: async () => [],
   };

@@ -5,7 +5,6 @@ import { AppBrainProvider } from '@/features/core';
 import { AnalysisProvider } from '@/features/analysis';
 import { MainLayout } from '@/features/layout';
 import { LoadingScreen } from '@/features/shared/components/LoadingScreen';
-import { QuotaExhaustedModal } from '@/features/settings/components/QuotaExhaustedModal';
 
 const App: React.FC = () => {
   const { init: initStore, isLoading: isStoreLoading, flushPendingWrites } = useProjectStore();

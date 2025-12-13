@@ -1,4 +1,4 @@
-import { Chapter } from '@/types/project';
+import { Chapter } from '@/types/schema';
 import { ExportSection, type ExportConfig } from '@/types/export';
 import { pdfExportService } from '@/services/pdfExport';
 import { exportStandardManuscriptDocx } from '@/services/io/docxExporter';

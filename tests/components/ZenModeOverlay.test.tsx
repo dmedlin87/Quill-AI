@@ -1,7 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ZenModeOverlay } from '@/features/layout/ZenModeOverlay';
+import { renderWithProviders } from '../helpers/renderWithProviders';
 
 // Mock the layout store
 const mockSetExitZenHovered = vi.fn();
@@ -35,7 +36,7 @@ describe('ZenModeOverlay', () => {
 
   describe('Visibility', () => {
     it('returns null when isZenMode is false', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={false} toggleZenMode={mockToggleZenMode} />
       );
 
@@ -43,7 +44,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('renders overlay when isZenMode is true', () => {
-      render(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
+      renderWithProviders(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
 
       expect(screen.getByLabelText('Exit Zen Mode (Escape)')).toBeInTheDocument();
     });
@@ -51,7 +52,7 @@ describe('ZenModeOverlay', () => {
 
   describe('Header Hover Zone', () => {
     it('renders invisible hover zone at top', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />
       );
 
@@ -60,7 +61,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('calls setHeaderHovered(true) on mouse enter', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />
       );
 
@@ -71,7 +72,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('calls setHeaderHovered(true) on focus', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />
       );
 
@@ -82,7 +83,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('has aria-hidden attribute', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />
       );
 
@@ -93,20 +94,20 @@ describe('ZenModeOverlay', () => {
 
   describe('Exit Button', () => {
     it('renders exit button with correct aria-label', () => {
-      render(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
+      renderWithProviders(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
 
       const button = screen.getByLabelText('Exit Zen Mode (Escape)');
       expect(button).toBeInTheDocument();
     });
 
     it('displays "Exit Zen" text', () => {
-      render(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
+      renderWithProviders(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
 
       expect(screen.getByText('Exit Zen')).toBeInTheDocument();
     });
 
     it('calls toggleZenMode when clicked', () => {
-      render(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
+      renderWithProviders(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
 
       fireEvent.click(screen.getByLabelText('Exit Zen Mode (Escape)'));
 
@@ -114,7 +115,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('calls setExitZenHovered(true) on mouse enter', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />
       );
 
@@ -125,7 +126,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('calls setExitZenHovered(false) on mouse leave', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />
       );
 
@@ -136,7 +137,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('calls setExitZenHovered(true) on button focus', () => {
-      render(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
+      renderWithProviders(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
 
       const button = screen.getByLabelText('Exit Zen Mode (Escape)');
       fireEvent.focus(button);
@@ -145,7 +146,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('calls setExitZenHovered(false) on button blur', () => {
-      render(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
+      renderWithProviders(<ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />);
 
       const button = screen.getByLabelText('Exit Zen Mode (Escape)');
       fireEvent.blur(button);
@@ -156,7 +157,7 @@ describe('ZenModeOverlay', () => {
 
   describe('Positioning', () => {
     it('positions exit button in bottom-right corner', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />
       );
 
@@ -165,7 +166,7 @@ describe('ZenModeOverlay', () => {
     });
 
     it('applies high z-index for overlay visibility', () => {
-      const { container } = render(
+      const { container } = renderWithProviders(
         <ZenModeOverlay isZenMode={true} toggleZenMode={mockToggleZenMode} />
       );
 

@@ -82,7 +82,12 @@ export interface ContextService {
 export function createDefaultContextService(): ContextService {
   return {
     getSmartAgentContext: async (state, projectId, options) => {
-      return getSmartAgentContext(state, projectId, options);
+      const queryType = options.queryType === 'navigation' ? 'general' : options.queryType;
+      return getSmartAgentContext(state, projectId, {
+        mode: options.mode,
+        queryType,
+        modelRole: 'agent',
+      });
     },
 
     getCompressedContext: (state) => {
