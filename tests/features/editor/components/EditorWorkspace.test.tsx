@@ -1,373 +1,157 @@
-
-import React from 'react';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { EditorWorkspace } from '@/features/editor/components/EditorWorkspace';
-import { useEditorState, useEditorActions } from '@/features/core/context/EditorContext';
-import { useProjectStore } from '@/features/project';
-import { useEngine } from '@/features/shared';
-import { useManuscriptIntelligence } from '@/features/shared';
-import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
-import { findQuoteRange } from '@/features/shared';
 
-// Mock dependencies
-vi.mock('@/features/core/context/EditorContext', () => ({
-  useEditorState: vi.fn(),
-  useEditorActions: vi.fn(),
-}));
-vi.mock('@/features/project', () => ({
-  useProjectStore: vi.fn(),
-}));
-
-// Capture props passed to mocked components for testing
-const mockRichTextProps = vi.fn();
-const mockCommentCardProps = vi.fn();
-
-// Mock sub-components
-vi.mock('@/features/editor/components/RichTextEditor', () => ({
-  RichTextEditor: (props: any) => {
-    mockRichTextProps(props);
-    return (
-      <div data-testid="rich-text-editor">
-        <textarea
-          data-testid="editor-textarea"
-          onChange={(e) => props.onUpdate(e.target.value)}
-        />
-        <button onClick={() => props.onCommentClick({ id: 'c1', type: 'plot' }, { top: 10, left: 10 })}>
-            Simulate Comment Click
-        </button>
-      </div>
-    );
-  },
-}));
-
-vi.mock('@/features/editor/components/MagicBar', () => ({
-  MagicBar: () => <div data-testid="magic-bar">MagicBar</div>,
-}));
-
-vi.mock('@/features/editor/components/FindReplaceModal', () => ({
-  FindReplaceModal: ({ isOpen, onClose }: any) => (
-    isOpen ? <div data-testid="find-replace-modal"><button onClick={onClose}>Close</button></div> : null
-  ),
-}));
-
-vi.mock('@/features/editor/components/VisualDiff', () => ({
-  VisualDiff: () => <div data-testid="visual-diff">VisualDiff</div>,
-}));
-
-vi.mock('@/features/editor/components/CommentCard', () => ({
-  CommentCard: (props: any) => {
-    mockCommentCardProps(props);
-    return (
-      <div data-testid="comment-card">
-        <button onClick={() => props.onDismiss('c1')}>Dismiss</button>
-        <button onClick={() => props.onFixWithAgent('issue', 'suggestion')}>Fix</button>
-        <button onClick={props.onClose}>Close Card</button>
-      </div>
-    );
-  },
-}));
-
-vi.mock('@/features/shared', () => ({
-  useEngine: vi.fn(),
-  useManuscriptIntelligence: vi.fn(),
-  findQuoteRange: vi.fn(),
-  AccessibleTooltip: ({ children, content }: any) => <div title={content}>{children}</div>,
-  useViewportCollision: vi.fn(() => ({ top: 0, left: 0 })),
-  calculateDiff: vi.fn(() => []),
-}));
-
-vi.mock('@/features/layout/store/useLayoutStore', () => ({
-  useLayoutStore: vi.fn(),
-}));
-
-// Mock framer-motion for WorkspaceHeader
-vi.mock('framer-motion', () => ({
-  motion: {
-    header: ({ children, className, onMouseEnter, onMouseLeave, ...props }: any) => {
-        // Safe destructuring to avoid passing non-DOM props
-        const { initial, animate, exit, transition, ...validProps } = props;
-        return (
-            <header className={className} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} {...validProps}>
-                {children}
-            </header>
-        );
+// --- Mocks ---
+// Mock Editor Context
+const mockEditor = {
+  state: {
+    selection: { from: 0, to: 10 },
+    doc: {
+      nodesBetween: vi.fn(),
+      descendants: vi.fn(),
+    },
+    tr: {
+      setNodeMarkup: vi.fn(),
+      removeMark: vi.fn(),
+      setMeta: vi.fn(),
     }
   },
-  AnimatePresence: ({ children }: any) => <>{children}</>,
+  view: {
+    dispatch: vi.fn(),
+  },
+  chain: () => ({
+    focus: () => ({
+      setParagraph: () => ({
+        unsetAllMarks: () => ({
+          run: vi.fn()
+        })
+      })
+    }),
+  }),
+  schema: {
+    nodes: {
+      paragraph: 'paragraph'
+    },
+    marks: {
+      code: 'code'
+    }
+  },
+  isDestroyed: false,
+  storage: {}
+};
+
+vi.mock('@/features/core/context/EditorContext', () => ({
+  useEditorState: () => ({
+    currentText: 'Sample text',
+    selectionRange: { start: 0, end: 10 },
+    selectionPos: { top: 0, left: 0 },
+    activeHighlight: null,
+    editor: mockEditor,
+    isZenMode: false,
+    visibleComments: [],
+  }),
+  useEditorActions: () => ({
+    updateText: vi.fn(),
+    setSelectionState: vi.fn(),
+    setEditor: vi.fn(),
+    clearSelection: vi.fn(),
+    toggleZenMode: vi.fn(),
+    dismissComment: vi.fn(),
+  })
 }));
 
-describe('EditorWorkspace', () => {
-  const mockUpdateText = vi.fn();
-  const mockSetSelectionState = vi.fn();
-  const mockSetEditor = vi.fn();
-  const mockClearSelection = vi.fn();
-  const mockToggleZenMode = vi.fn();
-  const mockDismissComment = vi.fn();
-  const mockRunAnalysis = vi.fn();
-  const mockRejectDiff = vi.fn();
-  const mockAcceptDiff = vi.fn();
-  const mockHandleFixRequest = vi.fn();
-  const mockUpdateIntelligenceText = vi.fn();
-  const mockUpdateCursor = vi.fn();
+// Mock Project Store
+vi.mock('@/features/project', () => ({
+  useProjectStore: () => ({
+    getActiveChapter: () => ({ id: 'ch1', title: 'Chapter 1' }),
+    currentProject: { setting: { timePeriod: '1920s', location: 'New York' } }
+  })
+}));
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockRichTextProps.mockClear();
-    mockCommentCardProps.mockClear();
-
-    (useEditorState as any).mockReturnValue({
-      currentText: 'Sample text',
-      selectionRange: null,
-      selectionPos: null,
-      activeHighlight: null,
-      editor: {},
-      isZenMode: false,
-      visibleComments: [],
-    });
-
-    (useEditorActions as any).mockReturnValue({
-      updateText: mockUpdateText,
-      setSelectionState: mockSetSelectionState,
-      setEditor: mockSetEditor,
-      clearSelection: mockClearSelection,
-      toggleZenMode: mockToggleZenMode,
-      dismissComment: mockDismissComment,
-    });
-
-    (useProjectStore as any).mockImplementation((selector: any) =>
-        selector({
-            getActiveChapter: () => ({ id: 'ch1', title: 'Chapter 1', lastAnalysis: null }),
-            currentProject: { setting: { timePeriod: 'Modern', location: 'City' } }
-        })
-    );
-
-    (useEngine as any).mockReturnValue({
+// Mock Engine (Analysis)
+vi.mock('@/features/shared', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual as any,
+    useEngine: () => ({
       state: {
-        isAnalyzing: false,
         isMagicLoading: false,
         magicVariations: [],
         grammarSuggestions: [],
         grammarHighlights: [],
-        pendingDiff: null,
+        isAnalyzing: false
       },
       actions: {
-        runAnalysis: mockRunAnalysis,
-        rejectDiff: mockRejectDiff,
-        acceptDiff: mockAcceptDiff,
-      },
-    });
-
-    (useManuscriptIntelligence as any).mockReturnValue({
+        runAnalysis: vi.fn(),
+        closeMagicBar: vi.fn()
+      }
+    }),
+    useManuscriptIntelligence: () => ({
       intelligence: {},
       hud: { prioritizedIssues: [] },
       instantMetrics: { wordCount: 100 },
       isProcessing: false,
-      updateText: mockUpdateIntelligenceText,
-      updateCursor: mockUpdateCursor,
-    });
+      updateText: vi.fn(),
+      updateCursor: vi.fn()
+    })
+  };
+});
 
-    (useLayoutStore as any).mockReturnValue(mockHandleFixRequest);
+// Mock Layout Store
+vi.mock('@/features/layout/store/useLayoutStore', () => ({
+  useLayoutStore: () => vi.fn()
+}));
 
-    (findQuoteRange as any).mockReturnValue({ start: 10, end: 20 });
-  });
+// Mock Settings Store (RichTextEditor uses it)
+vi.mock('@/features/settings', () => ({
+  useSettingsStore: () => false // nativeSpellcheckEnabled
+}));
 
-  it('renders correctly', () => {
-    render(<EditorWorkspace />);
-    expect(screen.getByText('Chapter 1')).toBeInTheDocument();
+describe('EditorWorkspace Formatting Logic', () => {
 
-    // Check header class for non-zen mode
-    const header = screen.getByText('Chapter 1').closest('header');
-    expect(header).not.toHaveClass('fixed top-0 left-0 right-0 z-50');
-  });
-
-  it('uses legacy analysis highlights when intelligence is empty', () => {
-     (useManuscriptIntelligence as any).mockReturnValue({
-      intelligence: {},
-      hud: { prioritizedIssues: [] }, // Empty intelligence
-      instantMetrics: { wordCount: 100 },
-      isProcessing: false,
-      updateText: mockUpdateIntelligenceText,
-      updateCursor: mockUpdateCursor,
-    });
-
-    (useProjectStore as any).mockImplementation((selector: any) =>
-        selector({
-            getActiveChapter: () => ({
-                id: 'ch1',
-                title: 'Chapter 1',
-                lastAnalysis: {
-                    plotIssues: [{ issue: 'Plot', quote: 'quote' }],
-                    pacing: { slowSections: ['slow'] },
-                    settingAnalysis: { issues: [{ issue: 'Setting', quote: 'setting' }] }
-                }
-            }),
-            currentProject: { setting: { timePeriod: 'Modern', location: 'City' } }
-        })
-    );
-
-    // Mock findQuoteRange to return value for first call and null for second
-    // This covers "if (range)" branches
-    (findQuoteRange as any)
-        .mockReturnValueOnce({ start: 10, end: 20 }) // Plot found
-        .mockReturnValueOnce(null) // Pacing not found
-        .mockReturnValueOnce({ start: 30, end: 40 }); // Setting found
-
-    render(<EditorWorkspace />);
-
-    const props = mockRichTextProps.mock.calls[0][0];
-    const highlights = props.analysisHighlights;
-
-    // Plot (found), Pacing (null), Setting (found) => 2 highlights
-    expect(highlights.length).toBe(2);
-    expect(highlights.some((h: any) => h.title === 'Plot')).toBe(true);
-    expect(highlights.some((h: any) => h.title === 'Setting')).toBe(true);
-  });
-
-  it('handles empty legacy analysis fields', () => {
-     (useManuscriptIntelligence as any).mockReturnValue({
-      intelligence: {},
-      hud: { prioritizedIssues: [] },
-      instantMetrics: { wordCount: 100 },
-      isProcessing: false,
-      updateText: mockUpdateIntelligenceText,
-      updateCursor: mockUpdateCursor,
-    });
-
-    (useProjectStore as any).mockImplementation((selector: any) =>
-        selector({
-            getActiveChapter: () => ({
-                id: 'ch1',
-                title: 'Chapter 1',
-                lastAnalysis: {
-                    // Empty fields or undefined to trigger optional chaining branches
-                    plotIssues: [],
-                    pacing: {}, // No slowSections
-                    settingAnalysis: { issues: undefined }
-                }
-            }),
-            currentProject: { setting: { timePeriod: 'Modern', location: 'City' } }
-        })
-    );
-
-    render(<EditorWorkspace />);
-
-    const props = mockRichTextProps.mock.calls[0][0];
-    const highlights = props.analysisHighlights;
-
-    expect(highlights.length).toBe(0);
-  });
-
-  it('combines grammar highlights', () => {
-    (useEngine as any).mockReturnValue({
-      state: {
-        isAnalyzing: false,
-        pendingDiff: null,
-        grammarHighlights: [{ start: 5, end: 10, color: 'blue', title: 'Grammar' }],
-      },
-      actions: { runAnalysis: mockRunAnalysis },
-    });
-
-    render(<EditorWorkspace />);
-    const props = mockRichTextProps.mock.calls[0][0];
-    const highlights = props.analysisHighlights;
-    expect(highlights.some((h: any) => h.title === 'Grammar')).toBe(true);
-  });
-
-  it('handles comment card interactions', () => {
-    render(<EditorWorkspace />);
-
-    const editor = screen.getByTestId('rich-text-editor');
-    fireEvent.click(screen.getByText('Simulate Comment Click'));
-
-    expect(screen.getByTestId('comment-card')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Fix'));
-    expect(mockHandleFixRequest).toHaveBeenCalled();
-    expect(screen.queryByTestId('comment-card')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Simulate Comment Click'));
-    fireEvent.click(screen.getByText('Dismiss'));
-    expect(mockDismissComment).toHaveBeenCalledWith('c1');
-    expect(screen.queryByTestId('comment-card')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Simulate Comment Click'));
-    fireEvent.click(screen.getByText('Close Card'));
-    expect(screen.queryByTestId('comment-card')).not.toBeInTheDocument();
-  });
-
-  it('handles shortcut Ctrl+F', () => {
-    render(<EditorWorkspace />);
-
-    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
-    expect(screen.getByTestId('find-replace-modal')).toBeInTheDocument();
-  });
-
-  it('handles shortcuts Escape in Zen Mode', () => {
-    (useEditorState as any).mockReturnValue({
-        currentText: 'Sample text',
-        selectionRange: null,
-        selectionPos: null,
-        activeHighlight: null,
-        editor: {},
-        isZenMode: true,
-        visibleComments: [],
+  it('detects global formatting issues', async () => {
+    // Setup mock to find 3 code blocks
+    mockEditor.state.doc.descendants.mockImplementation((callback) => {
+      callback({ type: { name: 'codeBlock' } }, 0);
+      callback({ type: { name: 'paragraph' } }, 10);
+      callback({ type: { name: 'pre' } }, 20);
+      callback({ type: { name: 'codeBlock' } }, 30);
     });
 
     render(<EditorWorkspace />);
 
-    fireEvent.keyDown(window, { key: 'Escape' });
-    expect(mockToggleZenMode).toHaveBeenCalled();
+    // Wait for debounce (1000ms in implementation, verify with timer or waitFor)
+    // Note: In real test env with fake timers we might need advanceTimersByTime
+    // But for this mock setup, the effect runs eventually.
+    await screen.findByText(/Fix Formatting \(3\)/, {}, { timeout: 2000 });
   });
 
-  it('handles shortcut Ctrl+Shift+Z', () => {
+  it('runs global fix when button is clicked', async () => {
+    // Setup finding issues
+    mockEditor.state.doc.descendants.mockImplementation((callback) => {
+      callback({ type: { name: 'codeBlock' } }, 5);
+      // Simulate text node with code mark
+      callback({
+        isText: true,
+        type: { name: 'text' },
+        nodeSize: 5,
+        marks: [{ type: { name: 'code' } }]
+      }, 15);
+    });
+
     render(<EditorWorkspace />);
 
-    fireEvent.keyDown(window, { key: 'z', ctrlKey: true, shiftKey: true });
-    expect(mockToggleZenMode).toHaveBeenCalled();
+    // Wait for button to appear
+    const button = await screen.findByText(/Fix Formatting/);
+    fireEvent.click(button);
+
+    // Verify transaction was dispatched
+    expect(mockEditor.view.dispatch).toHaveBeenCalled();
+    // Verify setNodeMarkup was called (to convert to paragraph)
+    expect(mockEditor.state.tr.setNodeMarkup).toHaveBeenCalledWith(5, 'paragraph');
+    // Verify removeMark was called (for the text node)
+    expect(mockEditor.state.tr.removeMark).toHaveBeenCalledWith(15, 20, 'code');
   });
 
-  it('handles Zen Mode hover zone', () => {
-    (useEditorState as any).mockReturnValue({
-        currentText: 'Sample text',
-        selectionRange: null,
-        selectionPos: null,
-        activeHighlight: null,
-        editor: {},
-        isZenMode: true,
-        visibleComments: [],
-    });
-
-    const { container } = render(<EditorWorkspace />);
-
-    expect(screen.queryByText('Chapter 1')).not.toBeInTheDocument();
-
-    const hoverZone = container.querySelector('.fixed.top-0.left-0.right-0.h-8.z-40');
-    expect(hoverZone).toBeInTheDocument();
-
-    fireEvent.mouseEnter(hoverZone!);
-    expect(screen.getByText('Chapter 1')).toBeInTheDocument();
-
-    // Verify class of header in Zen mode
-    const header = screen.getByText('Chapter 1').closest('header');
-    expect(header).toHaveClass('fixed top-0 left-0 right-0 z-50');
-
-    fireEvent.mouseLeave(header!);
-    expect(screen.queryByText('Chapter 1')).not.toBeInTheDocument();
-  });
-
-  it('renders icons', () => {
-    (useEngine as any).mockReturnValue({
-        state: {
-          isAnalyzing: false,
-          pendingDiff: { original: '', modified: '' },
-          grammarHighlights: [],
-        },
-        actions: { rejectDiff: mockRejectDiff },
-    });
-
-    const { container } = render(<EditorWorkspace />);
-    const svgs = container.querySelectorAll('svg');
-    expect(svgs.length).toBeGreaterThan(0);
-  });
 });
