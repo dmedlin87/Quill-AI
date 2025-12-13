@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { getApiKey } from "@/config/api";
+import { getActiveApiKey, validateApiKey } from "@/config/api";
 import { ManuscriptIndex, Contradiction, CharacterIndex } from "../types/schema";
 
 // Support both constructible and factory-style mocks in tests
@@ -11,9 +11,23 @@ const createClient = (Ctor: any, options: { apiKey: string }) => {
   }
 };
 
-const apiKey = getApiKey();
+const buildClient = (apiKey: string) => {
+  const error = validateApiKey(apiKey);
+  if (error) return null;
+  return createClient(GoogleGenAI as any, { apiKey });
+};
 
-const ai = createClient(GoogleGenAI as any, { apiKey });
+let currentApiKey = getActiveApiKey();
+let aiClient = buildClient(currentApiKey);
+
+const getClient = () => {
+  const activeKey = getActiveApiKey();
+  if (activeKey !== currentApiKey) {
+    currentApiKey = activeKey;
+    aiClient = buildClient(activeKey);
+  }
+  return aiClient;
+};
 
 interface ExtractionResult {
   characters: Array<{
@@ -31,7 +45,10 @@ export async function extractEntities(
 ): Promise<ExtractionResult> {
   if (!text || text.length < 50) return { characters: [] };
 
-  const response = await ai.models.generateContent({
+  const client = getClient();
+  if (!client) return { characters: [] };
+
+  const response = await client.models.generateContent({
     model: 'gemini-2.5-flash', // Fast model for incremental work
     contents: `Extract main characters and their physical/biographical attributes from this text. 
     Be precise about physical attributes (eyes, hair, age, height) if mentioned.
@@ -39,6 +56,7 @@ export async function extractEntities(
     
     Text snippet: "${text.slice(0, 30000)}..."`,
     config: {
+      abortSignal: signal,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,

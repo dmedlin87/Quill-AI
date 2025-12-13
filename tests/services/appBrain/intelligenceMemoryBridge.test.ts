@@ -185,6 +185,66 @@ describe('intelligenceMemoryBridge', () => {
       expect(result.conflicts[0].type).toBe('voice_inconsistency');
     });
 
+    it('ignores voice alerts that do not match the expected "Name shows ..." format', async () => {
+      const intelligence = createMockIntelligence({
+        voice: {
+          profiles: {},
+          consistencyAlerts: ['Seth voice shift detected (no keyword)'],
+        },
+      });
+
+      const result = await analyzeIntelligenceAgainstMemory(intelligence, { projectId: 'test-project' });
+
+      expect(result.conflicts).toHaveLength(0);
+      expect(memory.searchMemoriesByTags).not.toHaveBeenCalled();
+    });
+
+    it('detects voice conflicts when memory mentions "speak" or "talk"', async () => {
+      vi.mocked(memory.searchMemoriesByTags).mockResolvedValueOnce([
+        {
+          id: 'mem-speak',
+          text: 'Seth speaks in clipped sentences.',
+          type: 'fact',
+          scope: 'project',
+          projectId: 'test-project',
+          topicTags: ['character:seth', 'voice'],
+          importance: 0.8,
+          createdAt: Date.now(),
+        },
+      ] as any);
+
+      const speakIntel = createMockIntelligence({
+        voice: {
+          profiles: {},
+          consistencyAlerts: ['Seth shows avgSentenceLength shift of 35% between halves.'],
+        },
+      });
+      const speakResult = await analyzeIntelligenceAgainstMemory(speakIntel, { projectId: 'test-project' });
+      expect(speakResult.conflicts.some(c => c.type === 'voice_inconsistency')).toBe(true);
+
+      vi.mocked(memory.searchMemoriesByTags).mockResolvedValueOnce([
+        {
+          id: 'mem-talk',
+          text: 'Seth likes to talk in long, winding monologues.',
+          type: 'fact',
+          scope: 'project',
+          projectId: 'test-project',
+          topicTags: ['character:seth', 'voice'],
+          importance: 0.8,
+          createdAt: Date.now(),
+        },
+      ] as any);
+
+      const talkIntel = createMockIntelligence({
+        voice: {
+          profiles: {},
+          consistencyAlerts: ['Seth shows avgSentenceLength shift of 35% between halves.'],
+        },
+      });
+      const talkResult = await analyzeIntelligenceAgainstMemory(talkIntel, { projectId: 'test-project' });
+      expect(talkResult.conflicts.some(c => c.type === 'voice_inconsistency')).toBe(true);
+    });
+
     it('detects goal conflicts from heatmap issues', async () => {
       vi.mocked(memory.getActiveGoals).mockResolvedValueOnce([
         {
@@ -228,6 +288,80 @@ describe('intelligenceMemoryBridge', () => {
       
       const goalConflict = result.conflicts.find(c => c.type === 'goal_conflict');
       expect(goalConflict).toBeDefined();
+    });
+
+    it('skips heatmap flags without goal keyword mappings and uses fallback descriptions', async () => {
+      vi.mocked(memory.getActiveGoals).mockResolvedValueOnce([
+        {
+          id: 'goal-1',
+          projectId: 'test-project',
+          title: 'Clarify pacing',
+          status: 'active',
+          progress: 0,
+          createdAt: Date.now(),
+        } as any,
+      ]);
+
+      const unknownFlag = createMockIntelligence({
+        heatmap: {
+          sections: [
+            {
+              offset: 10,
+              length: 10,
+              scores: { plotRisk: 0, pacingRisk: 0, characterRisk: 0, settingRisk: 0, styleRisk: 0 },
+              overallRisk: 0.5,
+              flags: ['setting_unclear' as any],
+              suggestions: [],
+            },
+          ],
+          hotspots: [],
+          processedAt: Date.now(),
+        },
+      });
+
+      const unknownResult = await analyzeIntelligenceAgainstMemory(unknownFlag, { projectId: 'test-project' });
+      expect(unknownResult.conflicts.some(c => c.finding.flag === 'setting_unclear')).toBe(false);
+
+      vi.mocked(memory.getActiveGoals).mockResolvedValueOnce([
+        {
+          id: 'goal-1',
+          projectId: 'test-project',
+          title: 'Improve pacing in slow sections',
+          status: 'active',
+          progress: 0,
+          createdAt: Date.now(),
+        } as any,
+      ]);
+
+      const noSuggestionIntel = createMockIntelligence({
+        heatmap: {
+          sections: [
+            {
+              offset: 0,
+              length: 500,
+              scores: {
+                plotRisk: 0.2,
+                pacingRisk: 0.8,
+                characterRisk: 0.1,
+                settingRisk: 0.1,
+                styleRisk: 0.2,
+              },
+              overallRisk: 0.6,
+              flags: ['pacing_slow'],
+              suggestions: [],
+            },
+          ],
+          hotspots: [],
+          processedAt: Date.now(),
+        },
+      });
+
+      const noSuggestionResult = await analyzeIntelligenceAgainstMemory(noSuggestionIntel, {
+        projectId: 'test-project',
+        minSeverity: 'info',
+      });
+      const conflict = noSuggestionResult.conflicts.find(c => c.type === 'goal_conflict');
+      expect(conflict?.finding.description).toContain('Issue detected: pacing_slow');
     });
 
     it('respects minSeverity filter', async () => {
@@ -319,7 +453,7 @@ describe('intelligenceMemoryBridge', () => {
     });
   });
 
-  describe('getHighPriorityConflicts', () => {
+	  describe('getHighPriorityConflicts', () => {
     it('returns empty array when no high-priority issues', async () => {
       const hud: ManuscriptHUD = createMockIntelligence().hud;
       
@@ -328,7 +462,7 @@ describe('intelligenceMemoryBridge', () => {
       expect(conflicts).toHaveLength(0);
     });
 
-    it('detects conflicts between high-severity issues and goals', async () => {
+	    it('detects conflicts between high-severity issues and goals', async () => {
       vi.mocked(memory.getActiveGoals).mockResolvedValueOnce([
         {
           id: 'goal-1',
@@ -354,10 +488,38 @@ describe('intelligenceMemoryBridge', () => {
       
       const conflicts = await getHighPriorityConflicts(hud, 'test-project');
       
-      expect(conflicts.length).toBeGreaterThan(0);
-      expect(conflicts[0].severity).toBe('critical');
-    });
-  });
+	      expect(conflicts.length).toBeGreaterThan(0);
+	      expect(conflicts[0].severity).toBe('critical');
+	    });
+
+	    it('skips low-severity prioritized issues', async () => {
+	      vi.mocked(memory.getActiveGoals).mockResolvedValueOnce([
+	        {
+	          id: 'goal-1',
+	          projectId: 'test-project',
+	          title: 'Fix plot holes',
+	          status: 'active',
+	          progress: 0,
+	          createdAt: Date.now(),
+	        } as any,
+	      ]);
+
+	      const hud: ManuscriptHUD = {
+	        ...createMockIntelligence().hud,
+	        prioritizedIssues: [
+	          {
+	            type: 'unresolved_promise',
+	            description: 'Minor issue',
+	            offset: 10,
+	            severity: 0.2,
+	          } as any,
+	        ],
+	      };
+
+	      const conflicts = await getHighPriorityConflicts(hud, 'test-project');
+	      expect(conflicts).toHaveLength(0);
+	    });
+	  });
 
   describe('formatConflictsForPrompt', () => {
     it('returns empty string for no conflicts', () => {
@@ -447,7 +609,7 @@ describe('intelligenceMemoryBridge', () => {
     });
   });
 
-  describe('plot promises against memory/goals', () => {
+	  describe('plot promises against memory/goals', () => {
     it('detects unresolved promises conflicting with goals', async () => {
       vi.mocked(memory.getMemories).mockResolvedValueOnce([]);
       // getActiveGoals is called multiple times in analyzeIntelligenceAgainstMemory
@@ -492,7 +654,7 @@ describe('intelligenceMemoryBridge', () => {
       expect(plotConflict?.explanation).toContain('unresolved');
     });
 
-    it('detects unresolved promises conflicting with plan memories', async () => {
+	    it('detects unresolved promises conflicting with plan memories', async () => {
       vi.mocked(memory.getMemories).mockResolvedValueOnce([
         {
           id: 'mem-plan-1',
@@ -530,9 +692,47 @@ describe('intelligenceMemoryBridge', () => {
         projectId: 'test-project',
       });
       
-      const plotMemoryConflict = result.conflicts.find(c => c.type === 'plot_contradiction');
-      expect(plotMemoryConflict).toBeDefined();
-    });
+	      const plotMemoryConflict = result.conflicts.find(c => c.type === 'plot_contradiction');
+	      expect(plotMemoryConflict).toBeDefined();
+	    });
+
+	    it('matches plot promises against plan memories that mention payoff/complete', async () => {
+	      vi.mocked(memory.getMemories).mockResolvedValueOnce([
+	        {
+	          id: 'mem-plan-2',
+	          text: 'Need to payoff the villain threat by chapter 10',
+	          type: 'plan',
+	          scope: 'project',
+	          projectId: 'test-project',
+	          topicTags: ['plan'],
+	          importance: 0.8,
+	          createdAt: Date.now(),
+	        },
+	      ] as any);
+	      vi.mocked(memory.getActiveGoals).mockResolvedValueOnce([] as any);
+
+	      const intelligence = createMockIntelligence({
+	        timeline: {
+	          events: [],
+	          causalChains: [],
+	          promises: [
+	            {
+	              id: 'promise-3b',
+	              type: 'conflict',
+	              description: 'The villain threat remains unresolved',
+	              quote: 'villain text',
+	              offset: 210,
+	              resolved: false,
+	              chapterId: 'ch-1',
+	            },
+	          ],
+	          processedAt: Date.now(),
+	        },
+	      });
+
+	      const result = await analyzeIntelligenceAgainstMemory(intelligence, { projectId: 'test-project' });
+	      expect(result.conflicts.some(c => c.type === 'plot_contradiction')).toBe(true);
+	    });
 
     it('ignores resolved promises', async () => {
       vi.mocked(memory.getMemories).mockResolvedValueOnce([]);
@@ -564,7 +764,39 @@ describe('intelligenceMemoryBridge', () => {
           ],
           processedAt: Date.now(),
         },
-      });
+	  });
+
+	  describe('watchlist conflicts', () => {
+	    it('emits watched entity info conflicts with reason fallbacks', async () => {
+	      vi.mocked(memory.getWatchedEntities).mockResolvedValueOnce([
+	        {
+	          id: 'w1',
+	          name: 'Seth',
+	          projectId: 'test-project',
+	          priority: 'high',
+	          monitoringEnabled: true,
+	          createdAt: Date.now(),
+	        } as any,
+	      ]);
+
+	      const intelligence = createMockIntelligence({
+	        hud: {
+	          ...createMockIntelligence().hud,
+	          context: {
+	            ...createMockIntelligence().hud.context,
+	            activeEntities: [
+	              { id: 'char-1', name: 'Seth', type: 'character', mentionCount: 2 } as any,
+	            ],
+	          },
+	        } as any,
+	      });
+
+	      const result = await analyzeIntelligenceAgainstMemory(intelligence, { projectId: 'test-project' });
+	      const watched = result.conflicts.find(c => c.reference.type === 'watched_entity');
+	      expect(watched?.reference.text).toContain('Watching Seth');
+	      expect(watched?.explanation).toContain('No reason specified');
+	    });
+	  });
       
       const result = await analyzeIntelligenceAgainstMemory(intelligence, {
         projectId: 'test-project',

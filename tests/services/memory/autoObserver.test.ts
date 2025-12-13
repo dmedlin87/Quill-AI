@@ -175,6 +175,62 @@ describe('AutoObserver Service', () => {
       expect(result.created).toHaveLength(0);
       expect(mockCreateMemory).not.toHaveBeenCalled();
     });
+
+    it('skips duplicates for relationships, inconsistencies, and development suggestions when checker returns true', async () => {
+      const duplicateChecker = vi.fn().mockResolvedValue(true);
+
+      const analysis: AnalysisResult = {
+        characters: [{
+          name: 'Hero',
+          arc: '',
+          relationships: [{ name: 'Villain', type: 'enemy', description: 'Hates him' }],
+          inconsistencies: [{ issue: 'Sometimes forgets the plan' }],
+          developmentSuggestion: 'Give Hero more moments of doubt to deepen the arc.',
+        }],
+        plotIssues: [],
+        pacing: { score: 1, analysis: 'ok', slowSections: [], fastSections: [] },
+        timestamp: Date.now(),
+      } as any;
+
+      const result = await autoObserver.observeAnalysisResults(analysis, {
+        projectId,
+        deduplicateEnabled: true,
+        existingMemories: [],
+        duplicateChecker: duplicateChecker as any,
+      });
+
+      expect(duplicateChecker).toHaveBeenCalled();
+      expect(result.skipped).toBeGreaterThan(0);
+      expect(result.created).toHaveLength(0);
+    });
+
+    it('pushes newly created notes into existingMemories when deduplication is enabled', async () => {
+      const existingMemories: any[] = [];
+      const duplicateChecker = vi.fn().mockResolvedValue(false);
+
+      const analysis: AnalysisResult = {
+        characters: [{
+          name: 'Hero',
+          arc: 'Starts weak, becomes strong and learns to lead.',
+          relationships: [{ name: 'Sidekick', type: 'friend', description: 'Supports the hero' }],
+          inconsistencies: [{ issue: 'Sometimes forgets the plan' }],
+          developmentSuggestion: 'Give Hero more moments of doubt to deepen the arc.',
+        }],
+        plotIssues: [],
+        pacing: { score: 1, analysis: 'ok', slowSections: [], fastSections: [] },
+        timestamp: Date.now(),
+      } as any;
+
+      await autoObserver.observeAnalysisResults(analysis, {
+        projectId,
+        deduplicateEnabled: true,
+        existingMemories,
+        duplicateChecker: duplicateChecker as any,
+      });
+
+      expect(existingMemories.length).toBeGreaterThan(0);
+      expect(mockCreateMemory).toHaveBeenCalled();
+    });
   });
 
   describe('observeAnalysisResults', () => {
@@ -360,6 +416,25 @@ describe('AutoObserver Service', () => {
         topicTags: expect.arrayContaining(['pacing', 'fast'])
       }));
     });
+
+    it('handles missing slowSections/fastSections and supports string slow sections', async () => {
+      const analysis: AnalysisResult = {
+        characters: [],
+        plotIssues: [],
+        pacing: {
+          score: 0.5,
+          analysis: 'Okay',
+          slowSections: ['Chapter 2 is slow'],
+        } as any,
+        timestamp: Date.now(),
+      } as any;
+
+      await autoObserver.observeAnalysisResults(analysis, { projectId, deduplicateEnabled: false });
+
+      expect(mockCreateMemory).toHaveBeenCalledWith(expect.objectContaining({
+        text: expect.stringContaining('Pacing (slow): Chapter 2 is slow'),
+      }));
+    });
   });
 
   describe('observeIntelligenceResults', () => {
@@ -424,6 +499,35 @@ describe('AutoObserver Service', () => {
       });
 
       expect(mockGetMemories).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips relationship and promise memories when duplicateChecker reports duplicates', async () => {
+      const duplicateChecker = vi.fn().mockResolvedValue(true);
+
+      const intelligence: ManuscriptIntelligence = {
+        entities: {
+          nodes: [
+            { id: '1', name: 'Alice', type: 'character' },
+            { id: '2', name: 'Bob', type: 'character' },
+          ],
+          edges: [{ source: '1', target: '2', type: 'friend', coOccurrences: 5, evidence: [] }],
+        },
+        timeline: {
+          promises: [{ type: 'foreshadowing', description: 'Something bad will happen', resolved: false }],
+          events: [],
+          causalChains: [],
+        },
+      } as any;
+
+      const result = await autoObserver.observeIntelligenceResults(intelligence, {
+        projectId,
+        deduplicateEnabled: true,
+        existingMemories: [],
+        duplicateChecker: duplicateChecker as any,
+      });
+
+      expect(result.skipped).toBeGreaterThan(0);
+      expect(mockCreateMemory).not.toHaveBeenCalled();
     });
   });
 

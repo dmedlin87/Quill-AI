@@ -1198,4 +1198,89 @@ describe('useProjectStore', () => {
         vi.useRealTimers();
     });
   });
+
+  describe('coverage gaps', () => {
+    it('importProject supports empty chapter lists', async () => {
+      const { importProject } = useProjectStore.getState();
+      const projectId = await importProject('Empty', [], 'Author');
+
+      const state = useProjectStore.getState();
+      expect(projectId).toBeTruthy();
+      expect(state.currentProject?.title).toBe('Empty');
+      expect(state.chapters).toEqual([]);
+      expect(state.activeChapterId).toBeNull();
+    });
+
+    it('loadProject creates a first chapter when the project has none', async () => {
+      vi.mocked(db.projects.get).mockResolvedValueOnce({ id: 'p1', title: 'P', author: 'A', createdAt: 0, updatedAt: 0 } as any);
+      const where = vi.mocked(db.chapters.where);
+      where.mockReturnValueOnce({
+        equals: () => ({
+          sortBy: () => Promise.resolve([]),
+        }),
+      } as any);
+      vi.mocked(db.chapters.add).mockResolvedValueOnce(undefined as any);
+
+      const { loadProject } = useProjectStore.getState();
+      await loadProject('p1');
+
+      const state = useProjectStore.getState();
+      expect(state.chapters.length).toBe(1);
+      expect(state.activeChapterId).toBe(state.chapters[0].id);
+    });
+
+    it('reorderChapters clears state when given an empty list', async () => {
+      useProjectStore.setState({ chapters: [{ id: 'c1' } as any] });
+      const { reorderChapters } = useProjectStore.getState();
+      await reorderChapters([]);
+      expect(useProjectStore.getState().chapters).toEqual([]);
+      expect(db.chapters.bulkPut).not.toHaveBeenCalled();
+    });
+
+    it('flushPendingWrites logs failures when pending writes reject', async () => {
+      vi.useFakeTimers();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      const testChapter = {
+        id: 'c-flush',
+        projectId: 'p-flush',
+        title: 'Title',
+        content: 'Initial',
+        order: 0,
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(db.chapters.get).mockResolvedValue(testChapter as any);
+      vi.mocked(db.chapters.update).mockRejectedValueOnce(new Error('persist failed'));
+
+      useProjectStore.setState({ chapters: [testChapter as any], activeChapterId: 'c-flush' });
+      const { updateChapterContent, flushPendingWrites } = useProjectStore.getState();
+      updateChapterContent('c-flush', 'New content');
+      const result = await flushPendingWrites({ reason: 'test-flush' });
+
+      expect(result.pendingCount).toBeGreaterThan(0);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to flush'),
+        expect.anything(),
+      );
+
+      consoleSpy.mockRestore();
+      vi.useRealTimers();
+    });
+
+    it('updateChapterBranchState falls back to DB when chapter is not in memory', async () => {
+      vi.mocked(db.chapters.get).mockResolvedValueOnce({ id: 'c1', projectId: 'p1' } as any);
+      vi.mocked(db.chapters.update).mockResolvedValueOnce(undefined as any);
+      vi.mocked(db.projects.update).mockResolvedValueOnce(undefined as any);
+
+      useProjectStore.setState({ chapters: [], currentProject: { id: 'p1' } as any });
+
+      const { updateChapterBranchState } = useProjectStore.getState();
+      await updateChapterBranchState('c1', { activeBranchId: null });
+
+      expect(db.chapters.get).toHaveBeenCalledWith('c1');
+      expect(db.projects.update).toHaveBeenCalledWith('p1', expect.any(Object));
+    });
+  });
 });

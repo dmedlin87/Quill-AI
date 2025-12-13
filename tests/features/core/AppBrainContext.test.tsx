@@ -9,6 +9,7 @@ import {
   useAppBrainContext,
 } from '@/features/core/context/AppBrainContext';
 import { type UpdateManuscriptParams } from '@/services/appBrain';
+import { MainView, SidebarTab } from '@/types';
 
 type MockAnalysisStatus = 'idle' | 'loading' | 'error' | 'success';
 
@@ -209,11 +210,13 @@ vi.mock('@/services/commands/generation', () => ({
       if (context.generateRewrite) {
          try {
              await context.generateRewrite('test', 'expand', 'formal');
+             await context.generateRewrite('test', 'custom_mode', 'formal');
          } catch (e) {}
       }
       if (context.generateContinuation) {
          try {
              await context.generateContinuation({ context: 'ctx', selection: 'sel' });
+             await context.generateContinuation({ context: 'ctx', selection: undefined });
          } catch(e) {}
       }
       return mockRewrite(params, context);
@@ -225,11 +228,13 @@ vi.mock('@/services/commands/generation', () => ({
         if (context.generateRewrite) {
             try {
                 await context.generateRewrite('test', 'expand', 'formal');
+                await context.generateRewrite('test', 'custom_mode', 'formal');
             } catch(e) {}
         }
         if (context.generateContinuation) {
             try {
                 await context.generateContinuation({ context: 'ctx', selection: 'sel' });
+                await context.generateContinuation({ context: 'ctx', selection: undefined });
             } catch (e) {}
         }
        return mockContinue(params, context);
@@ -618,6 +623,70 @@ describe('AppBrainContext', () => {
       });
 
       expect(timeline).toBe('No timeline data available.');
+    });
+
+    it('uses default chapterId when activeChapterId is falsy', () => {
+      mockProject.activeChapterId = '';
+
+      renderHook(() => useAppBrain(), { wrapper });
+
+      expect(mockIntelligenceHook).toHaveBeenCalledWith(expect.objectContaining({
+        chapterId: 'default',
+      }));
+
+      mockProject.activeChapterId = 'ch1';
+    });
+
+    it('falls back to SidebarTab.ANALYSIS and storyboards when layout state is missing', () => {
+      const prevTab = mockLayoutStore.activeTab;
+      const prevView = mockLayoutStore.activeView;
+
+      mockLayoutStore.activeTab = undefined as any;
+      mockLayoutStore.activeView = MainView.STORYBOARD as any;
+
+      const { result } = renderHook(() => useAppBrain(), { wrapper });
+
+      expect(result.current.state.ui.activePanel).toBe(SidebarTab.ANALYSIS);
+      expect(result.current.state.ui.activeView).toBe('storyboard');
+
+      mockLayoutStore.activeTab = prevTab;
+      mockLayoutStore.activeView = prevView;
+    });
+
+    it('invokes command callbacks that coalesce to activeTab when panel is undefined', async () => {
+      mockLayoutStore.activeTab = 'analysis';
+      mockSwitchPanel.mockImplementationOnce(async (panel: string, ctx: any) => {
+        ctx.switchPanel(undefined);
+        ctx.switchPanel(panel);
+        return 'switched';
+      });
+
+      const { result } = renderHook(() => useAppBrain(), { wrapper });
+
+      await act(async () => {
+        await result.current.actions.switchPanel('lore');
+      });
+
+      expect(mockLayoutStore.setActiveTab).toHaveBeenCalledWith('analysis');
+      expect(mockLayoutStore.setActiveTab).toHaveBeenCalledWith('lore');
+    });
+
+    it('covers generation fallbacks when providers return empty results or throw', async () => {
+      const agent = await import('@/services/gemini/agent');
+      vi.mocked(agent.rewriteText).mockResolvedValueOnce({ result: [] } as any);
+      vi.mocked(agent.generateContinuation).mockRejectedValueOnce(new Error('nope'));
+
+      const { result } = renderHook(() => useAppBrain(), { wrapper });
+
+      await act(async () => {
+        await result.current.actions.rewriteSelection({ mode: 'expand', targetTone: 'formal' });
+      });
+      await act(async () => {
+        await result.current.actions.continueWriting();
+      });
+
+      expect(mockRewrite).toHaveBeenCalled();
+      expect(mockContinue).toHaveBeenCalled();
     });
   });
 });

@@ -149,10 +149,10 @@ describe('entityExtractor coverage', () => {
     });
 
     it('increments co-occurrences when the same pair appears across paragraphs', () => {
-        const text = `Alice met Bob.\n\nAlice met Bob again.`;
+        const text = `Alice arrived. Bob arrived.\n\nAlice smiled. Bob smiled.`;
         const paragraphs = [
-            createTestParagraph(0, 14),
-            createTestParagraph(16, text.length - 16),
+            createTestParagraph(0, 'Alice arrived. Bob arrived.'.length),
+            createTestParagraph('Alice arrived. Bob arrived.\n\n'.length, 'Alice smiled. Bob smiled.'.length),
         ];
         const result = extractEntities(text, paragraphs, [], 'chapter1');
 
@@ -162,10 +162,10 @@ describe('entityExtractor coverage', () => {
     });
 
     it('upgrades an interacts edge when an explicit relationship pattern is found', () => {
-        const text = `Alice met Bob.\n\nAlice attacked Bob.`;
+        const text = `Alice arrived. Bob arrived.\n\nAlice attacked Bob.`;
         const paragraphs = [
-            createTestParagraph(0, 14),
-            createTestParagraph(16, text.length - 16),
+            createTestParagraph(0, 'Alice arrived. Bob arrived.'.length),
+            createTestParagraph('Alice arrived. Bob arrived.\n\n'.length, 'Alice attacked Bob.'.length),
         ];
         const result = extractEntities(text, paragraphs, [], 'chapter1');
 

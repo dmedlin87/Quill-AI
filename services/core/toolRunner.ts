@@ -3,6 +3,7 @@ import type { ChatMessage } from '@/types';
 import type { AgentToolExecutor, AgentState } from './AgentController';
 import type { ToolResult } from '@/services/gemini/toolExecutor';
 import { getOrCreateBedsideNote } from '@/services/memory';
+import { isAbortError } from './abortCoordinator';
 
 const SIGNIFICANT_TOOLS = new Set([
   'update_manuscript',
@@ -158,6 +159,9 @@ export class ToolRunner {
           this.onMessage?.(reviewMessage);
         }
       } catch (err: unknown) {
+        if (isAbortError(err)) {
+          break;
+        }
         // Push fallback functionResponse so the model stays in sync
         const errorMessage =
           err instanceof Error ? err.message : 'Unknown error executing tool';

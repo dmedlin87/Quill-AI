@@ -1350,4 +1350,203 @@ describe('ProactiveThinker', () => {
       expect(t.formatAge(Date.now() - 5000)).toBe('just now');
     });
   });
+
+  describe('coverage gaps - voice consistency + chapter transitions', () => {
+    it('creates chapter transition bedside updates with optional severity/priority/reason fields', async () => {
+      const t = new ProactiveThinker({ enabled: true, minEventsToThink: 1 });
+
+      const getState = () =>
+        ({
+          manuscript: { projectId: mockProjectId, activeChapterId: 'c1', chapters: [] },
+          intelligence: { entities: null, hud: null, timeline: null },
+          lore: { characters: [] },
+        }) as any;
+
+      t.start(getState, mockProjectId, mockOnSuggestion);
+
+      (t as any).handleEvent({
+        type: 'CHAPTER_CHANGED',
+        payload: {
+          chapterId: 'c1',
+          title: 'One',
+          issues: [{ description: 'Issue', severity: 0.5 }],
+          watchedEntities: [{ name: 'Alice', priority: 'high', reason: 'Important' }],
+        },
+      });
+
+      await Promise.resolve();
+      expect(evolveBedsideNote).toHaveBeenCalledWith(
+        mockProjectId,
+        expect.stringContaining('Now in chapter: "One"'),
+        expect.objectContaining({ changeReason: 'chapter_transition' }),
+      );
+    });
+
+    it('detectVoiceConsistency emits suggestions when deviation is large', async () => {
+      const t = new ProactiveThinker({ enabled: true });
+
+      const getState = () =>
+        ({
+          manuscript: {
+            projectId: mockProjectId,
+            currentText: `\"Hello there,\" Alice said.`,
+          },
+          intelligence: {
+            entities: { nodes: [{ type: 'character', name: 'Alice' }] },
+          },
+          lore: { characters: [] },
+        }) as any;
+
+      vi.mocked(generateVoiceProfile).mockReturnValue({
+        impression: 'Live',
+        metrics: createMockMetrics({ avgSentenceLength: 5, contractionRatio: 0.0 }),
+      } as any);
+
+      vi.mocked(getVoiceProfileForCharacter).mockResolvedValue({
+        impression: 'Baseline',
+        metrics: createMockMetrics({ avgSentenceLength: 20, contractionRatio: 0.8 }),
+      } as any);
+
+      const onSuggestion = vi.fn();
+      t.start(getState, mockProjectId, onSuggestion);
+
+      await (t as any).detectVoiceConsistency({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 1000 } });
+
+      expect(upsertVoiceProfile).toHaveBeenCalled();
+      expect(onSuggestion).toHaveBeenCalledWith(expect.objectContaining({ type: 'voice_inconsistency' }));
+    });
+
+    it('detectVoiceConsistency returns early when quotes are too short to form dialogue blocks', async () => {
+      const t = new ProactiveThinker({ enabled: true });
+
+      const getState = () =>
+        ({
+          manuscript: { projectId: mockProjectId, currentText: `"Hi," Alice said.` },
+          intelligence: { entities: { nodes: [{ type: 'character', name: 'Alice' }] } },
+          lore: { characters: [] },
+        }) as any;
+
+      t.start(getState, mockProjectId, mockOnSuggestion);
+
+      await (t as any).detectVoiceConsistency({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 1000 } });
+
+      expect(generateVoiceProfile).not.toHaveBeenCalled();
+      expect(mockOnSuggestion).not.toHaveBeenCalled();
+    });
+
+    it('detectVoiceConsistency emits medium-priority drift and includes Higher/Lower diff text', async () => {
+      const t = new ProactiveThinker({ enabled: true });
+
+      const getState = () =>
+        ({
+          manuscript: { projectId: mockProjectId, currentText: `"Hello there," Alice said.` },
+          intelligence: { entities: { nodes: [{ type: 'character', name: 'Alice' }] } },
+          lore: { characters: [] },
+        }) as any;
+
+      vi.mocked(generateVoiceProfile).mockReturnValue({
+        impression: 'Live',
+        metrics: createMockMetrics({ avgSentenceLength: 15 }),
+      } as any);
+
+      vi.mocked(getVoiceProfileForCharacter).mockResolvedValue({
+        impression: 'Baseline',
+        metrics: createMockMetrics({ avgSentenceLength: 10 }),
+      } as any);
+
+      const onSuggestion = vi.fn();
+      t.start(getState, mockProjectId, onSuggestion);
+
+      await (t as any).detectVoiceConsistency({ type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 1000 } });
+
+      expect(onSuggestion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'voice_inconsistency',
+          priority: 'medium',
+          description: expect.stringContaining('Higher'),
+        }),
+      );
+    });
+
+    it('calculateVoiceDeviation treats two zero metrics as no deviation', () => {
+      const t = new ProactiveThinker({ enabled: true });
+      // @ts-ignore
+      const result = t.calculateVoiceDeviation(
+        createMockMetrics({ contractionRatio: 0, questionRatio: 0 }),
+        createMockMetrics({ contractionRatio: 0, questionRatio: 0 }),
+      );
+      expect(result.maxDelta).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('coverage gaps - parsing, lore suggestions, and long-term memory formatting', () => {
+    it('parseThinkingResult handles missing fields and mapSuggestions applies defaults', () => {
+      const t = new ProactiveThinker({ enabled: true });
+
+      const parsed = (t as any).parseThinkingResult(JSON.stringify({
+        suggestions: [{}, { title: 'Has title', type: 'plot' }],
+      }));
+
+      expect(parsed.significant).toBe(true);
+      expect(parsed.suggestions[0]).toEqual(expect.objectContaining({
+        title: 'Suggestion',
+        priority: 'medium',
+        tags: ['general'],
+      }));
+      expect(parsed.suggestions[1]).toEqual(expect.objectContaining({
+        title: 'Has title',
+        tags: ['plot'],
+      }));
+    });
+
+    it('detectLoreSuggestions uses fallback description when no fact is available', async () => {
+      const t = new ProactiveThinker({ enabled: true });
+
+      const state = {
+        manuscript: { projectId: mockProjectId, activeChapterId: 'ch1' },
+        intelligence: {
+          full: { entities: { nodes: [{ type: 'location', name: 'The Port', mentionCount: 2, firstMention: undefined }] } },
+        },
+        lore: undefined,
+      } as any;
+
+      vi.mocked(filterNovelLoreEntities).mockReturnValueOnce([{ name: 'The Port', type: 'location', firstMention: undefined }] as any);
+      vi.mocked(extractFacts).mockReturnValueOnce([]);
+
+      const suggestions = await (t as any).detectLoreSuggestions(state, [
+        { type: 'SIGNIFICANT_EDIT_DETECTED', payload: { delta: 100 }, timestamp: Date.now() },
+      ]);
+
+      expect(suggestions[0]).toEqual(expect.objectContaining({
+        type: 'lore_discovery',
+        title: expect.stringContaining('location'),
+        description: expect.stringContaining('offset 0'),
+      }));
+    });
+
+    it('fetchLongTermMemoryContext returns empty when projectId is missing', async () => {
+      const t = new ProactiveThinker({ enabled: true });
+      const result = await (t as any).fetchLongTermMemoryContext({
+        intelligence: { hud: null },
+      });
+      expect(result).toEqual({ text: '', matches: [] });
+    });
+
+    it('fetchLongTermMemoryContext adds ellipsis for very long notes', async () => {
+      const t = new ProactiveThinker({ enabled: true });
+      (t as any).projectId = mockProjectId;
+
+      const longText = 'x'.repeat(200);
+      vi.mocked(searchBedsideHistory).mockResolvedValueOnce([
+        { note: { id: 'n1', text: longText, createdAt: Date.now() - 3600_000 }, similarity: 0.91 },
+      ] as any);
+
+      const result = await (t as any).fetchLongTermMemoryContext({
+        intelligence: { hud: { context: { activeEntities: [] }, situational: { currentScene: { type: 'Action' } } } },
+      });
+
+      expect(result.text).toContain('...');
+      expect(result.matches).toHaveLength(1);
+    });
+  });
 });

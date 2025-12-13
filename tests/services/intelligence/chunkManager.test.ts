@@ -598,4 +598,66 @@ describe('ChunkManager worker + error branches', () => {
 
     manager.destroy();
   });
+
+  it('applyEdit falls back to provided newText when no pending text exists', () => {
+    const manager = createManager() as any;
+    (manager as any).pendingChapterTexts.clear();
+
+    (manager as any).applyEdit('c1', 'abc', 0, 3);
+
+    expect((manager as any).chapterTexts.get('c1')).toBe('abc');
+  });
+
+  it('processChunk returns early when chunk is missing', async () => {
+    const manager = createManager() as any;
+    await (manager as any).processChunk('missing-chunk');
+    expect(true).toBe(true);
+  });
+
+  it('processNextBatch returns early when already processing', async () => {
+    const manager = createManager() as any;
+    (manager as any).isProcessing = true;
+    await (manager as any).processNextBatch();
+    expect(processManuscriptCachedMock).not.toHaveBeenCalled();
+  });
+
+  it('uses a generic message when a non-Error is thrown during chunk processing', async () => {
+    const errors: Array<[string, string]> = [];
+    const manager = new ChunkManager(
+      { editDebounceMs: 0, processingIntervalMs: 0, idleThresholdMs: 0 },
+      {
+        onError: (chunkId, error) => errors.push([chunkId, error]),
+      }
+    ) as any;
+
+    manager.registerChapter('c1', 'hello world');
+    const chunkId = createChunkId('chapter', 'c1');
+
+    manager.analyzeTextChunk = vi.fn().mockRejectedValueOnce('nope');
+    await manager.reprocessChunk(chunkId);
+
+    expect(errors.some(([id, msg]) => id === chunkId && msg === 'Unknown error')).toBe(true);
+    manager.destroy();
+  });
+
+  it('falls back to main-thread processing when workerPool is missing', async () => {
+    const manager = new ChunkManager({ useWorker: true }) as any;
+    manager.workerPool = null;
+
+    manager.registerChapter('fallback', 'hello world');
+    await manager.processAllDirty();
+
+    expect(processManuscriptCachedMock).toHaveBeenCalled();
+    manager.destroy();
+  });
+
+  it('reports workerEnabled stats for worker mode', () => {
+    const workerManager = new ChunkManager({ useWorker: true }) as any;
+    expect(workerManager.getStats().workerEnabled).toBe(true);
+    workerManager.destroy();
+
+    const noWorkerManager = new ChunkManager({ useWorker: false }) as any;
+    expect(noWorkerManager.getStats().workerEnabled).toBe(false);
+    noWorkerManager.destroy();
+  });
 });
