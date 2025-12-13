@@ -67,6 +67,8 @@ interface WorkspaceHeaderProps {
   isIntelligenceProcessing: boolean;
   isAnalyzing: boolean;
   onRunAnalysis: () => void;
+  globalFormattingIssueCount: number;
+  onFixGlobalFormatting: () => void;
 }
 
 const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = React.memo(({
@@ -78,6 +80,8 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = React.memo(({
   isIntelligenceProcessing,
   isAnalyzing,
   onRunAnalysis,
+  globalFormattingIssueCount,
+  onFixGlobalFormatting,
 }) => (
   <motion.header
     initial={isZenMode ? { y: -60, opacity: 0 } : false}
@@ -140,6 +144,21 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = React.memo(({
           Deep Analysis
         </button>
       </AccessibleTooltip>
+
+      {globalFormattingIssueCount > 0 && (
+        <AccessibleTooltip
+          content={`Found ${globalFormattingIssueCount} formatting issues (code blocks/weird fonts). Click to fix all.`}
+          position="bottom"
+        >
+           <button
+             onClick={onFixGlobalFormatting}
+             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--warning-100)] text-[var(--warning-700)] text-[var(--text-sm)] font-medium hover:bg-[var(--warning-200)] border border-[var(--warning-300)] transition-colors shadow-sm animate-pulse-subtle"
+           >
+              <Icons.Wand />
+              Fix Formatting ({globalFormattingIssueCount})
+           </button>
+        </AccessibleTooltip>
+      )}
     </div>
   </motion.header>
 ));
@@ -219,6 +238,87 @@ export const EditorWorkspace: React.FC = () => {
 
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
   const [isHeaderHovered, setIsHeaderHovered] = useState(false);
+
+  // --- Formatting Issue Detection ---
+  const [selectionHasFormattingIssues, setSelectionHasFormattingIssues] = useState(false);
+  const [globalFormattingIssueCount, setGlobalFormattingIssueCount] = useState(0);
+
+  // Check for formatting issues in selection
+  useEffect(() => {
+    if (!editor || !selectionRange) {
+      setSelectionHasFormattingIssues(false);
+      return;
+    }
+
+    const { from, to } = editor.state.selection;
+    let hasIssues = false;
+
+    editor.state.doc.nodesBetween(from, to, (node) => {
+      if (node.type.name === 'codeBlock' || node.type.name === 'pre') {
+        hasIssues = true;
+        return false; // Stop iteration
+      }
+    });
+
+    setSelectionHasFormattingIssues(hasIssues);
+  }, [editor, selectionRange, currentText]); // Re-check on text change
+
+  // Check for global formatting issues
+  // Optimized with debounce to prevent scanning on every keystroke
+  const checkGlobalFormatting = useCallback(() => {
+    if (!editor) return;
+
+    let count = 0;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'codeBlock' || node.type.name === 'pre') {
+        count++;
+      }
+    });
+    setGlobalFormattingIssueCount(count);
+  }, [editor]); // Remove currentText from dependency to avoid rebuild, triggered by debounce
+
+  useEffect(() => {
+    if (!editor) return;
+    const timeoutId = setTimeout(checkGlobalFormatting, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [editor, currentText, checkGlobalFormatting]);
+
+  const handleFixFormattingSelection = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().setParagraph().unsetAllMarks().run();
+    setSelectionHasFormattingIssues(false);
+  }, [editor]);
+
+  const handleFixGlobalFormatting = useCallback(() => {
+    if (!editor) return;
+
+    // Create a transaction to fix all occurrences
+    const { tr } = editor.state;
+    let hasChanges = false;
+    const codeRanges: { from: number; to: number }[] = [];
+
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'codeBlock' || node.type.name === 'pre') {
+        // Convert block type to paragraph
+        tr.setNodeMarkup(pos, editor.schema.nodes.paragraph);
+        hasChanges = true;
+      }
+      // Also collect ranges of text with 'code' mark to strip inline code font
+      if (node.isText && node.marks.some(m => m.type.name === 'code')) {
+        codeRanges.push({ from: pos, to: pos + node.nodeSize });
+      }
+    });
+
+    // Remove code marks from identified ranges
+    codeRanges.forEach(range => {
+      tr.removeMark(range.from, range.to, editor.schema.marks.code);
+      hasChanges = true;
+    });
+
+    if (hasChanges) {
+       editor.view.dispatch(tr);
+    }
+  }, [editor]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -359,6 +459,8 @@ export const EditorWorkspace: React.FC = () => {
             isIntelligenceProcessing={isIntelligenceProcessing}
             isAnalyzing={engineState.isAnalyzing}
             onRunAnalysis={engineActions.runAnalysis}
+            globalFormattingIssueCount={globalFormattingIssueCount}
+            onFixGlobalFormatting={handleFixGlobalFormatting}
           />
         )}
       </AnimatePresence>
@@ -451,6 +553,7 @@ export const EditorWorkspace: React.FC = () => {
               helpType={engineState.magicHelpType}
               activeMode={engineState.activeMagicMode}
               grammarSuggestions={engineState.grammarSuggestions}
+              hasFormattingIssues={selectionHasFormattingIssues}
               onRewrite={engineActions.handleRewrite}
               onHelp={engineActions.handleHelp}
               onApply={engineActions.applyVariation}
@@ -458,6 +561,7 @@ export const EditorWorkspace: React.FC = () => {
               onApplyGrammar={engineActions.applyGrammarSuggestion}
               onApplyAllGrammar={engineActions.applyAllGrammarSuggestions}
               onDismissGrammar={engineActions.dismissGrammarSuggestion}
+              onFixFormatting={handleFixFormattingSelection}
               onClose={engineActions.closeMagicBar}
               position={selectionPos}
             />

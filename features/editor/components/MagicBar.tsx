@@ -11,6 +11,7 @@ interface MagicBarProps {
   helpType?: 'Explain' | 'Thesaurus' | null;
   activeMode?: string | null;
   grammarSuggestions: GrammarSuggestion[];
+  hasFormattingIssues?: boolean;
   onRewrite: (mode: string, tone?: string) => void;
   onHelp: (type: 'Explain' | 'Thesaurus') => void;
   onApply: (text: string) => void;
@@ -18,6 +19,7 @@ interface MagicBarProps {
   onApplyGrammar: (id?: string | null) => void;
   onApplyAllGrammar: () => void;
   onDismissGrammar: (id: string) => void;
+  onFixFormatting?: () => void;
   onClose: () => void;
   position: { top: number; left: number };
 }
@@ -27,13 +29,14 @@ const Icons = {
   Sparkles: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z" /></svg>,
   Book: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>,
   Lightbulb: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2 1.5-3.5a6 6 0 0 0-12 0c0 1.5.5 2.5 1.5 3.5.8.8 1.3 1.5 1.5 2.5" /><path d="M9 18h6" /><path d="M10 22h4" /></svg>,
-  Eye: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>,
+  Eye: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>,
   Message: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></svg>,
   Palette: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.6 1.6 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" /></svg>,
   X: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>,
   Check: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>,
   Copy: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>,
   ChevronLeft: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>,
+  Wand: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2.5l5 5" /><path d="M2.5 19.5l9.5-9.5" /><path d="M7 6l1 1" /><path d="M14 4l.5.5" /><path d="M17 7l-.5.5" /><path d="M4 9l.5.5" /></svg>,
 };
 
 // --- Sparkle Animation Component ---
@@ -88,6 +91,7 @@ const MagicBarComponent: React.FC<MagicBarProps> = ({
   helpType,
   activeMode,
   grammarSuggestions,
+  hasFormattingIssues,
   onRewrite,
   onHelp,
   onApply,
@@ -95,6 +99,7 @@ const MagicBarComponent: React.FC<MagicBarProps> = ({
   onApplyGrammar,
   onApplyAllGrammar,
   onDismissGrammar,
+  onFixFormatting,
   onClose,
   position
 }) => {
@@ -225,6 +230,16 @@ const MagicBarComponent: React.FC<MagicBarProps> = ({
                       <Icons.Check /> <span className="hidden sm:inline">Fix grammar</span>
                     </button>
                   </AccessibleTooltip>
+                  {hasFormattingIssues && onFixFormatting && (
+                    <AccessibleTooltip
+                      content={disabledReason ?? "Fix formatting issues (remove code blocks/unwanted styles)."}
+                      position="top"
+                    >
+                      <button onClick={onFixFormatting} className={`${menuButtonClass} ${disabledClasses} text-[var(--warning-500)] hover:text-[var(--warning-600)]`} disabled={!!disabledReason} aria-disabled={!!disabledReason}>
+                        <Icons.Wand /> <span className="hidden sm:inline">Clean Up</span>
+                      </button>
+                    </AccessibleTooltip>
+                  )}
               </div>
 
               <div className="w-px h-6 bg-[var(--border-primary)] mx-1"></div>
