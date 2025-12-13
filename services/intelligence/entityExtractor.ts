@@ -132,12 +132,6 @@ export const getCanonicalEntityKey = (
   const surname = nonTitleTokens[nonTitleTokens.length - 1];
   const info = surnameMap.get(surname);
 
-  // If the bare surname appears somewhere in the text, consolidate all
-  // references that share this surname under a single key.
-  if (info?.hasBare) {
-    return surname;
-  }
-
   // Otherwise, keep the full non-title name as the key so distinct characters
   // with the same surname remain separate.
   return nonTitleTokens.join(' ');

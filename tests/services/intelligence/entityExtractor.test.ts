@@ -376,13 +376,17 @@ describe('entityExtractor', () => {
       
       const result = extractEntities(text, paragraphs, [], 'chapter1');
       
-      // Should consolidate into one or two entities, not three
       const smithEntities = result.nodes.filter(n => 
         n.name.toLowerCase().includes('smith')
       );
       
-      // Should be consolidated
-      expect(smithEntities.length).toBeLessThanOrEqual(2);
+      // Should NOT be consolidated aggressively. "John Smith" should remain distinct from "Smith"
+      // because "Smith" is ambiguous (could be Mr. Smith, or John, or someone else).
+      // Ideally we have: "John Smith" and "Smith" (from Mr. Smith/Smith).
+      expect(smithEntities.length).toBeGreaterThanOrEqual(2);
+
+      const johnSmith = smithEntities.find(n => n.name === 'John Smith');
+      expect(johnSmith).toBeDefined();
     });
 
     it('adds aliases from known-as patterns and skips incomplete captures', () => {
@@ -403,14 +407,15 @@ describe('entityExtractor', () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   describe('getCanonicalEntityKey', () => {
-    it('uses bare surname when present in surname map', () => {
+    it('does not incorrectly merge full names just because bare surname is present', () => {
       const surnameMap = new Map<string, { hasBare: boolean }>([
         ['smith', { hasBare: true }],
       ]);
 
       const key = getCanonicalEntityKey('John Smith', surnameMap);
 
-      expect(key).toBe('smith');
+      // Should return 'john smith' to prevent merging with 'Jane Smith' or 'Mr. Smith'
+      expect(key).toBe('john smith');
     });
 
     it('preserves full name when surname is never used alone', () => {
