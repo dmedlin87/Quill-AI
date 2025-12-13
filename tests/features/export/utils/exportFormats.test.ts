@@ -30,58 +30,147 @@ describe('generateExport', () => {
     { id: '1', title: 'Chapter 1', content: '<p>Paragraph 1.</p><p>Paragraph 2.</p>' },
   ];
 
-  const mockCreateObjectURL = vi.fn(() => 'blob:url');
-  const mockRevokeObjectURL = vi.fn();
+  let lastBlob: Blob | null = null;
+  let lastAnchor: { href: string; download: string; click: () => void } | null = null;
   const mockLinkClick = vi.fn();
-  const mockAppendChild = vi.fn();
-  const mockRemoveChild = vi.fn();
-
-  // Capture blob content
-  let capturedBlobContent: string[] = [];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    capturedBlobContent = [];
+    lastBlob = null;
+    lastAnchor = null;
 
-    global.URL.createObjectURL = mockCreateObjectURL;
-    global.URL.revokeObjectURL = mockRevokeObjectURL;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob: any) => {
+      lastBlob = blob as Blob;
+      return 'blob:url';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
 
-    // Mock Blob constructor correctly
-    // We need to use 'function' not arrow function to support 'new'
-    vi.spyOn(global, 'Blob').mockImplementation(function(content) {
-      capturedBlobContent = content as string[];
-      return { size: 0, type: '' } as Blob;
-    } as any);
-
-    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
-      if (tag === 'a') {
-        return {
-          click: mockLinkClick,
-          href: '',
-          download: '',
-        } as unknown as HTMLAnchorElement;
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: any) => {
+      if (tagName === 'a') {
+        lastAnchor = { href: '', download: '', click: mockLinkClick };
+        return lastAnchor as any as HTMLAnchorElement;
       }
-      return document.createElement(tag);
+      return originalCreateElement(tagName);
     });
 
-    vi.spyOn(document.body, 'appendChild').mockImplementation(mockAppendChild);
-    vi.spyOn(document.body, 'removeChild').mockImplementation(mockRemoveChild);
+    vi.spyOn(document.body, 'appendChild').mockImplementation(() => null as any);
+    vi.spyOn(document.body, 'removeChild').mockImplementation(() => null as any);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('generates TXT export with correct paragraph spacing', async () => {
+  const readBlobText = async (blob: Blob): Promise<string> => {
+    const maybeText = (blob as any).text;
+    if (typeof maybeText === 'function') {
+      return maybeText.call(blob);
+    }
+
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.readAsText(blob);
+    });
+  };
+
+  it('generates TXT export with title/author and HTML normalization', async () => {
     await generateExport(mockProject, mockChapters as any[], {
       format: 'txt',
+      includeTitle: true,
+      includeAuthor: true,
+      includeChapterTitles: false,
+    });
+
+    expect(mockLinkClick).toHaveBeenCalledTimes(1);
+    expect(lastAnchor?.download).toBe('test_novel.txt');
+    expect(lastBlob).toBeInstanceOf(Blob);
+
+    const content = await readBlobText(lastBlob!);
+    expect(content).toContain('Test Novel');
+    expect(content).toContain('by Test Author');
+    expect(content).toMatch(/Paragraph 1\.\s+Paragraph 2\./);
+  });
+
+  it('generates Markdown export with chapter headings', async () => {
+    await generateExport(mockProject, mockChapters as any[], {
+      format: 'md',
+      includeTitle: false,
+      includeAuthor: false,
+      includeChapterTitles: true,
+    });
+
+    expect(lastAnchor?.download).toBe('test_novel.md');
+    const content = await readBlobText(lastBlob!);
+    expect(content).toContain('## Chapter 1');
+  });
+
+  it('uses provided filename verbatim when supplied', async () => {
+    await generateExport(mockProject, mockChapters as any[], {
+      format: 'txt',
+      filename: 'My Export Name',
       includeTitle: false,
       includeAuthor: false,
       includeChapterTitles: false,
     });
 
-    const content = capturedBlobContent.join('');
-    // This is expected to fail with the current implementation
-    expect(content).toMatch(/Paragraph 1\.\s+Paragraph 2\./);
+    expect(lastAnchor?.download).toBe('My Export Name.txt');
+  });
+
+  it('routes DOCX exports through exportStandardManuscriptDocx', async () => {
+    await generateExport(mockProject, mockChapters as any[], {
+      format: 'docx',
+      includeTitle: true,
+      includeAuthor: true,
+      includeChapterTitles: true,
+    });
+
+    expect(toManuscriptExportChapters).toHaveBeenCalledWith(mockChapters);
+    expect(exportStandardManuscriptDocx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Test Novel',
+        author: 'Test Author',
+        filename: 'test_novel.docx',
+      }),
+    );
+  });
+
+  it('routes PDF exports through pdfExportService with expected config', async () => {
+    await generateExport(mockProject, mockChapters as any[], {
+      format: 'pdf',
+      includeTitle: true,
+      includeAuthor: true,
+      includeChapterTitles: false,
+    });
+
+    expect(createManuscriptExportData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Test Novel',
+        author: 'Test Author',
+        includeTitles: false,
+        pageBreakBetweenChapters: true,
+      }),
+    );
+
+    expect(pdfExportService.generatePdf).toHaveBeenCalledWith(
+      expect.objectContaining({ mocked: true }),
+      expect.objectContaining({
+        filename: 'test_novel.pdf',
+        manuscriptOptions: expect.objectContaining({ includeChapterTitles: false }),
+      }),
+    );
+  });
+
+  it('throws for unsupported formats', async () => {
+    await expect(
+      generateExport(mockProject, mockChapters as any[], {
+        format: 'rtf' as any,
+        includeTitle: false,
+        includeAuthor: false,
+        includeChapterTitles: false,
+      }),
+    ).rejects.toThrow('Unsupported format');
   });
 });

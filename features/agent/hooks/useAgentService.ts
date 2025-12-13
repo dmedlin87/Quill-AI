@@ -33,6 +33,7 @@ export interface AgentState {
 export interface UseAgentServiceOptions {
   lore?: Lore;
   chapters?: Chapter[];
+  activeChapterId?: string | null;
   analysis?: AnalysisResult | null;
   onToolAction: ToolActionHandler;
   initialPersona?: Persona;
@@ -69,7 +70,17 @@ export function useAgentService(
   fullText: string,
   options: UseAgentServiceOptions
 ): AgentServiceResult {
-  const { lore, chapters = [], analysis, onToolAction, initialPersona, intelligenceHUD, interviewTarget, projectId } = options;
+  const {
+    lore,
+    chapters = [],
+    activeChapterId,
+    analysis,
+    onToolAction,
+    initialPersona,
+    intelligenceHUD,
+    interviewTarget,
+    projectId,
+  } = options;
 
   const messageLimit = Number.isFinite(options.messageLimit) && (options.messageLimit as number) > 0
     ? Math.floor(options.messageLimit as number)
@@ -139,6 +150,7 @@ export function useAgentService(
     const context: AgentContextInput = {
       fullText,
       chapters,
+      activeChapterId: activeChapterId ?? null,
       lore,
       analysis: analysis || null,
       intelligenceHUD,
@@ -186,6 +198,7 @@ export function useAgentService(
   }, [
     fullText,
     chapters,
+    activeChapterId,
     lore,
     analysis,
     intelligenceHUD,

@@ -71,12 +71,6 @@ describe('abortCoordinator', () => {
       expect(isAbortError(error)).toBe(true);
     });
 
-    it("returns true for Error with AbortError name", () => {
-      const error = new Error('The operation was aborted');
-      error.name = 'AbortError';
-      expect(isAbortError(error)).toBe(true);
-    });
-
     it('returns false for regular Error', () => {
       const error = new Error('Something went wrong');
       expect(isAbortError(error)).toBe(false);
@@ -97,6 +91,24 @@ describe('abortCoordinator', () => {
 
     it('returns false for string', () => {
       expect(isAbortError('AbortError')).toBe(false);
+    });
+
+    it('does not throw when DOMException is unavailable and still detects AbortError by name', () => {
+      const originalDOMException = (globalThis as any).DOMException;
+
+      try {
+        (globalThis as any).DOMException = undefined;
+
+        const error = { name: 'AbortError' };
+        let result: boolean | undefined;
+
+        expect(() => {
+          result = isAbortError(error);
+        }).not.toThrow();
+        expect(result).toBe(true);
+      } finally {
+        (globalThis as any).DOMException = originalDOMException;
+      }
     });
   });
 

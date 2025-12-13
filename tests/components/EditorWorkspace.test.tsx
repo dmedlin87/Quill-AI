@@ -82,11 +82,13 @@ vi.mock('@/features/editor/components/CommentCard', () => ({
 }));
 
 import { useProjectStore } from '@/features/project';
-import { useEngine } from '@/features/shared';
+import { useEngine, useManuscriptIntelligence, findQuoteRange } from '@/features/shared';
 import { useEditorState, useEditorActions } from '@/features/core/context/EditorContext';
 
 const mockUseProjectStore = useProjectStore as unknown as Mock;
 const mockUseEngine = useEngine as unknown as Mock;
+const mockUseManuscriptIntelligence = useManuscriptIntelligence as unknown as Mock;
+const mockFindQuoteRange = findQuoteRange as unknown as Mock;
 const mockUseEditorState = useEditorState as unknown as Mock;
 const mockUseEditorActions = useEditorActions as unknown as Mock;
 
@@ -94,7 +96,11 @@ describe('EditorWorkspace', () => {
   const mockRunAnalysis = vi.fn();
   const mockToggleZenMode = vi.fn();
 
-  const setupMocks = (overridesEditor: Record<string, any> = {}, overridesEngine: Record<string, any> = {}) => {
+  const setupMocks = (
+    overridesEditor: Record<string, any> = {},
+    overridesEngine: Record<string, any> = {},
+    overridesIntelligence: Record<string, any> = {},
+  ) => {
     const { dismissComment: overrideDismissComment, ...editorStateOverrides } = overridesEditor;
 
     mockUseProjectStore.mockReturnValue({
@@ -182,6 +188,16 @@ describe('EditorWorkspace', () => {
       state: mergedState,
       actions: mergedActions,
     });
+
+    mockUseManuscriptIntelligence.mockReturnValue({
+      intelligence: null,
+      hud: { prioritizedIssues: [] },
+      instantMetrics: { wordCount: 0 },
+      isProcessing: false,
+      updateText: vi.fn(),
+      updateCursor: vi.fn(),
+      ...overridesIntelligence,
+    });
   };
 
   beforeEach(() => {
@@ -249,6 +265,106 @@ describe('EditorWorkspace', () => {
     render(<EditorWorkspace />);
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(mockToggleZenMode).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows selection hint when text exists and there is no selection', () => {
+    setupMocks({ selectionRange: null, currentText: 'Non-empty text' });
+    render(<EditorWorkspace />);
+    expect(screen.getByText(/Highlight a sentence/i)).toBeInTheDocument();
+  });
+
+  it('shows empty-document help when document is empty', () => {
+    setupMocks({ selectionRange: null, currentText: '   ' });
+    render(<EditorWorkspace />);
+    expect(screen.getByText(/Start writing to get AI help/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Highlight a sentence/i)).not.toBeInTheDocument();
+  });
+
+  it('hides header in Zen Mode until hover zone is entered', () => {
+    setupMocks({ isZenMode: true });
+    const { container } = render(<EditorWorkspace />);
+
+    expect(screen.queryByText('Deep Analysis')).not.toBeInTheDocument();
+
+    const hoverZone = container.querySelector('div.fixed.top-0.left-0.right-0.h-8.z-40');
+    expect(hoverZone).toBeTruthy();
+    fireEvent.mouseEnter(hoverZone!);
+
+    expect(screen.getByText('Deep Analysis')).toBeInTheDocument();
+  });
+
+  it('passes intelligence-derived analysisHighlights into RichTextEditor', () => {
+    setupMocks(
+      {},
+      {},
+      {
+        hud: {
+          prioritizedIssues: [
+            { id: 'i1', description: 'High', severity: 0.9, offset: 10 },
+            { id: 'i2', description: 'Mid', severity: 0.6, offset: 20 },
+            { id: 'i3', description: 'Low', severity: 0.2, offset: 30 },
+          ],
+        },
+      },
+    );
+
+    render(<EditorWorkspace />);
+
+    const props = mockRichTextProps.mock.calls[0][0];
+    expect(props.analysisHighlights).toHaveLength(3);
+    expect(props.analysisHighlights[0].color).toBe('var(--error-500)');
+    expect(props.analysisHighlights[1].color).toBe('var(--warning-500)');
+    expect(props.analysisHighlights[2].color).toBe('var(--magic-500)');
+  });
+
+  it('falls back to plotIssues highlights when intelligence has none', () => {
+    mockFindQuoteRange.mockReturnValue({ start: 2, end: 5 });
+
+    setupMocks({}, {}, { hud: { prioritizedIssues: [] } });
+
+    mockUseProjectStore.mockReturnValue({
+      currentProject: { id: 'p1', title: 'Test Project', setting: { timePeriod: 'Modern', location: 'City' } },
+      getActiveChapter: () => ({
+        id: 'ch1',
+        title: 'Chapter 1',
+        lastAnalysis: { plotIssues: [{ issue: 'X', quote: 'q', suggestion: 's' }] },
+      }),
+    });
+
+    render(<EditorWorkspace />);
+
+    expect(mockFindQuoteRange).toHaveBeenCalled();
+    const props = mockRichTextProps.mock.calls[0][0];
+    expect(props.analysisHighlights).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ start: 2, end: 5, color: 'var(--error-500)' }),
+      ]),
+    );
+  });
+
+  it('sets MagicBar hasFormattingIssues when selection contains code blocks', () => {
+    const editor = {
+      state: {
+        selection: { from: 0, to: 5 },
+        doc: {
+          nodesBetween: vi.fn((_from: number, _to: number, cb: any) => {
+            cb({ type: { name: 'codeBlock' } });
+          }),
+        },
+      },
+    };
+
+    setupMocks({
+      editor,
+      selectionRange: { start: 0, end: 5, text: 'Sample' },
+      selectionPos: { top: 100, left: 200 },
+    });
+
+    render(<EditorWorkspace />);
+
+    expect(
+      mockMagicBarProps.mock.calls.some((call) => call[0]?.hasFormattingIssues === true),
+    ).toBe(true);
   });
 
   it('shows diff modal when pendingDiff is present', () => {

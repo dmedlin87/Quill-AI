@@ -121,9 +121,6 @@ describe('EditorWorkspace Formatting Logic', () => {
 
     render(<EditorWorkspace />);
 
-    // Wait for debounce (1000ms in implementation, verify with timer or waitFor)
-    // Note: In real test env with fake timers we might need advanceTimersByTime
-    // But for this mock setup, the effect runs eventually.
     await screen.findByText(/Fix Formatting \(3\)/, {}, { timeout: 2000 });
   });
 
@@ -142,8 +139,7 @@ describe('EditorWorkspace Formatting Logic', () => {
 
     render(<EditorWorkspace />);
 
-    // Wait for button to appear
-    const button = await screen.findByText(/Fix Formatting/);
+    const button = await screen.findByRole('button', { name: /Fix Formatting/i }, { timeout: 3000 });
     fireEvent.click(button);
 
     // Verify transaction was dispatched

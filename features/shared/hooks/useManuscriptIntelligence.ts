@@ -367,6 +367,13 @@ export const useManuscriptIntelligence = (
     
     return () => {
       if (workerRef.current) {
+        if (workerRequestIdRef.current) {
+          try {
+            workerRef.current.postMessage({ type: 'CANCEL', id: workerRequestIdRef.current });
+          } catch {
+            // Best-effort cancellation; worker may already be shutting down.
+          }
+        }
         workerRef.current.terminate();
         workerRef.current = null;
       }

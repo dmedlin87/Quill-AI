@@ -1320,4 +1320,61 @@ describe('adaptiveContext', () => {
       expect(result.context).toContain('No recent events');
     });
   });
+
+  describe('Coverage gaps', () => {
+    it('does not append goals when they would exceed the memory budget', async () => {
+      vi.spyOn(memoryService, 'getMemories').mockResolvedValue([{ id: 'bed', topicTags: ['meta:bedside-note'] }] as any);
+      vi.spyOn(memoryService, 'getMemoriesForContext').mockResolvedValue({ author: [], project: [{ id: 'p', text: 'm', topicTags: [] }] } as any);
+      vi.spyOn(memoryService, 'getActiveGoals').mockResolvedValue([{ title: 'Goal', progress: 10 }] as any);
+      vi.spyOn(memoryService, 'formatMemoriesForPrompt').mockReturnValue('MEMS');
+      vi.spyOn(memoryService, 'formatGoalsForPrompt').mockReturnValue('G'.repeat(5000));
+
+      const tinyBudget = {
+        ...DEFAULT_BUDGET,
+        totalTokens: 120,
+        sections: { ...DEFAULT_BUDGET.sections, memory: 0.1 },
+      };
+
+      const result = await buildAdaptiveContext(baseState, 'p1', { budget: tinyBudget });
+      expect(result.context).toContain('MEMS');
+      expect(result.context).not.toContain('Goal');
+    });
+
+    it('stops listing lore characters when near budget ceiling', async () => {
+      const loreState = {
+        ...baseState,
+        lore: {
+          characters: [
+            { name: 'A', bio: 'x'.repeat(2000) },
+            { name: 'B', bio: 'y'.repeat(2000) },
+          ],
+          worldRules: [],
+          manuscriptIndex: null,
+        },
+      };
+
+      const result = await buildAdaptiveContext(loreState, null, {
+        budget: { ...DEFAULT_BUDGET, totalTokens: 250, sections: { ...DEFAULT_BUDGET.sections, lore: 0.4 } },
+      });
+
+      expect(result.context).toContain('[LORE BIBLE]');
+      expect(result.context).toContain('A');
+    });
+
+    it('truncates a truncatable section during assembly when budget is tight', async () => {
+      vi.spyOn(memoryService, 'getMemories').mockResolvedValue([{ id: 'bed', topicTags: ['meta:bedside-note'] }] as any);
+      vi.spyOn(memoryService, 'getMemoriesForContext').mockResolvedValue({ author: [], project: [] } as any);
+      vi.spyOn(memoryService, 'getActiveGoals').mockResolvedValue([] as any);
+
+      const state = {
+        ...baseState,
+        manuscript: { ...baseState.manuscript, currentText: 'x'.repeat(5000) },
+      };
+
+      const result = await buildAdaptiveContext(state, 'p1', { budget: { ...DEFAULT_BUDGET, totalTokens: 80 } });
+
+      expect(result.sectionsTruncated.length).toBeGreaterThan(0);
+      expect(result.sectionsIncluded.length).toBeGreaterThan(0);
+    });
+  });
 });

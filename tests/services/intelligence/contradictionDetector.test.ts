@@ -935,5 +935,30 @@ describe('Contradiction Detector', () => {
 
       expect(contradictions).toEqual([]);
     });
+
+    it('treats compatible color variations as non-contradictions', () => {
+      const text = `Alice's blue eyes sparkled. Later, Alice's azure eyes reflected the firelight.`;
+      const entities = createEntityGraph([
+        createEntity('Alice', [{ offset: 0, length: 5 }, { offset: 33, length: 5 }]),
+      ]);
+
+      const contradictions = detectContradictions(text, entities, createTimeline());
+      expect(contradictions).toEqual([]);
+    });
+
+    it('falls back to Math.random id generation when crypto.randomUUID is unavailable', () => {
+      const originalCrypto = globalThis.crypto;
+      try {
+        Object.defineProperty(globalThis, 'crypto', { value: { ...originalCrypto, randomUUID: undefined }, configurable: true });
+        const text = `Alice's green eyes glowed. Alice's brown eyes glowed.`;
+        const entities = createEntityGraph([
+          createEntity('Alice', [{ offset: 0, length: 5 }]),
+        ]);
+        const contradictions = detectContradictions(text, entities, createTimeline());
+        expect(contradictions[0]?.id).toBeTruthy();
+      } finally {
+        Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true });
+      }
+    });
   });
 });

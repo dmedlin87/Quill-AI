@@ -69,6 +69,105 @@ describe('useManuscriptIntelligence', () => {
     vi.useRealTimers();
   });
 
+  it('throttles instant processing within the throttle window', () => {
+    const nowSpy = vi
+      .spyOn(Date, 'now')
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(1020);
+
+    const { result } = renderHook(() =>
+      useManuscriptIntelligence({ chapterId: 'c1', initialText: '' }),
+    );
+
+    act(() => {
+      result.current.updateText('a', 1);
+      result.current.updateText('ab', 2);
+    });
+
+    expect(mocks.processInstant).toHaveBeenCalledTimes(1);
+    nowSpy.mockRestore();
+  });
+
+  it('uses requestIdleCallback for background processing when available', () => {
+    const ric = vi.fn((cb: any) => cb());
+    vi.stubGlobal('requestIdleCallback', ric as any);
+
+    const onReady = vi.fn();
+    mocks.processManuscript.mockReturnValueOnce({
+      hud: { situational: {} },
+      structural: { scenes: [] },
+      entities: { nodes: [] },
+      timeline: { promises: [] },
+      heatmap: { sections: [] },
+      style: { flags: { passiveVoiceRatio: 0, adverbDensity: 0, clicheCount: 0, filterWordDensity: 0 } },
+      chapterId: 'c1',
+    });
+
+    const { result } = renderHook(() =>
+      useManuscriptIntelligence({ chapterId: 'c1', initialText: '', onIntelligenceReady: onReady }),
+    );
+
+    act(() => {
+      result.current.forceFullProcess();
+    });
+
+    expect(ric).toHaveBeenCalled();
+    expect(mocks.processManuscript).toHaveBeenCalled();
+    expect(onReady).toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it('updates HUD on cursor updates when scenes exist and builds section context', () => {
+    const onReady = vi.fn();
+
+    mocks.processManuscript.mockReturnValueOnce({
+      hud: { situational: {} },
+      structural: {
+        scenes: [
+          { startOffset: 0, endOffset: 20, type: 'action', tension: 0.6, pov: 'Alice' },
+        ],
+      },
+      entities: {
+        nodes: [
+          {
+            name: 'Alice',
+            type: 'character',
+            mentions: [{ offset: 5 }],
+          },
+        ],
+      },
+      timeline: { promises: [] },
+      heatmap: { sections: [] },
+      style: { flags: { passiveVoiceRatio: 0, adverbDensity: 0, clicheCount: 0, filterWordDensity: 0 } },
+      chapterId: 'c1',
+    } as any);
+
+    const { result } = renderHook(() =>
+      useManuscriptIntelligence({ chapterId: 'c1', initialText: '', onIntelligenceReady: onReady }),
+    );
+
+    act(() => {
+      result.current.updateText('Hello world', 0);
+      result.current.forceFullProcess();
+      vi.runAllTimers();
+    });
+
+    expect(onReady).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.updateCursor(10);
+    });
+
+    expect(mocks.updateHUD).toHaveBeenCalled();
+
+    const sectionContext = result.current.getSectionContext(0, 15);
+    expect(sectionContext).toContain('[SCENES]');
+    expect(sectionContext).toContain('POV: Alice');
+    expect(sectionContext).toContain('[ENTITIES]');
+    expect(sectionContext).toContain('Alice (character)');
+  });
+
   it('runs instant and debounced processing on text updates', () => {
     const { result } = renderHook(() =>
       useManuscriptIntelligence({ chapterId: 'c1', initialText: 'Hello' })
@@ -693,8 +792,18 @@ describe('Worker Integration', () => {
       }
     };
 
-    const WorkerSpy = vi.fn(() => new MockWorkerInstance());
-    vi.stubGlobal('Worker', WorkerSpy);
+    class WorkerCtor {
+      postMessage = mockWorker.postMessage;
+      terminate = mockWorker.terminate;
+      onmessage: any = null;
+      onerror: any = null;
+
+      constructor() {
+        mockWorker.instance = this;
+      }
+    }
+
+    vi.stubGlobal('Worker', WorkerCtor as any);
   });
 
   afterEach(() => {
@@ -703,75 +812,81 @@ describe('Worker Integration', () => {
     vi.useRealTimers();
   });
 
-  it.skip('initializes worker when enabled (simulated)', async () => {
-      // Mock URL to prevent "Invalid URL" errors in JSDOM/Node environment during test
-      const originalURL = global.URL;
-      global.URL = class MockURL {
-        href: string;
-        constructor(url: string, base?: string) {
-            this.href = url;
-        }
-        toString() { return this.href; }
-      } as any;
+  it('posts to the worker and handles RESULT/ERROR messages, then cancels on unmount', async () => {
+    const mod = await import('@/features/shared/hooks/useManuscriptIntelligence');
 
-      // Import the config object - renaming to avoid variable shadowing confusion 
-      // though not strictly necessary, it ensures we use the dynamically imported module
-      const { WORKER_CONFIG, useManuscriptIntelligence: testHook } = await import('@/features/shared/hooks/useManuscriptIntelligence');
-      
-      const originalEnabled = WORKER_CONFIG.enabled;
-      WORKER_CONFIG.enabled = true;
+    const originalEnabled = mod.WORKER_CONFIG.enabled;
+    mod.WORKER_CONFIG.enabled = true;
 
-      try {
-        const { result } = renderHook(() =>
-          testHook({ chapterId: 'c1', initialText: 'Test' })
-        );
+    const onReady = vi.fn();
+    try {
+      const { result, unmount } = renderHook(() =>
+        mod.useManuscriptIntelligence({ chapterId: 'c1', initialText: '', onIntelligenceReady: onReady }),
+      );
 
-        // Verify Worker was instantiated
-        expect(global.Worker).toHaveBeenCalled();
-        
-        // Ensure text is updated
-        act(() => {
-          result.current.updateText('Test content', 10);
-          vi.runAllTimers();
+      act(() => {
+        result.current.forceFullProcess();
+      });
+
+      expect(mockWorker.postMessage).toHaveBeenCalled();
+      const requestId = mockWorker.postMessage.mock.calls[0]?.[0]?.id;
+      expect(requestId).toBeTruthy();
+
+      // Ignore mismatched ids (non-READY)
+      act(() => {
+        mockWorker.instance.onmessage?.({
+          data: { type: 'RESULT', id: 'old', payload: { chapterId: 'c1' } },
         });
-        
-        // Trigger background process
-        act(() => {
-          result.current.forceFullProcess();
-          vi.runAllTimers();
-        });
+      });
+      expect(onReady).not.toHaveBeenCalled();
 
-        // We expect postMessage to be called because WORKER_CONFIG.enabled is true
-        expect(mockWorker.postMessage).toHaveBeenCalled();
-        
-        // Simulate result from worker
-        const mockResult = {
-            chapterId: 'c1',
-            structural: { scenes: [] },
-            hud: { situational: { update: true } }
-        };
-        
-        act(() => {
-          // Trigger onmessage on the worker instance
-          const workerInstance = mockWorker.instance;
-          if (workerInstance && workerInstance.onmessage) {
-              workerInstance.onmessage({
-                  data: {
-                      type: 'RESULT',
-                      id: mockWorker.postMessage.mock.calls[0]?.[0]?.id,
-                      payload: mockResult
-                  }
-              });
-          }
+      // Exercise READY + PROGRESS branches
+      act(() => {
+        mockWorker.instance.onmessage?.({ data: { type: 'READY', id: 'ready' } });
+        mockWorker.instance.onmessage?.({
+          data: { type: 'PROGRESS', id: requestId, progress: { percent: 50 } },
         });
-        
-        // Check if state updated
-        expect(result.current.intelligence).toEqual(mockResult);
+      });
 
-      } finally {
-        // Restore config and URL
-        WORKER_CONFIG.enabled = originalEnabled;
-        global.URL = originalURL;
-      }
+      // RESULT updates state and calls callback
+      const payload = {
+        chapterId: 'c1',
+        hud: { situational: { ok: true } },
+        structural: { scenes: [] },
+        entities: { nodes: [] },
+        timeline: { promises: [] },
+        heatmap: { sections: [] },
+        style: { flags: { passiveVoiceRatio: 0, adverbDensity: 0, clicheCount: 0, filterWordDensity: 0 } },
+      };
+
+      act(() => {
+        mockWorker.instance.onmessage?.({ data: { type: 'RESULT', id: requestId, payload } });
+      });
+
+      expect(onReady).toHaveBeenCalledTimes(1);
+      expect(result.current.processingTier).toBe('idle');
+      expect(result.current.isProcessing).toBe(false);
+
+      // ERROR sets idle and stops processing
+      act(() => {
+        result.current.forceFullProcess();
+      });
+      const secondRequestId = mockWorker.postMessage.mock.calls.at(-1)?.[0]?.id;
+
+      act(() => {
+        mockWorker.instance.onmessage?.({ data: { type: 'ERROR', id: secondRequestId, error: 'boom' } });
+      });
+
+      expect(result.current.processingTier).toBe('idle');
+      expect(result.current.isProcessing).toBe(false);
+
+      act(() => {
+        unmount();
+      });
+
+      expect(mockWorker.postMessage).toHaveBeenCalledWith({ type: 'CANCEL', id: secondRequestId });
+    } finally {
+      mod.WORKER_CONFIG.enabled = originalEnabled;
+    }
   });
 });

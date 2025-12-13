@@ -125,6 +125,33 @@ describe('AutoObserver Service', () => {
       }));
     });
 
+    it('supports string relationships and captures createMemory errors', async () => {
+      mockCreateMemory.mockRejectedValueOnce(new Error('db down'));
+
+      const analysis: AnalysisResult = {
+        characters: [{
+          name: 'Hero',
+          arc: 'Starts weak, becomes strong and learns to lead.',
+          relationships: ['Sidekick'],
+          inconsistencies: [],
+          developmentSuggestion: ''
+        }],
+        plotIssues: [],
+        pacing: { score: 1, analysis: 'ok', slowSections: [], fastSections: [] },
+        timestamp: Date.now()
+      } as any;
+
+      const result = await autoObserver.observeAnalysisResults(analysis, { projectId, deduplicateEnabled: false });
+
+      expect(mockCreateMemory).toHaveBeenCalledWith(expect.objectContaining({
+        text: expect.stringContaining("Hero's arc:"),
+      }));
+      expect(mockCreateMemory).toHaveBeenCalledWith(expect.objectContaining({
+        text: 'Hero has relationship with Sidekick',
+      }));
+      expect(result.errors.some(e => e.includes('Failed to create arc observation'))).toBe(true);
+    });
+
     it('should skip duplicates if enabled', async () => {
       const analysis: AnalysisResult = {
         characters: [{
@@ -737,4 +764,3 @@ describe('AutoObserver Service', () => {
     });
   });
 });
-

@@ -10,6 +10,11 @@ import { createChunkId } from '@/services/intelligence/chunkIndex';
 
 const parseStructureMock = vi.fn();
 const processManuscriptCachedMock = vi.fn();
+const workerPoolMock = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  submitJob: vi.fn(),
+  cancelChapterJobs: vi.fn(),
+};
 
 vi.mock('@/services/intelligence/index', async () => {
   const actual = await vi.importActual('@/services/intelligence/index');
@@ -19,6 +24,10 @@ vi.mock('@/services/intelligence/index', async () => {
     processManuscriptCached: (...args: any[]) => processManuscriptCachedMock(...args),
   };
 });
+
+vi.mock('@/services/intelligence/workerPool', () => ({
+  getWorkerPool: () => workerPoolMock,
+}));
 
 const createStructureStub = (text: string) => {
   const trimmed = text.trim();
@@ -53,6 +62,16 @@ const createStructureStub = (text: string) => {
     processedAt: 1,
   };
 };
+
+const createIntelStub = (text: string): ManuscriptIntelligence => ({
+  structural: createStructureStub(text) as any,
+  entities: createEntitiesStub(['Alice'], ['Town']) as any,
+  style: createStyleStub() as any,
+  heatmap: { sections: [{ overallRisk: 0.1 }] } as any,
+  timeline: createTimelineStub(['promise']) as any,
+  hud: null as any,
+  processedAt: 1,
+});
 
 const createEntitiesStub = (characters: string[], locations: string[]) => ({
   nodes: [
@@ -525,5 +544,58 @@ describe('ChunkManager processing and persistence flows', () => {
 
     manager.destroy();
     expect((manager as any).isDestroyed).toBe(true);
+  });
+});
+
+describe('ChunkManager worker + error branches', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    parseStructureMock.mockImplementation((text: string) => createStructureStub(text));
+    processManuscriptCachedMock.mockImplementation((text: string) => createIntelStub(text));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('cancels worker jobs when removing a chapter in worker mode', () => {
+    const manager = new ChunkManager({ useWorker: true });
+    manager.removeChapter('chap-x');
+    expect(workerPoolMock.cancelChapterJobs).toHaveBeenCalledWith('chap-x');
+    manager.destroy();
+  });
+
+  it('reports errors when chapter text is missing during reprocess', async () => {
+    const onError = vi.fn();
+    const manager = new ChunkManager({ useWorker: false }, { onError });
+
+    manager.registerChapter('c1', 'Hello world');
+    // Simulate a sync bug where chapter text cache is missing.
+    (manager as any).chapterTexts.delete('c1');
+
+    await manager.reprocessChunk(createChunkId('chapter', 'c1'));
+
+    expect(onError).toHaveBeenCalledWith(
+      createChunkId('chapter', 'c1'),
+      expect.stringContaining('Could not retrieve chunk text'),
+    );
+
+    manager.destroy();
+  });
+
+  it('surfaces worker failures as chunk processing errors', async () => {
+    const onError = vi.fn();
+    const manager = new ChunkManager({ useWorker: true }, { onError });
+
+    workerPoolMock.submitJob.mockImplementationOnce((_job: any, cb: any) => cb({ error: 'worker-fail' }));
+    workerPoolMock.submitJob.mockImplementation((_job: any, cb: any) => cb({ intelligence: createIntelStub('ok') }));
+
+    manager.registerChapter('c1', 'Hello world');
+    await manager.processAllDirty();
+
+    expect(onError).toHaveBeenCalled();
+    expect(String(onError.mock.calls[0][1])).toContain('worker-fail');
+
+    manager.destroy();
   });
 });

@@ -147,4 +147,38 @@ describe('entityExtractor coverage', () => {
         expect(forest).toBeDefined();
         expect(forest?.type).toBe('location');
     });
+
+    it('increments co-occurrences when the same pair appears across paragraphs', () => {
+        const text = `Alice met Bob.\n\nAlice met Bob again.`;
+        const paragraphs = [
+            createTestParagraph(0, 14),
+            createTestParagraph(16, text.length - 16),
+        ];
+        const result = extractEntities(text, paragraphs, [], 'chapter1');
+
+        const edge = result.edges.find(e => e.type === 'interacts');
+        expect(edge).toBeDefined();
+        expect(edge?.coOccurrences).toBeGreaterThanOrEqual(2);
+    });
+
+    it('upgrades an interacts edge when an explicit relationship pattern is found', () => {
+        const text = `Alice met Bob.\n\nAlice attacked Bob.`;
+        const paragraphs = [
+            createTestParagraph(0, 14),
+            createTestParagraph(16, text.length - 16),
+        ];
+        const result = extractEntities(text, paragraphs, [], 'chapter1');
+
+        const opposes = result.edges.find(e => e.type === 'opposes');
+        expect(opposes).toBeDefined();
+    });
+
+    it('adds pronoun co-references as additional mentions when resolved', () => {
+        const text = `Alice walked in. She smiled.`;
+        const result = extractEntities(text, [createTestParagraph(0, text.length)], [], 'chapter1');
+
+        const alice = result.nodes.find(n => n.name === 'Alice');
+        expect(alice).toBeDefined();
+        expect(alice?.mentionCount).toBeGreaterThanOrEqual(2);
+    });
 });

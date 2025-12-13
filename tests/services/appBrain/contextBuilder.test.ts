@@ -323,6 +323,50 @@ describe('contextBuilder - coverage gaps', () => {
      const ctx = buildAgentContext(state);
      expect(ctx).toContain('⚠️ Has 1 inconsistencies');
   });
+
+  it('truncates long selection and microphone transcript previews and omits empty activity/history', async () => {
+    vi.mocked(eventBus.formatRecentEventsForAI).mockReturnValueOnce('');
+    const historyMod = await import('@/services/commands/history');
+    vi.spyOn(historyMod, 'getCommandHistory').mockReturnValueOnce({
+      formatForPrompt: vi.fn(() => ''),
+    } as any);
+
+    const longSelection = 's'.repeat(160);
+    const longTranscript = 't'.repeat(90);
+
+    const state: AppBrainState = {
+      ...baseState,
+      manuscript: {
+        ...baseState.manuscript,
+        branches: [],
+        activeBranchId: null,
+        setting: null as any,
+      },
+      ui: {
+        ...baseState.ui,
+        selection: { start: 1, end: 2, text: longSelection } as any,
+        microphone: { ...baseState.ui.microphone, lastTranscript: longTranscript } as any,
+      },
+      intelligence: {
+        ...baseState.intelligence,
+        hud: {
+          ...baseState.intelligence.hud!,
+          context: {
+            ...baseState.intelligence.hud!.context,
+            activeRelationships: [{ id: 'r1', source: 'missing', target: 'missing', type: 'ally' } as any],
+          },
+        } as any,
+      },
+      session: { ...baseState.session, lastAgentAction: null },
+    };
+
+    const ctx = buildAgentContext(state);
+    expect(ctx).toContain('Selection: "');
+    expect(ctx).toContain('(heard: "');
+    expect(ctx).toContain('...'); // selection + transcript truncation markers
+    expect(ctx).not.toContain('[RECENT ACTIVITY]');
+    expect(ctx).not.toContain('[RECENT AGENT ACTIONS]');
+  });
 });
 
 describe('contextBuilder - buildAgentContextWithMemory', () => {

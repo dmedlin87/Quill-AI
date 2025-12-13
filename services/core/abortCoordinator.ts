@@ -74,7 +74,7 @@ export function isAbortError(error: unknown): boolean {
     return false;
   }
 
-  if (error instanceof DOMException) {
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
     return error.name === 'AbortError';
   }
 

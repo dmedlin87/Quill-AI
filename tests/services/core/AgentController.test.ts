@@ -116,6 +116,22 @@ describe('DefaultAgentController', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    mockSendMessage.mockReset();
+    mockCreateChatSessionFromContext.mockReset();
+    mockCreateChatSessionFromContext.mockImplementation(() => ({
+      chat: {
+        sendMessage: mockSendMessage,
+      },
+      memoryContext: '',
+    }));
+
+    mockGetOrCreateBedsideNote.mockReset();
+    mockGetOrCreateBedsideNote.mockResolvedValue({
+      text: 'Existing bedside note summary',
+    });
+
+    mockGetSmartAgentContext.mockReset();
   });
 
   it('sends a simple message without tool calls', async () => {
@@ -175,6 +191,7 @@ describe('DefaultAgentController', () => {
     expect(toolExecutor.execute).toHaveBeenCalledWith(
       'update_manuscript',
       { foo: 'bar' },
+      expect.objectContaining({ abortSignal: expect.any(Object) }),
     );
 
     // One send for init, one for user context, one for tool loop
@@ -239,7 +256,11 @@ describe('DefaultAgentController', () => {
     expect(messageTexts.some(text => text.includes('Bedside note may need an update'))).toBe(
       false,
     );
-    expect(toolExecutor.execute).toHaveBeenCalledWith('update_bedside_note', { foo: 'bar' });
+    expect(toolExecutor.execute).toHaveBeenCalledWith(
+      'update_bedside_note',
+      { foo: 'bar' },
+      expect.objectContaining({ abortSignal: expect.any(Object) }),
+    );
     expect(mockGetOrCreateBedsideNote).not.toHaveBeenCalled();
   });
 
@@ -648,9 +669,11 @@ describe('DefaultAgentController', () => {
     mockSendMessage.mockResolvedValueOnce({ text: 'Interim', functionCalls: [] });
 
     const deferred = createDeferred<AgentToolLoopModelResult>();
+    const toolLoopStarted = createDeferred<void>();
     const runAgentToolLoopSpy = vi
       .spyOn(agentToolLoopModule, 'runAgentToolLoop')
       .mockImplementation(async ({ initialResult }) => {
+        toolLoopStarted.resolve();
         await deferred.promise;
         return initialResult;
       });
@@ -664,7 +687,7 @@ describe('DefaultAgentController', () => {
     const { controller } = makeController({ events });
 
     const sendPromise = controller.sendMessage({ text: 'Abort mid way', editorContext });
-    await Promise.resolve();
+    await toolLoopStarted.promise;
 
     controller.abortCurrentRequest();
     deferred.resolve({ text: 'Should not emit', functionCalls: [] });

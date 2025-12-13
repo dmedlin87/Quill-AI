@@ -193,7 +193,7 @@ const MagicBarComponent: React.FC<MagicBarProps> = ({
     <div 
       style={{ top: displayPosition.top, left: displayPosition.left }}
       className={`fixed z-50 -translate-x-1/2 -mt-4 animate-scale-in ${
-        safePosition?.adjustments.vertical === 'down' 
+        safePosition?.adjustments?.vertical === 'down' 
           ? 'origin-top' 
           : '-translate-y-full origin-bottom'
       }`}

@@ -309,6 +309,63 @@ describe('toolExecutor core helpers', () => {
     expect(result.message).toContain('...');
   });
 
+  it('defaults write_memory_note scope to project and importance to 0.5', async () => {
+    const result = await executeMemoryToolCall(
+      'write_memory_note',
+      {
+        text: 'Hello',
+        type: 'observation',
+        // scope omitted
+        // tags omitted
+        // importance omitted
+      },
+      'project-1',
+    );
+
+    expect(memoryModule.createMemory).toHaveBeenCalledWith({
+      scope: 'project',
+      projectId: 'project-1',
+      text: 'Hello',
+      type: 'observation',
+      topicTags: [],
+      importance: 0.5,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('filters search_memory results to project scope', async () => {
+    const result = await executeMemoryToolCall(
+      'search_memory',
+      { tags: ['x'], scope: 'project' },
+      'project-1',
+    );
+
+    expect(result.success).toBe(true);
+    expect(memoryModule.formatMemoriesForPrompt).toHaveBeenCalledWith(
+      {
+        author: [],
+        project: [{ scope: 'project', type: 'observation', text: 'note1' }],
+      },
+      { maxLength: 2000 },
+    );
+  });
+
+  it('defaults watch_entity priority to medium when omitted', async () => {
+    const result = await executeMemoryToolCall(
+      'watch_entity',
+      { name: 'Seth' },
+      'project-1',
+    );
+
+    expect(result.success).toBe(true);
+    expect(memoryModule.addWatchedEntity).toHaveBeenCalledWith({
+      name: 'Seth',
+      projectId: 'project-1',
+      priority: 'medium',
+      reason: undefined,
+    });
+  });
+
   it('fails to write project-scoped memory without projectId', async () => {
     const result = await executeMemoryToolCall(
       'write_memory_note',

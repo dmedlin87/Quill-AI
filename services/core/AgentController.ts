@@ -420,10 +420,8 @@ export class DefaultAgentController implements AgentController {
         return;
       }
 
-      const result = finalResult;
-
       // Final text response
-      const responseText = (result as any).text as string | undefined;
+      const responseText = finalResult.text;
       const modelMessage: ChatMessage = {
         role: 'model',
         text: responseText || 'Done.',

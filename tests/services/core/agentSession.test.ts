@@ -64,6 +64,27 @@ describe('agentSession helpers', () => {
     expect(ctx).toContain('[CHAPTER: Two]');
   });
 
+  it('marks only one active chapter when activeChapterId is missing and multiple chapters share the same content', () => {
+    const duplicateChapters = [
+      { id: 'c1', title: 'One', content: 'Same', order: 0, updatedAt: 0 },
+      { id: 'c2', title: 'Two', content: 'Same', order: 1, updatedAt: 0 },
+      { id: 'c3', title: 'Three', content: 'Other', order: 2, updatedAt: 0 },
+    ];
+
+    const ctx = buildManuscriptContext(duplicateChapters as any, 'Same', null);
+    const activeCount = (ctx.match(/\(ACTIVE - You can edit this\)/g) || []).length;
+
+    expect(activeCount).toBe(1);
+    expect(ctx).toContain('[CHAPTER: One] (ACTIVE - You can edit this)');
+    expect(ctx).toContain('[CHAPTER: Two] (READ ONLY - Request user to switch)');
+  });
+
+  it('prefers activeChapterId over content heuristics', () => {
+    const ctx = buildManuscriptContext(chapters as any, 'Second', 'c1');
+    expect(ctx).toContain('[CHAPTER: One] (ACTIVE - You can edit this)');
+    expect(ctx).toContain('[CHAPTER: Two] (READ ONLY - Request user to switch)');
+  });
+
   it('builds memory context with provider and projectId', async () => {
     const provider = {
       buildMemoryContext: vi.fn(async (projectId: string) => `[mem:${projectId}]`),

@@ -1273,5 +1273,81 @@ describe('ProactiveThinker', () => {
       await t.maybeEvolveBedsideNote('test', {});
       expect(evolveBedsideNote).not.toHaveBeenCalled();
     });
+
+    it('applyAdaptiveRelevance mutes and reprioritizes suggestions using weights', () => {
+      setProactiveThinkerSettingsAdapter({
+        getSuggestionWeights: () => ({
+          plot: 0.0,
+          character: 0.4,
+          pacing: 0.2,
+          style: 1.6,
+          continuity: 2.0,
+          lore_discovery: 1.0,
+          timeline_conflict: 1.0,
+          voice_inconsistency: 1.0,
+          other: 1.0,
+        }),
+      });
+
+      const t = new ProactiveThinker({ enabled: true });
+      const suggestions = [
+        { type: 'related_memory', tags: ['plot'], priority: 'high', text: 'plot' },
+        { type: 'character', priority: 'high', text: 'character' },
+        { type: 'pacing', priority: 'high', text: 'pacing' },
+        { type: 'style', priority: 'low', text: 'style' },
+        { type: 'continuity', priority: 'medium', text: 'continuity' },
+        { type: 'other', priority: 'medium', text: 'other' },
+      ] as any[];
+
+      // @ts-ignore - private helper for deterministic coverage
+      const weighted = t.applyAdaptiveRelevance(suggestions);
+
+      // Hard-mute plot suggestion
+      expect(weighted.some((s: any) => s.text === 'plot')).toBe(false);
+
+      // Reprioritized outputs should be sorted by priority
+      const priorities = weighted.map((s: any) => s.priority);
+      expect(priorities[0]).toBe('high');
+      expect(priorities).toContain('low');
+
+      const byText = Object.fromEntries(weighted.map((s: any) => [s.text, s.priority]));
+      expect(byText.character).toBe('medium'); // high -> medium (weight < 0.5)
+      expect(byText.pacing).toBe('low'); // high -> low (weight < 0.3)
+      expect(byText.style).toBe('medium'); // low -> medium (weight > 1.5)
+      expect(byText.continuity).toBe('high'); // forced high (weight > 1.8)
+    });
+
+    it('getSuggestionCategory maps related_memory tags and falls back to other', () => {
+      const t = new ProactiveThinker({ enabled: true });
+
+      // @ts-ignore
+      expect(t.getSuggestionCategory({ type: 'related_memory', tags: ['plot'] })).toBe('plot');
+      // @ts-ignore
+      expect(t.getSuggestionCategory({ type: 'related_memory', tags: ['character'] })).toBe('character');
+      // @ts-ignore
+      expect(t.getSuggestionCategory({ type: 'related_memory', tags: ['pacing'] })).toBe('pacing');
+      // @ts-ignore
+      expect(t.getSuggestionCategory({ type: 'related_memory', tags: ['style'] })).toBe('style');
+      // @ts-ignore
+      expect(t.getSuggestionCategory({ type: 'related_memory', tags: ['continuity'] })).toBe('continuity');
+      // @ts-ignore
+      expect(t.getSuggestionCategory({ type: 'related_memory', tags: [] })).toBe('other');
+      // @ts-ignore
+      expect(t.getSuggestionCategory({ type: 'voice_inconsistency' })).toBe('voice_inconsistency');
+    });
+
+    it('formatAge emits day/hour/minute/just-now variants', () => {
+      vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+      const t = new ProactiveThinker({ enabled: true });
+
+      // @ts-ignore
+      expect(t.formatAge(Date.now() - 2 * 86400000)).toBe('2d ago');
+      // @ts-ignore
+      expect(t.formatAge(Date.now() - 3 * 3600000)).toBe('3h ago');
+      // @ts-ignore
+      expect(t.formatAge(Date.now() - 15 * 60000)).toBe('15m ago');
+      // @ts-ignore
+      expect(t.formatAge(Date.now() - 5000)).toBe('just now');
+    });
   });
 });

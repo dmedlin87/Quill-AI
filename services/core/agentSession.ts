@@ -14,10 +14,17 @@ export const buildManuscriptContext = (
   chapters: AgentContextInput['chapters'],
   fullText: string,
   activeChapterId?: string | null,
-): string =>
-  chapters
+): string => {
+  const resolvedActiveChapterId =
+    activeChapterId && chapters.some(chapter => chapter.id === activeChapterId)
+      ? activeChapterId
+      : chapters.find(chapter => chapter.content === fullText)?.id ?? chapters[0]?.id ?? null;
+
+  return chapters
     .map(chapter => {
-      const isActive = activeChapterId ? chapter.id === activeChapterId : chapter.content === fullText;
+      const isActive = resolvedActiveChapterId
+        ? chapter.id === resolvedActiveChapterId
+        : false;
       return `[CHAPTER: ${chapter.title}]${
         isActive
           ? ' (ACTIVE - You can edit this)'
@@ -25,6 +32,7 @@ export const buildManuscriptContext = (
       }\n${chapter.content}\n`;
     })
     .join('\n-------------------\n');
+};
 
 export const buildMemoryContext = async (
   memoryProvider?: MemoryProvider,

@@ -566,6 +566,45 @@ describe('ImportWizard', () => {
       // Page-number-only lines should be removed
       expect(result[0].content).not.toMatch(/^\s*\d{1,4}\s*$/m);
     });
+
+    it('auto-fixes missing Chapter 1 when Chapter 2 is next', () => {
+      const chaptersWithGap = [
+        { title: 'Prologue', content: 'Some opening text that should become Chapter 1.' },
+        { title: 'Chapter 2', content: 'Second chapter content.' },
+      ];
+
+      render(
+        <ImportWizard
+          initialChapters={chaptersWithGap as any}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /Auto-Fix.*Issues/i }));
+      fireEvent.click(screen.getByText('Finish Import'));
+
+      const result = mockOnConfirm.mock.calls[0][0];
+      expect(result.some((chapter: any) => chapter.title === 'Chapter 1')).toBe(true);
+    });
+
+    it('treats numeric artifact-heavy chapters as artifacts (not short content)', () => {
+      const artifactChapter = [
+        { title: 'Chapter 1', content: '\n1\n2\n3\n4\n5\n' }, // 5 artifact lines
+      ];
+
+      render(
+        <ImportWizard
+          initialChapters={artifactChapter as any}
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      // Should flag artifacts, but not short-content warning (suppressed when hasArtifacts)
+      expect(screen.getAllByText(/potential page number artifacts detected/i).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/very little content/i)).not.toBeInTheDocument();
+    });
   });
 
   describe('Drag and Drop', () => {
