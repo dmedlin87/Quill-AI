@@ -33,6 +33,7 @@ const FALSE_POSITIVES = new Set([
   'chapter', 'part', 'book', 'section', 'act', 'scene',
   'said', 'asked', 'replied', 'answered', 'thought', 'knew', 'felt', 'saw',
   'but', 'and', 'or', 'if', 'when', 'then', 'now', 'here', 'there',
+  'with', 'from', 'for', 'to', 'about', 'without',
   'yes', 'no', 'maybe', 'perhaps', 'certainly', 'definitely',
   'one', 'two', 'three', 'four', 'five', 'first', 'second', 'third', 'last',
 ]);
