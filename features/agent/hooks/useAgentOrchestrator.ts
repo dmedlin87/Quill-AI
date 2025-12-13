@@ -20,6 +20,7 @@ import type { AppEvent, AppBrainState } from '@/services/appBrain';
 import { AgentToolLoopModelResult, runAgentToolLoop } from '@/services/core/agentToolLoop';
 import { buildAgentContextPrompt } from '@/services/core/agentContextBuilder';
 import { createToolCallAdapter } from '@/services/core/toolCallAdapter';
+import { isAbortError } from '@/services/core/abortCoordinator';
 import type { ToolResult } from '@/services/gemini/toolExecutor';
 import { AgentMachineAction, AgentMachineState, agentOrchestratorReducer, initialAgentMachineState } from '@/services/core/agentOrchestratorMachine';
 import { shallow } from 'zustand/shallow';
@@ -267,11 +268,15 @@ export function useAgentOrchestrator(
   // ─────────────────────────────────────────────────────────────────────────
 
   const executeToolCall = useCallback(
-    async (toolName: string, args: Record<string, unknown>): Promise<ToolResult> => {
+    async (
+      toolName: string,
+      args: Record<string, unknown>,
+      options: { abortSignal?: AbortSignal | null } = {},
+    ): Promise<ToolResult> => {
       dispatch({ type: 'START_EXECUTION', tool: toolName });
 
       const projectId = manuscript.projectId;
-      const result = await executeAgentToolCall(toolName, args, brainActions, projectId);
+      const result = await executeAgentToolCall(toolName, args, brainActions, projectId, options);
 
       if (result.success) {
         emitToolExecuted(toolName, true);
@@ -405,11 +410,15 @@ export function useAgentOrchestrator(
             [];
 
           for (const call of functionCalls) {
+            if (signal.aborted) {
+              break;
+            }
             toolUI.handleToolStart(call.name);
             try {
               const result = (await executeToolCall(
                 call.name,
                 call.args as Record<string, unknown>,
+                { abortSignal: signal },
               )) as ToolResult;
 
               toolUI.handleToolEnd(call.name, result);
@@ -419,6 +428,9 @@ export function useAgentOrchestrator(
                 response: { result: result.message },
               });
             } catch (err) {
+              if (signal.aborted || isAbortError(err)) {
+                break;
+              }
               const errorMessage =
                 err instanceof Error ? err.message : 'Unknown error executing tool';
               const fallback: ToolResult = {

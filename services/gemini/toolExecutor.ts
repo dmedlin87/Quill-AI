@@ -14,11 +14,26 @@ import { BedsideNoteGoalSummary } from '@/services/memory/types';
 import { BedsideNoteAction, BedsideNoteMutationRequest } from '@/services/memory/bedside/schema';
 import { CommandRegistry } from '@/services/commands/registry';
 import { getCommandHistory } from '@/services/commands/history';
+import { isAbortError } from '@/services/core/abortCoordinator';
 
 export interface ToolResult {
   success: boolean;
   message: string;
   error?: string;
+}
+
+export interface ToolExecuteOptions {
+  abortSignal?: AbortSignal | null;
+}
+
+function throwIfAborted(abortSignal?: AbortSignal | null): void {
+  if (!abortSignal?.aborted) return;
+  if (typeof DOMException !== 'undefined') {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+  const err = new Error('Aborted');
+  (err as { name?: string }).name = 'AbortError';
+  throw err;
 }
 
 const MEMORY_TOOL_NAMES = new Set<string>([
@@ -40,8 +55,10 @@ export async function executeAppBrainToolCall(
   toolName: string,
   args: Record<string, unknown>,
   actions: AppBrainActions,
+  options: ToolExecuteOptions = {},
 ): Promise<ToolResult> {
   try {
+    throwIfAborted(options.abortSignal);
     let result: string;
 
     switch (toolName) {
@@ -105,7 +122,7 @@ export async function executeAppBrainToolCall(
 
       // UI Control
       case 'switch_panel':
-        actions.switchPanel(args.panel as string);
+        await actions.switchPanel(args.panel as string);
         result = `Switched to ${args.panel} panel`;
         break;
       case 'toggle_zen_mode':
@@ -152,13 +169,22 @@ export async function executeAppBrainToolCall(
         break;
 
       default:
-        result = `Unknown tool: ${toolName}`;
+        return {
+          success: true,
+          message: `Unknown tool: ${toolName}`,
+        };
     }
+
+    throwIfAborted(options.abortSignal);
+
     return {
       success: true,
       message: result,
     };
   } catch (e) {
+    if (isAbortError(e)) {
+      throw e;
+    }
     const error = e instanceof Error ? e.message : 'Unknown error';
     return {
       success: false,
@@ -172,8 +198,10 @@ export async function executeMemoryToolCall(
   toolName: string,
   args: Record<string, unknown>,
   projectId: string | null,
+  options: ToolExecuteOptions = {},
 ): Promise<ToolResult> {
   try {
+    throwIfAborted(options.abortSignal);
     let message: string;
 
     switch (toolName) {
@@ -397,11 +425,16 @@ export async function executeMemoryToolCall(
         };
     }
 
+    throwIfAborted(options.abortSignal);
+
     return {
       success: true,
       message,
     };
   } catch (e) {
+    if (isAbortError(e)) {
+      throw e;
+    }
     const error = e instanceof Error ? e.message : 'Unknown error';
     return {
       success: false,
@@ -416,11 +449,13 @@ export async function executeAgentToolCall(
   args: Record<string, unknown>,
   actions: AppBrainActions,
   projectId: string | null,
+  options: ToolExecuteOptions = {},
 ): Promise<ToolResult> {
+  throwIfAborted(options.abortSignal);
   if (isMemoryToolName(toolName)) {
-    return executeMemoryToolCall(toolName, args, projectId);
+    return executeMemoryToolCall(toolName, args, projectId, options);
   }
-  return executeAppBrainToolCall(toolName, args, actions);
+  return executeAppBrainToolCall(toolName, args, actions, options);
 }
 
 /**
@@ -454,8 +489,14 @@ export class ToolExecutor {
     private readonly recordHistory: boolean = true,
   ) {}
 
-  async execute(toolName: string, args: Record<string, unknown>): Promise<ToolResult> {
-    const result = await executeAgentToolCall(toolName, args, this.actions, this.projectId);
+  async execute(
+    toolName: string,
+    args: Record<string, unknown>,
+    options: ToolExecuteOptions = {},
+  ): Promise<ToolResult> {
+    throwIfAborted(options.abortSignal);
+    const result = await executeAgentToolCall(toolName, args, this.actions, this.projectId, options);
+    throwIfAborted(options.abortSignal);
     
     // Record to history (unless it's a memory tool - those have their own tracking)
     if (this.recordHistory && !isMemoryToolName(toolName)) {

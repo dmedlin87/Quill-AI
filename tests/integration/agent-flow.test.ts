@@ -128,7 +128,11 @@ describe('Agent flow integration', () => {
     });
 
     await waitFor(() => {
-      expect(onToolAction).toHaveBeenCalledWith('update_manuscript', { oldText: 'Old content', newText: 'Rewritten content' });
+      expect(onToolAction).toHaveBeenCalledWith(
+        'update_manuscript',
+        { oldText: 'Old content', newText: 'Rewritten content' },
+        expect.objectContaining({ abortSignal: expect.any(Object) }),
+      );
     });
 
     const updatedChapter = useProjectStore.getState().chapters.find(c => c.id === useProjectStore.getState().activeChapterId);

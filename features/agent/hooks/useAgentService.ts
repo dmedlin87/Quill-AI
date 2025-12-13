@@ -21,9 +21,14 @@ import {
   AgentToolExecutor,
   MemoryProvider,
 } from '@/services/core/AgentController';
+import { isAbortError } from '@/services/core/abortCoordinator';
 
 // Tool action handler type
-export type ToolActionHandler = (toolName: string, args: Record<string, unknown>) => Promise<string>;
+export type ToolActionHandler = (
+  toolName: string,
+  args: Record<string, unknown>,
+  options?: { abortSignal?: AbortSignal | null },
+) => Promise<string>;
 
 export interface AgentState {
   status: 'idle' | 'thinking' | 'executing' | 'error';
@@ -108,11 +113,31 @@ export function useAgentService(
   }, [messageLimit]);
 
   const createToolExecutor = useCallback((): AgentToolExecutor => ({
-    async execute(toolName, args) {
+    async execute(toolName, args, options) {
+      const abortSignal = options?.abortSignal ?? null;
+      if (abortSignal?.aborted) {
+        if (typeof DOMException !== 'undefined') {
+          throw new DOMException('Aborted', 'AbortError');
+        }
+        const err = new Error('Aborted');
+        (err as { name?: string }).name = 'AbortError';
+        throw err;
+      }
       try {
-        const message = await onToolAction(toolName, args);
+        const message = await onToolAction(toolName, args, { abortSignal });
+        if (abortSignal?.aborted) {
+          if (typeof DOMException !== 'undefined') {
+            throw new DOMException('Aborted', 'AbortError');
+          }
+          const err = new Error('Aborted');
+          (err as { name?: string }).name = 'AbortError';
+          throw err;
+        }
         return { success: true, message };
       } catch (e) {
+        if (isAbortError(e)) {
+          throw e;
+        }
         const errorMessage = e instanceof Error ? e.message : 'Unknown error';
         return {
           success: false,

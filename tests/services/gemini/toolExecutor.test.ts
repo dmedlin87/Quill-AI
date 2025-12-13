@@ -221,6 +221,21 @@ describe('toolExecutor core helpers', () => {
     expect(actions.continueWriting).toHaveBeenCalled();
   });
 
+  it('returns error when switch_panel action rejects', async () => {
+    const actions = createMockActions();
+    const err = new Error('switch failed');
+    const rejection = Promise.reject(err);
+    rejection.catch(() => undefined);
+
+    (actions.switchPanel as any).mockReturnValueOnce(rejection);
+
+    const result = await executeAppBrainToolCall('switch_panel', { panel: 'analysis' }, actions);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('switch failed');
+    expect(result.message).toContain('Error executing switch_panel');
+  });
+
   it('captures errors from AppBrain actions with legacy param keys', async () => {
     const actions = createMockActions();
     (actions.updateManuscript as any).mockRejectedValueOnce(new Error('kaboom'));
@@ -689,6 +704,29 @@ describe('toolExecutor core helpers', () => {
 describe('ToolExecutor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('throws AbortError and skips tool execution/history when abortSignal is already aborted', async () => {
+    const actions = createMockActions();
+    const executor = new ToolExecutor(actions, 'project-1', true);
+
+    const abortController = new AbortController();
+    abortController.abort();
+
+    const args = {
+      search_text: 'old',
+      replacement_text: 'new',
+      description: 'desc',
+    };
+
+    await expect(
+      executor.execute('update_manuscript', args, { abortSignal: abortController.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(actions.updateManuscript).not.toHaveBeenCalled();
+    const history = getCommandHistory();
+    expect(history.record).not.toHaveBeenCalled();
+    expect(history.persist).not.toHaveBeenCalled();
   });
 
   it('executes non-memory tools and records to history', async () => {
