@@ -225,12 +225,7 @@ export const getModelPricing = (
  * Get the active model build key from settings or environment.
  */
 export function getActiveModelBuild(): ModelBuildKey {
-  // First check environment override
-  if (MODEL_BUILD_ENV && MODEL_BUILD_ENV in ModelBuilds) {
-    return MODEL_BUILD_ENV;
-  }
-  
-  // Try to read from settings store in localStorage
+  // Try to read from settings store in localStorage before falling back to env overrides
   try {
     const stored = localStorage.getItem('quill-settings');
     if (stored) {
@@ -244,13 +239,15 @@ export function getActiveModelBuild(): ModelBuildKey {
     // Ignore parse errors
   }
   
+  // Environment overrides serve as a fallback
+  if (MODEL_BUILD_ENV && MODEL_BUILD_ENV in ModelBuilds) {
+    return MODEL_BUILD_ENV;
+  }
+  
   return 'default';
 }
 
-const ACTIVE_BUILD_KEY: ModelBuildKey =
-  MODEL_BUILD_ENV && MODEL_BUILD_ENV in ModelBuilds ? MODEL_BUILD_ENV : 'default';
-
-/**
+/** 
  * Get the active models based on current settings.
  * This is a function to allow dynamic switching.
  */
@@ -258,24 +255,44 @@ export function getActiveModels(): ModelBuild {
   return ModelBuilds[getActiveModelBuild()];
 }
 
-// For backwards compatibility - static reference
-export const ActiveModels: ModelBuild = ModelBuilds[ACTIVE_BUILD_KEY];
+// For backwards compatibility - dynamic proxy that mirrors whatever build is active.
+/** @deprecated Use getActiveModels() so callers pick up live user preferences. */
+export const ActiveModels: ModelBuild = new Proxy<ModelBuild>({} as ModelBuild, {
+  get(_, prop: string) {
+    return getActiveModels()[prop as keyof ModelBuild];
+  },
+  ownKeys() {
+    return Object.keys(getActiveModels());
+  },
+  getOwnPropertyDescriptor(_, prop: string) {
+    const target = getActiveModels();
+    if (prop in target) {
+      return {
+        configurable: true,
+        enumerable: true,
+        value: (target as Record<string, unknown>)[prop],
+        writable: true,
+      };
+    }
+    return undefined;
+  },
+}) as ModelBuild;
 
 export const ModelConfig = {
   get analysis() {
-    return ActiveModels.analysis.id;
+    return getActiveModels().analysis.id;
   },
   get agent() {
-    return ActiveModels.agent.id;
+    return getActiveModels().agent.id;
   },
   get tts() {
-    return ActiveModels.tts.id;
+    return getActiveModels().tts.id;
   },
   get liveAudio() {
-    return ActiveModels.liveAudio.id;
+    return getActiveModels().liveAudio.id;
   },
   get tools() {
-    return ActiveModels.tools.id;
+    return getActiveModels().tools.id;
   },
   get pro() {
     return this.analysis;
@@ -289,12 +306,24 @@ export const ModelConfig = {
  * Token limits per model (approximate)
  * Used by tokenGuard to prevent context window overflow
  */
-export const TokenLimits = {
-  'gemini-3-pro-preview': 1_000_000,
-  'gemini-2.5-flash': 1_000_000,
-  'gemini-2.5-flash-preview-tts': 8_000,
-  'gemini-2.5-flash-native-audio-preview-09-2025': 32_000,
-} as const;
+const buildTokenLimits = (
+  builds: Record<ModelBuildKey, ModelBuild>
+): Readonly<Record<string, number>> => {
+  const limits: Record<string, number> = {};
+
+  for (const build of Object.values(builds)) {
+    for (const def of Object.values(build)) {
+      if (typeof def.maxTokens === 'number') {
+        const previous = limits[def.id] ?? 0;
+        limits[def.id] = Math.max(def.maxTokens, previous);
+      }
+    }
+  }
+
+  return Object.freeze(limits);
+};
+
+export const TokenLimits = buildTokenLimits(ModelBuilds);
 
 /**
  * Default thinking budgets for deep analysis
@@ -305,4 +334,4 @@ export const ThinkingBudgets = {
   rewrite: 4096,
 } as const;
 
-export type ModelId = keyof typeof TokenLimits;
+export type ModelId = Extract<keyof typeof TokenLimits, string>;

@@ -4,6 +4,7 @@ export { CritiqueIntensitySelector, IntensityBadge } from './components/Critique
 export { ExperienceSelector, ExperienceBadge } from './components/ExperienceSelector';
 export { NativeSpellcheckToggle } from './components/NativeSpellcheckToggle';
 export { DeveloperModeToggle } from './components/DeveloperModeToggle';
+export { AutomatedThinkingToggle } from './components/AutomatedThinkingToggle';
 export { RelevanceTuning } from './components/RelevanceTuning';
 export { ThemeSelector } from './components/ThemeSelector';
 export { ModelBuildSelector, ModelBuildBadge } from './components/ModelBuildSelector';

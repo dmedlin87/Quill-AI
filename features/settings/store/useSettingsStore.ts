@@ -26,6 +26,8 @@ interface SettingsState {
   setNativeSpellcheckEnabled: (enabled: boolean) => void;
   developerModeEnabled: boolean;
   setDeveloperModeEnabled: (enabled: boolean) => void;
+  automatedThinkingEnabled: boolean;
+  setAutomatedThinkingEnabled: (enabled: boolean) => void;
   suggestionWeights: SuggestionWeights;
   updateSuggestionWeight: (category: string, weight: number) => void;
   resetSuggestionWeights: () => void;
@@ -45,6 +47,7 @@ const initialState: Omit<SettingsState, keyof SettingsActions> = {
   budgetThreshold: 1.0,
   nativeSpellcheckEnabled: true,
   developerModeEnabled: false,
+  automatedThinkingEnabled: false,
   suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
   // Model and API key defaults
   modelBuild: 'default',
@@ -60,6 +63,7 @@ type SettingsActions = Pick<
   | 'setBudgetThreshold'
   | 'setNativeSpellcheckEnabled'
   | 'setDeveloperModeEnabled'
+  | 'setAutomatedThinkingEnabled'
   | 'updateSuggestionWeight'
   | 'resetSuggestionWeights'
   | 'setModelBuild'
@@ -120,6 +124,12 @@ export const useSettingsStore = create<SettingsState>()(
           state.developerModeEnabled === enabled
             ? state
             : { ...state, developerModeEnabled: enabled }
+        ),
+      setAutomatedThinkingEnabled: (enabled) =>
+        set((state) =>
+          state.automatedThinkingEnabled === enabled
+            ? state
+            : { ...state, automatedThinkingEnabled: enabled }
         ),
       updateSuggestionWeight: (category, weight) =>
         set((state) => ({

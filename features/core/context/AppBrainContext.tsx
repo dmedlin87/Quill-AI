@@ -14,6 +14,7 @@ import { useProjectStore } from '@/features/project';
 import { useManuscriptIntelligence } from '@/features/shared/hooks/useManuscriptIntelligence';
 import { useThrottledValue } from '@/features/shared/hooks/useThrottledValue';
 import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
+import { useSettingsStore } from '@/features/settings';
 import {
   AppBrainState,
   AppBrainActions,
@@ -26,6 +27,10 @@ import {
   emitSelectionChanged,
   emitCursorMoved,
   emitChapterSwitched,
+  startProactiveThinker,
+  stopProactiveThinker,
+  startSignificantEditMonitor,
+  stopSignificantEditMonitor,
   createContextBuilder,
   createEmptyAppBrainState,
 } from '@/services/appBrain';
@@ -110,6 +115,8 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const editor = useEditor();
   const analysisCtx = useAnalysis();
   const projectStore = useProjectStore();
+  const projectId = projectStore.currentProject?.id ?? null;
+  const automatedThinkingEnabled = useSettingsStore((state) => state.automatedThinkingEnabled);
   const { activeTab, activeView, setActiveTab } = useLayoutStore((state) => ({
     activeTab: state.activeTab,
     activeView: state.activeView,
@@ -567,6 +574,24 @@ export const AppBrainProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     createContextBuilder(() => stateRef.current),
     []
   );
+
+  useEffect(() => {
+    if (!automatedThinkingEnabled || !projectId) {
+      stopProactiveThinker();
+      stopSignificantEditMonitor();
+      return;
+    }
+
+    const getStateForThinker = () => useAppBrainStore.getState();
+
+    startSignificantEditMonitor(projectId);
+    startProactiveThinker(getStateForThinker, projectId, () => {});
+
+    return () => {
+      stopProactiveThinker();
+      stopSignificantEditMonitor();
+    };
+  }, [automatedThinkingEnabled, projectId]);
 
   const value = useMemo<AppBrainValue>(() => ({
     state: throttledState,

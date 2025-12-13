@@ -20,6 +20,7 @@ describe('useSettingsStore', () => {
       nativeSpellcheckEnabled: true,
       developerModeEnabled: false,
       budgetThreshold: 1.0,
+      automatedThinkingEnabled: false,
       suggestionWeights: DEFAULT_SUGGESTION_WEIGHTS,
     });
   });
@@ -33,6 +34,7 @@ describe('useSettingsStore', () => {
     expect(state.nativeSpellcheckEnabled).toBe(true);
     expect(state.developerModeEnabled).toBe(false);
     expect(state.budgetThreshold).toBe(1.0);
+    expect(state.automatedThinkingEnabled).toBe(false);
     expect(state.suggestionWeights).toEqual(DEFAULT_SUGGESTION_WEIGHTS);
   });
 
@@ -92,6 +94,14 @@ describe('useSettingsStore', () => {
 
     resetSuggestionWeights();
     expect(useSettingsStore.getState().suggestionWeights.plot).toBe(DEFAULT_SUGGESTION_WEIGHTS.plot);
+  });
+
+  it('toggles automated thinking preference', () => {
+    const { setAutomatedThinkingEnabled } = useSettingsStore.getState();
+
+    setAutomatedThinkingEnabled(true);
+
+    expect(useSettingsStore.getState().automatedThinkingEnabled).toBe(true);
   });
 
   it('preserves state reference if value is unchanged', () => {

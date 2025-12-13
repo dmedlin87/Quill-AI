@@ -9,6 +9,19 @@ import { OrbStatus } from '@/features/agent';
 // Mock dependencies
 vi.mock('@/features/layout/store/useLayoutStore');
 
+let mockAdvancedFeaturesEnabled = false;
+let mockExperimentalFeaturesEnabled = false;
+
+vi.mock('@/features/settings/store/useSettingsStore', () => ({
+  useSettingsStore: vi.fn((selector) => {
+    const state = {
+      advancedFeaturesEnabled: mockAdvancedFeaturesEnabled,
+      experimentalFeaturesEnabled: mockExperimentalFeaturesEnabled,
+    };
+    return typeof selector === 'function' ? selector(state) : state;
+  }),
+}));
+
 // Mock components
 vi.mock('@/features/agent', () => ({
   AIPresenceOrb: ({ onClick, status }: any) => (
@@ -70,6 +83,8 @@ describe('NavigationRail', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAdvancedFeaturesEnabled = false;
+    mockExperimentalFeaturesEnabled = false;
     (useLayoutStore as unknown as Mock).mockReturnValue(mockStore);
     (useLayoutStore.getState as unknown as Mock).mockReturnValue(mockStore);
   });
@@ -84,8 +99,8 @@ describe('NavigationRail', () => {
   it('renders navigation items', () => {
     render(<NavigationRail {...defaultProps} />);
     expect(screen.getByLabelText('Analysis')).toBeInTheDocument();
-    expect(screen.getByLabelText('History')).toBeInTheDocument();
-    expect(screen.getByLabelText('Voice')).toBeInTheDocument();
+    expect(screen.queryByLabelText('History')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Voice')).not.toBeInTheDocument();
   });
 
   it('handles tab switching', () => {
