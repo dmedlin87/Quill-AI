@@ -299,6 +299,20 @@ describe('entityExtractor', () => {
       const room = locations.find(n => n.name === 'large room');
       expect(room).toBeDefined();
     });
+
+    it('stops extracting greedy phrase at stop words even if they are not in the default FALSE_POSITIVES list for location extraction', () => {
+      const text = `He walked into the room with a view.`;
+      const paragraphs = [createTestParagraph(0, text.length)];
+
+      const result = extractEntities(text, paragraphs, [], 'chapter1');
+      const locations = result.nodes.filter(n => n.type === 'location');
+
+      const roomWith = locations.find(n => n.name.toLowerCase() === 'room with');
+      expect(roomWith).toBeUndefined();
+
+      const room = locations.find(n => n.name.toLowerCase() === 'room');
+      expect(room).toBeDefined();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
