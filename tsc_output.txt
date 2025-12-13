@@ -1,0 +1,204 @@
+App.tsx(8,37): error TS2307: Cannot find module '@/features/settings/components/QuotaExhaustedModal' or its corresponding type declarations.
+config/models.ts(34,19): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+config/models.ts(35,24): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+features/debug/components/BrainActivityMonitor.tsx(6,38): error TS2312: An interface can only extend an object type or intersection of object types with statically known members.
+features/debug/components/BrainActivityMonitor.tsx(138,67): error TS2339: Property 'timestamp' does not exist on type 'BrainActivityEntry'.
+features/debug/components/BrainActivityMonitor.tsx(138,81): error TS2339: Property 'timestamp' does not exist on type 'BrainActivityEntry'.
+features/debug/components/BrainActivityMonitor.tsx(164,82): error TS2339: Property 'type' does not exist on type 'BrainActivityEntry'.
+features/debug/components/BrainActivityMonitor.tsx(167,30): error TS2339: Property 'type' does not exist on type 'BrainActivityEntry'.
+features/debug/components/BrainActivityMonitor.tsx(168,98): error TS2339: Property 'timestamp' does not exist on type 'BrainActivityEntry'.
+features/debug/components/BrainActivityMonitor.tsx(170,30): error TS2345: Argument of type 'BrainActivityEntry' is not assignable to parameter of type 'AppEvent'.
+features/editor/hooks/useChunkIndex.ts(268,5): error TS2322: Type '() => { isProcessing: boolean; chapterCount: number; workerEnabled: boolean; totalChunks: number; dirtyCount: number; freshCount: number; processingCount: number; errorCount: number; byLevel: Record<ChunkLevel, number>; } | { ...; }' is not assignable to type '() => { isProcessing: boolean; chapterCount: number; workerEnabled: boolean; totalChunks: number; dirtyCount: number; freshCount: number; processingCount: number; errorCount: number; byLevel: Record<...>; }'.
+  Type '{ isProcessing: boolean; chapterCount: number; workerEnabled: boolean; totalChunks: number; dirtyCount: number; freshCount: number; processingCount: number; errorCount: number; byLevel: Record<...>; } | { ...; }' is not assignable to type '{ isProcessing: boolean; chapterCount: number; workerEnabled: boolean; totalChunks: number; dirtyCount: number; freshCount: number; processingCount: number; errorCount: number; byLevel: Record<ChunkLevel, number>; }'.
+    Property 'workerEnabled' is missing in type '{ totalChunks: number; dirtyCount: number; freshCount: number; processingCount: number; errorCount: number; byLevel: { scene: number; chapter: number; act: number; book: number; }; isProcessing: false; chapterCount: number; }' but required in type '{ isProcessing: boolean; chapterCount: number; workerEnabled: boolean; totalChunks: number; dirtyCount: number; freshCount: number; processingCount: number; errorCount: number; byLevel: Record<ChunkLevel, number>; }'.
+features/export/utils/exportFormats.ts(1,25): error TS2307: Cannot find module '@/types/project' or its corresponding type declarations.
+features/project/store/useProjectStore.ts(52,20): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+features/project/store/useProjectStore.ts(53,27): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+features/shared/hooks/useDraftSmithEngine.ts(108,35): error TS2339: Property 'active' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'active' does not exist on type '{ text: string; start: number; end: number; }'.
+features/voice/components/VoiceMode.tsx(147,11): error TS2322: Type '((options?: { restart?: boolean; }) => Promise<void>) | (() => void)' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
+  Type '(options?: { restart?: boolean; }) => Promise<void>' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
+    Types of parameters 'options' and 'event' are incompatible.
+      Type 'MouseEvent<HTMLButtonElement, MouseEvent>' has no properties in common with type '{ restart?: boolean; }'.
+features/voice/hooks/useSpeechIntent.ts(8,47): error TS2304: Cannot find name 'SpeechRecognition'.
+features/voice/hooks/useSpeechIntent.ts(16,18): error TS2339: Property 'SpeechRecognition' does not exist on type 'Window & typeof globalThis'.
+features/voice/hooks/useSpeechIntent.ts(21,33): error TS2304: Cannot find name 'SpeechRecognition'.
+features/voice/hooks/useSpeechIntent.ts(43,35): error TS2552: Cannot find name 'SpeechRecognitionEvent'. Did you mean 'SpeechRecognitionResult'?
+features/voice/hooks/useSpeechIntent.ts(52,34): error TS2552: Cannot find name 'SpeechRecognitionErrorEvent'. Did you mean 'SpeechRecognitionResult'?
+services/agent/readerService.ts(49,35): error TS2551: Property 'response' does not exist on type 'GenerateContentResponse'. Did you mean 'responseId'?
+services/appBrain/memoryService.ts(84,5): error TS2322: Type '(projectId: string, observation: string, context: { chapterId?: string; }) => Promise<MemoryNote>' is not assignable to type '(projectId: string, observation: string, context?: { chapterId?: string; }) => Promise<void>'.
+  Type 'Promise<MemoryNote>' is not assignable to type 'Promise<void>'.
+    Type 'MemoryNote' is not assignable to type 'void'.
+services/appBrain/memoryService.ts(94,5): error TS2322: Type '(projectId: string, characterName: string, profile: VoiceProfile) => Promise<VoiceProfile>' is not assignable to type '(projectId: string, characterName: string, profile: VoiceProfile) => Promise<void>'.
+  Type 'Promise<VoiceProfile>' is not assignable to type 'Promise<void>'.
+    Type 'VoiceProfile' is not assignable to type 'void'.
+services/appBrain/memoryService.ts(96,59): error TS2345: Argument of type 'VoiceProfile' is not assignable to parameter of type 'DialogueLine[]'.
+  Type 'VoiceProfile' is missing the following properties from type 'DialogueLine[]': length, pop, push, concat, and 29 more.
+services/appBrain/memoryService.ts(99,5): error TS2322: Type '(text: string, options: { maxFacts?: number; }) => Promise<ExtractedFact[]>' is not assignable to type '(text: string, options?: { maxFacts?: number; }) => Promise<string[]>'.
+  Type 'Promise<ExtractedFact[]>' is not assignable to type 'Promise<string[]>'.
+    Type 'ExtractedFact[]' is not assignable to type 'string[]'.
+      Type 'ExtractedFact' is not assignable to type 'string'.
+services/appBrain/memoryService.ts(101,33): error TS2554: Expected 1 arguments, but got 2.
+services/appBrain/memoryService.ts(106,38): error TS2345: Argument of type 'string' is not assignable to parameter of type 'EntityNode[]'.
+services/appBrain/memoryService.ts(111,47): error TS2554: Expected 1 arguments, but got 2.
+services/core/contextService.ts(85,53): error TS2345: Argument of type 'AgentContextOptions' is not assignable to parameter of type 'SmartContextOptions'.
+  Types of property 'queryType' are incompatible.
+    Type '"analysis" | "navigation" | "editing" | "general"' is not assignable to type '"analysis" | "editing" | "general"'.
+      Type '"navigation"' is not assignable to type '"analysis" | "editing" | "general"'.
+services/memory/dreaming.ts(74,5): error TS2353: Object literal may only specify known properties, and 'generationConfig' does not exist in type 'GenerateContentParameters'.
+services/memory/dreaming.ts(79,26): error TS2551: Property 'response' does not exist on type 'GenerateContentResponse'. Did you mean 'responseId'?
+tests/features/agent/components/AIPresenceOrb.test.tsx(25,3): error TS2353: Object literal may only specify known properties, and 'description' does not exist in type 'Persona'.
+tests/features/agent/components/ChatInterface.test.tsx(686,70): error TS2345: Argument of type 'string[]' is not assignable to parameter of type '{ author: MemoryNote[]; project: MemoryNote[]; }'.
+  Type 'string[]' is missing the following properties from type '{ author: MemoryNote[]; project: MemoryNote[]; }': author, project
+tests/features/agent/components/ProactiveSuggestions.test.tsx(31,3): error TS2353: Object literal may only specify known properties, and 'context' does not exist in type 'ProactiveSuggestion'.
+tests/features/agent/hooks/useMemoryIntelligence.test.ts(197,54): error TS2345: Argument of type '"retrieval"' is not assignable to parameter of type '"searched" | "suggested" | "referenced" | "manual"'.
+tests/features/agent/useProactiveSuggestions.test.ts(11,5): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/features/agent/useProactiveSuggestions.test.ts(25,69): error TS2345: Argument of type 'any[]' is not assignable to parameter of type 'never'.
+tests/features/agent/useProactiveSuggestions.test.ts(79,38): error TS2345: Argument of type 'ProactiveSuggestion[]' is not assignable to parameter of type 'never'.
+tests/features/agent/useProactiveSuggestions.test.ts(102,38): error TS2345: Argument of type 'ProactiveSuggestion[]' is not assignable to parameter of type 'never'.
+tests/features/agent/useProactiveSuggestions.test.ts(123,30): error TS2345: Argument of type 'ProactiveSuggestion[]' is not assignable to parameter of type 'never'.
+tests/features/agent/useProactiveSuggestions.test.ts(127,30): error TS2345: Argument of type 'ProactiveSuggestion[]' is not assignable to parameter of type 'never'.
+tests/features/analysis/components/CharactersSection.test.tsx(10,5): error TS2739: Type '{ name: string; bio: string; arc: string; inconsistencies: { issue: string; quote: string; }[]; developmentSuggestion: string; arcStages: { stage: string; description: string; }[]; }' is missing the following properties from type 'CharacterProfile': relationships, plotThreads
+tests/features/debug/BrainActivityMonitor.test.tsx(77,19): error TS2345: Argument of type 'Element' is not assignable to parameter of type 'HTMLElement'.
+  Type 'Element' is missing the following properties from type 'HTMLElement': accessKey, accessKeyLabel, autocapitalize, autocorrect, and 129 more.
+tests/features/debug/BrainActivityMonitor.test.tsx(78,19): error TS2345: Argument of type 'Element' is not assignable to parameter of type 'HTMLElement'.
+  Type 'Element' is missing the following properties from type 'HTMLElement': accessKey, accessKeyLabel, autocapitalize, autocorrect, and 129 more.
+tests/features/debug/components/BrainActivityMonitor.test.tsx(138,35): error TS2322: Type '"TEST_EVENT"' is not assignable to type '"SELECTION_CHANGED" | "CURSOR_MOVED" | "CHAPTER_SWITCHED" | "CHAPTER_CHANGED" | "TEXT_CHANGED" | "IDLE_STATUS_CHANGED" | "DREAMING_STATE_CHANGED" | "ANALYSIS_COMPLETED" | ... 15 more ... | "PROACTIVE_SUGGESTION_ACTION"'.
+tests/features/debug/components/BrainActivityMonitor.test.tsx(166,31): error TS2740: Type '{ id: string; }' is missing the following properties from type 'ProactiveSuggestion': type, priority, title, description, and 3 more.
+tests/features/editor/components/VersionControlPanel.test.tsx(37,13): error TS2322: Type '{ branches: { id: string; name: string; content: string; createdAt: string; baseContent: string; }[]; activeBranchId: any; mainContent: string; onCreateBranch: Mock<Procedure>; onSwitchBranch: Mock<...>; onMergeBranch: Mock<...>; onDeleteBranch: Mock<...>; onRenameBranch: Mock<...>; }' is not assignable to type 'VersionControlPanelProps'.
+  Types of property 'branches' are incompatible.
+    Type '{ id: string; name: string; content: string; createdAt: string; baseContent: string; }[]' is not assignable to type 'Branch[]'.
+      Type '{ id: string; name: string; content: string; createdAt: string; baseContent: string; }' is not assignable to type 'Branch'.
+        Types of property 'createdAt' are incompatible.
+          Type 'string' is not assignable to type 'number'.
+tests/features/editor/components/VersionControlPanel.test.tsx(73,51): error TS2322: Type '{ content: string; id: string; name: string; createdAt: string; baseContent: string; }[]' is not assignable to type 'Branch[]'.
+  Type '{ content: string; id: string; name: string; createdAt: string; baseContent: string; }' is not assignable to type 'Branch'.
+    Types of property 'createdAt' are incompatible.
+      Type 'string' is not assignable to type 'number'.
+tests/features/editor/components/VersionControlPanel.test.tsx(83,13): error TS2322: Type '{ branches: { id: string; name: string; content: string; createdAt: string; baseContent: string; }[]; activeBranchId: any; mainContent: string; onCreateBranch: Mock<Procedure>; onSwitchBranch: Mock<...>; onMergeBranch: Mock<...>; onDeleteBranch: Mock<...>; onRenameBranch: Mock<...>; }' is not assignable to type 'VersionControlPanelProps'.
+  Types of property 'branches' are incompatible.
+    Type '{ id: string; name: string; content: string; createdAt: string; baseContent: string; }[]' is not assignable to type 'Branch[]'.
+      Type '{ id: string; name: string; content: string; createdAt: string; baseContent: string; }' is not assignable to type 'Branch'.
+        Types of property 'createdAt' are incompatible.
+          Type 'string' is not assignable to type 'number'.
+tests/features/editor/extensions/CommentMark.test.ts(99,5): error TS2684: The 'this' context of type 'EditorProps<Plugin<any>>' is not assignable to method's 'this' of type 'Plugin<any>'.
+  Type 'EditorProps<Plugin<any>>' is missing the following properties from type 'Plugin<any>': spec, props, getState
+tests/features/editor/extensions/CommentMark.test.ts(113,5): error TS2684: The 'this' context of type 'EditorProps<Plugin<any>>' is not assignable to method's 'this' of type 'Plugin<any>'.
+  Type 'EditorProps<Plugin<any>>' is missing the following properties from type 'Plugin<any>': spec, props, getState
+tests/features/editor/extensions/CommentMark.test.ts(134,27): error TS2684: The 'this' context of type 'EditorProps<Plugin<any>>' is not assignable to method's 'this' of type 'Plugin<any>'.
+  Type 'EditorProps<Plugin<any>>' is missing the following properties from type 'Plugin<any>': spec, props, getState
+tests/features/editor/hooks/useTiptapSync.test.ts(497,41): error TS2345: Argument of type '{ isDestroyed: boolean; view: { dispatch: Mock<Procedure>; }; }' is not assignable to parameter of type 'Editor'.
+  Type '{ isDestroyed: boolean; view: { dispatch: Mock<Procedure>; }; }' is missing the following properties from type 'Editor': commandManager, extensionManager, css, schema, and 43 more.
+tests/features/editor/hooks/useTiptapSync.test.ts(520,37): error TS2345: Argument of type '{ isDestroyed: boolean; state: { reconfigure: Mock<Procedure>; }; view: { updateState: Mock<Procedure>; }; }' is not assignable to parameter of type 'Editor'.
+  Type '{ isDestroyed: boolean; state: { reconfigure: Mock<Procedure>; }; view: { updateState: Mock<Procedure>; }; }' is missing the following properties from type 'Editor': commandManager, extensionManager, css, schema, and 42 more.
+tests/features/memory/BedsideNotePanel.test.tsx(237,7): error TS2322: Type 'BedsideNoteContent' is not assignable to type 'Record<string, unknown>'.
+  Index signature for type 'string' is missing in type 'BedsideNoteContent'.
+tests/features/memory/BedsideNotePanel.test.tsx(308,7): error TS2322: Type 'BedsideNoteContent' is not assignable to type 'Record<string, unknown>'.
+  Index signature for type 'string' is missing in type 'BedsideNoteContent'.
+tests/features/shared/hooks/useDraftSmithEngine.test.ts(39,5): error TS2698: Spread types may only be created from object types.
+tests/features/shared/utils/textLocator.test.ts(124,48): error TS2339: Property 'startIndex' does not exist on type '{ quote: string; issue: string; suggestion: string; alternatives?: string[]; }'.
+tests/features/voice/hooks/useVoiceSession.test.ts(61,91): error TS2554: Expected 0 arguments, but got 1.
+tests/features/voice/hooks/useVoiceSession.test.ts(309,59): error TS2503: Cannot find namespace 'vi'.
+tests/features/voice/hooks/useVoiceSession.test.ts(322,59): error TS2503: Cannot find namespace 'vi'.
+tests/hooks/useEditorComments.test.ts(24,3): error TS2353: Object literal may only specify known properties, and 'scenes' does not exist in type 'Chapter'.
+tests/mocks/testFactories.ts(26,3): error TS2322: Type '{ cursorPosition: number; selection: { start: number; end: number; text: string; } | null; totalLength?: number; }' is not assignable to type 'EditorContext'.
+  Property 'totalLength' is optional in type '{ cursorPosition: number; selection: { start: number; end: number; text: string; }; totalLength?: number; }' but required in type 'EditorContext'.
+tests/mocks/testFactories.ts(41,3): error TS2741: Property 'totalLength' is missing in type '{ cursorPosition: number; selection: { start: number; end: number; text: string; }; }' but required in type 'EditorContext'.
+tests/mocks/testFactories.ts(58,3): error TS2322: Type '{ id: string; projectId?: string; title: string; content: string; order: number; lastAnalysis?: AnalysisResult; updatedAt?: number; branches?: Branch[]; activeBranchId?: string | null; comments?: InlineComment[]; }' is not assignable to type 'Chapter'.
+  Property 'projectId' is optional in type '{ id: string; projectId?: string; title: string; content: string; order: number; lastAnalysis?: AnalysisResult; updatedAt?: number; branches?: Branch[]; activeBranchId?: string; comments?: InlineComment[]; }' but required in type 'Chapter'.
+tests/mocks/testFactories.ts(94,5): error TS2353: Object literal may only specify known properties, and 'description' does not exist in type 'Persona'.
+tests/mocks/testFactories.ts(152,5): error TS2322: Type '"balanced"' is not assignable to type 'CritiqueIntensity'.
+tests/mocks/testFactories.ts(154,5): error TS2322: Type '"balanced"' is not assignable to type 'AutonomyMode'.
+tests/mocks/testFactories.ts(174,5): error TS2322: Type '"balanced"' is not assignable to type 'CritiqueIntensity'.
+tests/mocks/testFactories.ts(176,5): error TS2322: Type '"balanced"' is not assignable to type 'AutonomyMode'.
+tests/services/appBrain/eventBus.test.ts(450,28): error TS2339: Property 'idle' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'idle' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/appBrain/eventBus.test.ts(457,28): error TS2339: Property 'active' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'active' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/appBrain/eventBus.test.ts(464,28): error TS2339: Property 'delta' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'delta' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/appBrain/eventBus.test.ts(465,28): error TS2339: Property 'chapterId' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'chapterId' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/appBrain/eventBus.test.ts(472,28): error TS2339: Property 'trigger' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'trigger' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/appBrain/eventBus.test.ts(483,28): error TS2339: Property 'rawThinking' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'rawThinking' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/appBrain/eventBus.test.ts(596,32): error TS2339: Property 'delta' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'delta' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/appBrain/eventBus.test.ts(597,32): error TS2339: Property 'trigger' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'trigger' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/appBrain/eventBus.test.ts(598,32): error TS2339: Property 'thinkingTime' does not exist on type '{ text: string; start: number; end: number; } | { position: number; scene: string; } | { chapterId: string; title: string; } | { projectId: string; chapterId: string; title: string; issues?: ChapterIssueSummary[]; watchedEntities?: WatchedEntitySummary[]; } | ... 19 more ... | { ...; }'.
+  Property 'thinkingTime' does not exist on type '{ text: string; start: number; end: number; }'.
+tests/services/commands/history.test.ts(132,11): error TS2353: Object literal may only specify known properties, and 'timestamp' does not exist in type 'Omit<ExecutedCommand, "id" | "timestamp">'.
+tests/services/errorReporter.test.ts(10,5): error TS2322: Type 'Mock<Procedure | Constructable>' is not assignable to type '{ (...data: any[]): void; (message?: any, ...optionalParams: any[]): void; }'.
+  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '{ (...data: any[]): void; (message?: any, ...optionalParams: any[]): void; }'.
+    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(...data: any[]): void'.
+tests/services/gemini/client.test.ts(168,54): error TS2345: Argument of type '{ contents: undefined[]; }' is not assignable to parameter of type 'GenerateContentParameters'.
+  Property 'model' is missing in type '{ contents: undefined[]; }' but required in type 'GenerateContentParameters'.
+tests/services/gemini/client.test.ts(177,39): error TS2345: Argument of type 'string' is not assignable to parameter of type 'GenerateContentParameters'.
+tests/services/gemini/client.test.ts(197,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'GenerateContentParameters'.
+tests/services/gemini/client.test.ts(213,58): error TS2345: Argument of type 'string' is not assignable to parameter of type 'GenerateContentParameters'.
+tests/services/gemini/client.test.ts(227,50): error TS2345: Argument of type 'string' is not assignable to parameter of type 'GenerateContentParameters'.
+tests/services/gemini/client.test.ts(236,52): error TS2345: Argument of type 'string' is not assignable to parameter of type 'GenerateContentParameters'.
+tests/services/intelligence/chunkIndex.test.ts(702,9): error TS2740: Type '{ totalWords: number; dialogueRatio: number; }' is missing the following properties from type 'StructuralStats': totalSentences, totalParagraphs, avgSentenceLength, sentenceLengthVariance, and 3 more.
+tests/services/intelligence/chunkIndex.test.ts(717,9): error TS2740: Type '{ totalWords: number; dialogueRatio: number; }' is missing the following properties from type 'StructuralStats': totalSentences, totalParagraphs, avgSentenceLength, sentenceLengthVariance, and 3 more.
+tests/services/intelligence/chunkIndex.test.ts(730,9): error TS2740: Type '{ totalWords: number; dialogueRatio: number; }' is missing the following properties from type 'StructuralStats': totalSentences, totalParagraphs, avgSentenceLength, sentenceLengthVariance, and 3 more.
+tests/services/intelligence/chunkIndex.test.ts(747,9): error TS2740: Type '{ totalWords: number; dialogueRatio: number; }' is missing the following properties from type 'StructuralStats': totalSentences, totalParagraphs, avgSentenceLength, sentenceLengthVariance, and 3 more.
+tests/services/intelligence/chunkIndex.test.ts(763,9): error TS2740: Type '{ totalWords: number; dialogueRatio: number; }' is missing the following properties from type 'StructuralStats': totalSentences, totalParagraphs, avgSentenceLength, sentenceLengthVariance, and 3 more.
+tests/services/intelligence/chunkIndex.test.ts(792,11): error TS2740: Type '{ totalWords: number; dialogueRatio: number; }' is missing the following properties from type 'StructuralStats': totalSentences, totalParagraphs, avgSentenceLength, sentenceLengthVariance, and 3 more.
+tests/services/intelligence/chunkManager.test.ts(73,3): error TS2353: Object literal may only specify known properties, and 'processedAt' does not exist in type 'ManuscriptIntelligence'.
+tests/services/intelligence/chunkManager.test.ts(426,19): error TS2341: Property 'processNextBatch' is private and only accessible within class 'ChunkManager'.
+tests/services/intelligence/chunkManager.test.ts(481,13): error TS2341: Property 'chapterTexts' is private and only accessible within class 'ChunkManager'.
+tests/services/intelligence/chunkManager_coverage.test.ts(237,17): error TS2341: Property 'scheduleProcessing' is private and only accessible within class 'ChunkManager'.
+tests/services/intelligence/contradictionDetector.test.ts(34,3): error TS2322: Type '{ offset: number; length: number; }[]' is not assignable to type '{ offset: number; chapterId: string; }[]'.
+  Property 'chapterId' is missing in type '{ offset: number; length: number; }' but required in type '{ offset: number; chapterId: string; }'.
+tests/services/intelligence/contradictionDetector.test.ts(39,69): error TS2741: Property 'processedAt' is missing in type '{ nodes: EntityNode[]; edges: undefined[]; }' but required in type 'EntityGraph'.
+tests/services/intelligence/contradictionDetector.test.ts(47,3): error TS2353: Object literal may only specify known properties, and 'conflicts' does not exist in type 'Timeline'.
+tests/services/intelligence/contradictionDetector.test.ts(56,3): error TS2353: Object literal may only specify known properties, and 'authorId' does not exist in type 'MemoryNote'.
+tests/services/intelligence/deltaTracker.test.ts(18,3): error TS2322: Type '{ id: string; name: string; type: "character"; mentions: { id: string; offset: number; length: number; context: string; }[]; }[]' is not assignable to type 'EntityNode[]'.
+  Type '{ id: string; name: string; type: "character"; mentions: { id: string; offset: number; length: number; context: string; }[]; }' is missing the following properties from type 'EntityNode': aliases, firstMention, mentionCount, attributes
+tests/services/intelligence/deltaTracker.test.ts(36,3): error TS2322: Type '{ id: string; description: string; offset: number; resolved: boolean; }[]' is not assignable to type 'PlotPromise[]'.
+  Type '{ id: string; description: string; offset: number; resolved: boolean; }' is missing the following properties from type 'PlotPromise': type, quote, chapterId
+tests/services/intelligence/incrementalProcessor.test.ts(310,32): error TS2352: Conversion of type '{ structural: { scenes: { id: string; startOffset: number; endOffset: number; type: "scene"; }[]; paragraphs: ClassifiedParagraph[]; dialogueMap: DialogueLine[]; stats: StructuralStats; processedAt: number; }; ... 7 more ...; hud: ManuscriptHUD; }' to type 'ManuscriptIntelligence' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  The types of 'structural.scenes' are incompatible between these types.
+    Type '{ id: string; startOffset: number; endOffset: number; type: "scene"; }[]' is not comparable to type 'Scene[]'.
+      Type '{ id: string; startOffset: number; endOffset: number; type: "scene"; }' is missing the following properties from type 'Scene': pov, location, timeMarker, tension, dialogueRatio
+tests/services/intelligence/incrementalProcessor.test.ts(332,53): error TS2345: Argument of type '{ scenes: { id: string; startOffset: number; endOffset: number; type: string; }[]; paragraphs: ClassifiedParagraph[]; dialogueMap: DialogueLine[]; stats: StructuralStats; processedAt: number; }' is not assignable to parameter of type 'StructuralFingerprint'.
+  Types of property 'scenes' are incompatible.
+    Type '{ id: string; startOffset: number; endOffset: number; type: string; }[]' is not assignable to type 'Scene[]'.
+      Type '{ id: string; startOffset: number; endOffset: number; type: string; }' is missing the following properties from type 'Scene': pov, location, timeMarker, tension, dialogueRatio
+tests/services/intelligence/incrementalProcessor.test.ts(357,32): error TS2352: Conversion of type '{ structural: { scenes: ({ id: string; startOffset: number; endOffset: number; type: "scene"; } | { id: string; startOffset: number; endOffset: number; type: "scene"; pov: string; location: string; })[]; paragraphs: ClassifiedParagraph[]; dialogueMap: DialogueLine[]; stats: StructuralStats; processedAt: number; }; ....' to type 'ManuscriptIntelligence' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  The types of 'structural.scenes' are incompatible between these types.
+    Type '({ id: string; startOffset: number; endOffset: number; type: "scene"; } | { id: string; startOffset: number; endOffset: number; type: "scene"; pov: string; location: string; })[]' is not comparable to type 'Scene[]'.
+      Type '{ id: string; startOffset: number; endOffset: number; type: "scene"; } | { id: string; startOffset: number; endOffset: number; type: "scene"; pov: string; location: string; }' is not comparable to type 'Scene'.
+        Type '{ id: string; startOffset: number; endOffset: number; type: "scene"; pov: string; location: string; }' is missing the following properties from type 'Scene': timeMarker, tension, dialogueRatio
+tests/services/intelligence/incrementalProcessor.test.ts(371,54): error TS2322: Type '"scene"' is not assignable to type 'SceneType'.
+tests/services/intelligence/incrementalProcessor.test.ts(372,59): error TS2322: Type '"scene"' is not assignable to type 'SceneType'.
+tests/services/intelligence/incrementalProcessor.test.ts(497,32): error TS2352: Conversion of type '{ structural: { scenes: { id: string; startOffset: number; endOffset: number; type: "scene"; }[]; paragraphs: ClassifiedParagraph[]; dialogueMap: DialogueLine[]; stats: StructuralStats; processedAt: number; }; ... 7 more ...; hud: ManuscriptHUD; }' to type 'ManuscriptIntelligence' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  The types of 'structural.scenes' are incompatible between these types.
+    Type '{ id: string; startOffset: number; endOffset: number; type: "scene"; }[]' is not comparable to type 'Scene[]'.
+      Type '{ id: string; startOffset: number; endOffset: number; type: "scene"; }' is missing the following properties from type 'Scene': pov, location, timeMarker, tension, dialogueRatio
+tests/services/intelligence/incrementalProcessor.test.ts(513,53): error TS2345: Argument of type '{ scenes: { id: string; startOffset: number; endOffset: number; type: string; }[]; paragraphs: ClassifiedParagraph[]; dialogueMap: DialogueLine[]; stats: StructuralStats; processedAt: number; }' is not assignable to parameter of type 'StructuralFingerprint'.
+  Types of property 'scenes' are incompatible.
+    Type '{ id: string; startOffset: number; endOffset: number; type: string; }[]' is not assignable to type 'Scene[]'.
+      Type '{ id: string; startOffset: number; endOffset: number; type: string; }' is missing the following properties from type 'Scene': pov, location, timeMarker, tension, dialogueRatio
+tests/services/intelligence/incrementalProcessor.test.ts(581,56): error TS2322: Type '"scene"' is not assignable to type 'SceneType'.
+tests/services/intelligence/incrementalProcessor.test.ts(582,61): error TS2322: Type '"flashback"' is not assignable to type 'SceneType'.
+tests/services/intelligence/incrementalProcessor.test.ts(594,54): error TS2322: Type '"scene"' is not assignable to type 'SceneType'.
+tests/services/intelligence/incrementalProcessor.test.ts(595,57): error TS2322: Type '"scene"' is not assignable to type 'SceneType'.
+tests/services/intelligence/timelineTracker.test.ts(35,14): error TS2352: Conversion of type '{ type: string; startOffset: number; endOffset: number; tension: number; timeMarker: string; location: string; characters: undefined[]; summary: string; dominantEmotion: string; dialogueRatio: number; actionDensity: number; }' to type 'Scene' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ type: string; startOffset: number; endOffset: number; tension: number; timeMarker: string; location: string; characters: undefined[]; summary: string; dominantEmotion: string; dialogueRatio: number; actionDensity: number; }' is missing the following properties from type 'Scene': id, pov
+tests/services/intelligence/workerPool.test.ts(304,83): error TS2304: Cannot find name 'JobCallback'.
+tests/services/intelligence/workerPool.test.ts(488,11): error TS2739: Type 'MockWorker' is missing the following properties from type 'Worker': addEventListener, removeEventListener, dispatchEvent, onmessageerror
+tests/services/intelligence/workerPool.test.ts(624,11): error TS2739: Type 'MockWorker' is missing the following properties from type 'Worker': addEventListener, removeEventListener, dispatchEvent, onmessageerror
+tests/services/memory/bedsideHistorySearch.test.ts(108,72): error TS2322: Type '`uuid-${number}`' is not assignable to type '`${string}-${string}-${string}-${string}-${string}`'.
+tests/services/memory/relevance.test.ts(18,70): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(19,73): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(34,70): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(45,74): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(56,69): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(70,71): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(81,71): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(82,69): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(83,73): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.
+tests/services/memory/relevance.test.ts(98,72): error TS2353: Object literal may only specify known properties, and 'importance' does not exist in type 'EntityNode'.

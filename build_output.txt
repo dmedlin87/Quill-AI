@@ -1,0 +1,24 @@
+
+> quill-ai@0.0.0 build
+> vite build
+
+vite v6.4.1 building for production...
+transforming...
+✓ 1555 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                              2.22 kB │ gzip:   0.83 kB
+dist/assets/worker-DEPLPrI8.js              45.06 kB
+dist/assets/index-DCp9IToE.css              21.05 kB │ gzip:   4.46 kB
+dist/assets/purify.es-B6FQ9oRL.js           22.57 kB │ gzip:   8.74 kB
+dist/assets/index.es-BINsIM_P.js           159.35 kB │ gzip:  53.40 kB
+dist/assets/html2canvas.esm-QH1iLAAe.js    202.38 kB │ gzip:  48.04 kB
+dist/assets/index-3AQCbjkB.js              395.82 kB │ gzip: 116.64 kB
+dist/assets/index-CHL5NxHY.js              500.56 kB │ gzip: 130.43 kB
+dist/assets/index-ChnARmPL.js            2,075.53 kB │ gzip: 630.14 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 14.88s
