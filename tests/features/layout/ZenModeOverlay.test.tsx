@@ -4,6 +4,11 @@ import { vi } from 'vitest';
 import { ZenModeOverlay } from '@/features/layout/ZenModeOverlay';
 import { useLayoutStore } from '@/features/layout/store/useLayoutStore';
 
+// Mock FocusHUD to avoid Context errors
+vi.mock('@/features/layout/components/FocusHUD', () => ({
+  FocusHUD: () => <div data-testid="focus-hud-mock" />,
+}));
+
 // Mock framer-motion
 vi.mock('framer-motion', () => ({
   motion: {

@@ -332,6 +332,7 @@ describe('useChunkIndex branch coverage', () => {
       byLevel: { scene: 0, chapter: 0, act: 0, book: 0 },
       isProcessing: false,
       chapterCount: 0,
+      workerEnabled: false,
     });
 
     unmount();
